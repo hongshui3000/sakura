@@ -1,11 +1,11 @@
-# Kconfig - CC3220 SDK HAL configuration
+# Kconfig - TM4C12X SDK HAL configuration
 
-config HAS_TM4C123XX_SDK
+config HAS_TM4C12X_SDK
 	bool
 
-menuconfig TM4C123XX_SDK
-	bool "TI TM4C123XX SDK support"
+menuconfig HAS_TM4C12X_SDK
+	bool "TI TM4C12X SDK support"
 	default n
-	depends on HAS_TM4C123XX_SDK
+	depends on HAS_CMSIS
 	help
-	Build required peripheral driverlib files from the TM4C123XX SDK
+	Build required peripheral driverlib files from the TM4C12X SDK

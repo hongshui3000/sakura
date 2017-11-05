@@ -15,4 +15,4 @@ endif
 
 -include $(srctree)/ext/hal/ti/simplelink/Makefile
 
--include $(srctree)/ext/hal/ti/ek-tm4c12x/ek-tm4c123xx/Makefile
+-include $(srctree)/ext/hal/ti/ek-tm4c12x/Makefile

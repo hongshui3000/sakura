@@ -1,0 +1,7 @@
+identifier: ti_tm4c123gxl_launchpad
+name: tm4c123gxl LaunchPad development kit
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gccarmemb

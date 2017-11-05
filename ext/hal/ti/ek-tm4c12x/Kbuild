@@ -1,5 +1,5 @@
-ccflags-$(CONFIG_HAS_TM4C123XX_SDK) += -D$(COMPILER)
+ccflags-$(CONFIG_HAS_TM4C123X_SDK) += -D$(COMPILER)
 # Need to build prcm and utils for PRCMCC3220MCUInit, which is not in ROM
-obj-$(CONFIG_HAS_TM4C123XX_SDK) += tm4c123xx/source/driverlib/gpio.o
-#obj-$(CONFIG_HAS_TM4C123XX_SDK) += tm4c123xx/source/driverlib/gpio.o
-#obj-$(CONFIG_HAS_TM4C123XX_SDK) += tm4c123xx/source/driverlib/gpio.o
+obj-$(CONFIG_HAS_TM4C12X_SDK) += ek-tm4c12x/source/driverlib/gpio.o
+#obj-$(CONFIG_HAS_TM4C12X_SDK) += ek-tm4c12x/source/driverlib/gpio.o
+#obj-$(CONFIG_HAS_TM4C12X_SDK) += ek-tm4c12x/source/driverlib/gpio.o
