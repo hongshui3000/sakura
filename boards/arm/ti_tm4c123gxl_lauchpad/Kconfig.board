@@ -1,6 +1,0 @@
-# Kconfig - TI TM4C123GX LaunchXL Board
-#
-
-config  BOARD_TI_TM4C123GXL_LAUNCHPAD
-	bool "TI TM4C123GXL LAUNCHPAD"
-	depends on SOC_TM4C123GH6PM
