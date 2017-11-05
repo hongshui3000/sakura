@@ -1,0 +1,9 @@
+# Kconfig - TI TM4C123GXL LaunchXL board configuration
+#
+
+if BOARD_TI_TM4C123GXL_LAUNCHPAD
+
+config BOARD
+	default ti_tm4c123gxl_launchpad
+
+endif # BOARD_TI_TM4C123GXL_LAUNCHPAD

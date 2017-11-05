@@ -10,10 +10,14 @@
 #define __SIZE_K(x) (x * 1024)
 
 #if defined(CONFIG_SOC_CC3220SF)
-#define DT_SFLASH_SIZE		__SIZE_K(1024)
-#define DT_FLASH_SIZE		__SIZE_K(1024)
-#define DT_SRAM_SIZE		__SIZE_K(256)
-#define DT_SRAM_START		0x20000000
+#define DT_SFLASH_SIZE __SIZE_K(1024)
+#define DT_FLASH_SIZE __SIZE_K(1024)
+#define DT_SRAM_SIZE __SIZE_K(256)
+#define DT_SRAM_START 0x20000000
+#if defined(CONFIG_SOC_TM4C123GH6PM)
+#define DT_FLASH_SIZE __SIZE_K(256)
+#define DT_SRAM_SIZE __SIZE_K(32)
+#define DT_SRAM_START 0x20000000
 #else
 #error "Flash and RAM sizes not defined for this chip"
 #endif

@@ -1,0 +1,23 @@
+# Kconfig.soc - Texas Instruments TM4C123
+#
+
+choice
+prompt "TI tm4c12x MCU Selection"
+depends on SOC_SERIES_TM4C123
+
+config SOC_TM4C123GH6PM
+	bool "TM4C123"
+	select HAS_TM4C12X_SDK
+
+endchoice
+
+
+if SOC_TM4C123GH6PM
+
+config TM4C123_DEBUG
+	bool "Prepend debug header, disabling flash verification"
+	depends on XIP
+	default y if XIP
+	default n if !XIP
+
+endif # SOC_TM4C123GH6PM
