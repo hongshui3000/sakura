@@ -6,7 +6,6 @@
 	model = "TI TM4C123GXL Launchpad";
 	compatible = "ti,ti_tm4c123gxl_launchpad","ti,tm4c123gh6pm",
 						"ti,tm4c123";
-
 	aliases {
 		uart_0 = &uart0;
 	};
