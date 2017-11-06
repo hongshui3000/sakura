@@ -51,10 +51,17 @@ static int uart_tm4c123_init(struct device* dev)
     }
 
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
-    MAP_UARTConfigSetExpClk((unsigned long)config->base, uart_tm4c123_dev_cfg_0.sys_clk_freq, 115200,
+    MAP_UARTConfigSetExpClk((unsigned long)config->base, uart_tm4c123_dev_cfg_0.sys_clk_freq, TI_TM4C123_UART_4000C000_CURRENT_SPEED,
         (UART_CONFIG_PAR_NONE | UART_CONFIG_STOP_ONE | UART_CONFIG_WLEN_8));
 
 #ifdef CONFIG_UART_INTERRUPT_DRIVEN
+
+    IRQ_CONNECT(TI_TM4C123_UART_4000C000_IRQ_0,
+        TI_TM4C123_UART_4000C000_IRQ_0,
+        uart_tm4c123_isr, DEVICE_GET(uart_tm4c123_0),
+        0);
+    irq_enable(TI_TM4C123_UART_4000C000_IRQ_0);
+
     //
     // We are configured for buffered output so enable the master interrupt
     // for this UART and the receive interrupts.  We don't actually enable the
@@ -93,52 +100,48 @@ static unsigned char uart_tm4c123_poll_out(struct device* dev,
 static int uart_tm4c123_fifo_fill(struct device* dev,
     const u8_t* tx_data, int size)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
-    // unsigned int num_tx = 0;
+    const struct uart_device_config* config = DEV_CFG(dev);
+    unsigned int num_tx = 0;
 
-    // while ((size - num_tx) > 0) {
-    //     MAP_UARTCharPut((unsigned long)config->base,
-    //         tx_data[num_tx]);
-    //     if (MAP_UART_getInterruptStatus((unsigned long)config->base,
-    //             EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG)) {
-    //         num_tx++;
-    //     } else {
-    //         break;
-    //     }
-    // }
+    while ((size - num_tx) > 0) {
+        MAP_UARTCharPut((unsigned long)config->base,
+            tx_data[num_tx]);
+        if (MAP_UARTIntStatus((unsigned long)config->base, UART_INT_TX)) {
+            num_tx++;
+        } else {
+            break;
+        }
+    }
 
-    // return (int)num_tx;
+    return (int)num_tx;
 }
 
 static int uart_tm4c123_fifo_read(struct device* dev, u8_t* rx_data,
     const int size)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
-    // unsigned int num_rx = 0;
+    const struct uart_device_config* config = DEV_CFG(dev);
+    unsigned int num_rx = 0;
 
-    // while (((size - num_rx) > 0) && MAP_UART_getInterruptStatus((unsigned long)config->base,
-    //                                     EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG)) {
+    while (((size - num_rx) > 0) && MAP_UARTIntStatus((unsigned long)config->base, UART_INT_RX)) {
 
-    //     rx_data[num_rx++] = MAP_UARTCharGet((unsigned long)config->base);
-    // }
+        rx_data[num_rx++] = MAP_UARTCharGet((unsigned long)config->base);
+    }
 
-    // return num_rx;
+    return num_rx;
 }
 
 static void uart_tm4c123_irq_tx_enable(struct device* dev)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
+    const struct uart_device_config* config = DEV_CFG(dev);
 
-    // MAP_UART_enableInterrupt((unsigned long)config->base,
-    //     EUSCI_A_UART_TRANSMIT_INTERRUPT);
+    MAP_UARTIntEnable((unsigned long)config->base, UART_INT_TX);
 }
 
 static void uart_tm4c123_irq_tx_disable(struct device* dev)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
+    const struct uart_device_config* config = DEV_CFG(dev);
 
-    // MAP_UART_disableInterrupt((unsigned long)config->base,
-    //     EUSCI_A_UART_TRANSMIT_INTERRUPT);
+    MAP_UARTIntDisable((unsigned long)config->base, UART_INT_TX);
 }
 
 static int uart_tm4c123_irq_tx_ready(struct device* dev)
@@ -146,34 +149,31 @@ static int uart_tm4c123_irq_tx_ready(struct device* dev)
     // const struct uart_device_config* config = DEV_CFG(dev);
     // unsigned int int_status;
 
-    // int_status = MAP_UART_getInterruptStatus((unsigned long)config->base,
-    //     EUSCI_A_UART_TRANSMIT_INTERRUPT_FLAG);
+    // int_status = MAP_UARTIntStatus((unsigned long)config->base, UART_INT_TX);
 
     // return (int_status & EUSCI_A_IE_TXIE);
+    return 1;
 }
 
 static void uart_tm4c123_irq_rx_enable(struct device* dev)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
+    const struct uart_device_config* config = DEV_CFG(dev);
 
-    // MAP_UART_enableInterrupt((unsigned long)config->base,
-    //     EUSCI_A_UART_RECEIVE_INTERRUPT);
+    MAP_UARTIntEnable((unsigned long)config->base, UART_INT_RX);
 }
 
 static void uart_tm4c123_irq_rx_disable(struct device* dev)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
+    const struct uart_device_config* config = DEV_CFG(dev);
 
-    // MAP_UART_disableInterrupt((unsigned long)config->base,
-    //     EUSCI_A_UART_RECEIVE_INTERRUPT);
+    MAP_UARTIntDisable((unsigned long)config->base, UART_INT_RX);
 }
 
 static int uart_tm4c123_irq_tx_complete(struct device* dev)
 {
-    // const struct uart_device_config* config = DEV_CFG(dev);
+    const struct uart_device_config* config = DEV_CFG(dev);
 
-    // return MAP_UART_getInterruptStatus((unsigned long)config->base,
-    //     EUSCI_A_UART_TRANSMIT_COMPLETE_INTERRUPT_FLAG);
+    return MAP_UARTIntStatus((unsigned long)config->base, UART_INT_TX);
 }
 
 static int uart_tm4c123_irq_rx_ready(struct device* dev)
@@ -181,10 +181,10 @@ static int uart_tm4c123_irq_rx_ready(struct device* dev)
     // const struct uart_device_config* config = DEV_CFG(dev);
     // unsigned int int_status;
 
-    // int_status = MAP_UART_getInterruptStatus((unsigned long)config->base,
-    //     EUSCI_A_UART_RECEIVE_INTERRUPT_FLAG);
+    // int_status = MAP_UARTIntStatus((unsigned long)config->base, UART_INT_RX);
 
     // return (int_status & EUSCI_A_IE_RXIE);
+    return 1;
 }
 
 static void uart_tm4c123_irq_err_enable(struct device* dev)
@@ -206,6 +206,7 @@ static int uart_tm4c123_irq_is_pending(struct device* dev)
     //     (unsigned long)config->base);
 
     // return (int_status & (EUSCI_A_IE_TXIE | EUSCI_A_IE_RXIE));
+    return 1;
 }
 
 static int uart_tm4c123_irq_update(struct device* dev)
@@ -216,9 +217,9 @@ static int uart_tm4c123_irq_update(struct device* dev)
 static void uart_tm4c123_irq_callback_set(struct device* dev,
     uart_irq_callback_t cb)
 {
-    // struct uart_tm4c123_dev_data_t* const dev_data = DEV_DATA(dev);
+    struct uart_tm4c123_dev_data_t* const dev_data = DEV_DATA(dev);
 
-    // dev_data->cb = cb;
+    dev_data->cb = cb;
 }
 
 /**
@@ -232,22 +233,21 @@ static void uart_tm4c123_irq_callback_set(struct device* dev,
  */
 static void uart_tm4c123_isr(void* arg)
 {
-    //   struct device* dev = arg;
-    //   const struct uart_device_config* config = DEV_CFG(dev);
-    //   struct uart_tm4c123_dev_data_t* const dev_data = DEV_DATA(dev);
-    //   unsigned int int_status;
+    struct device* dev = arg;
+    const struct uart_device_config* config = DEV_CFG(dev);
+    struct uart_tm4c123_dev_data_t* const dev_data = DEV_DATA(dev);
+    unsigned int int_status;
 
-    //   int_status = MAP_UART_getEnabledInterruptStatus(
-    //       (unsigned long)config->base);
+    int_status = MAP_UARTIntStatus((unsigned long)config->base, UART_INT_RX | UART_INT_RT);
 
-    //   if (dev_data->cb) {
-    //       dev_data->cb(dev);
-    //   }
-    //   /*
-    // * Clear interrupts only after cb called, as Zephyr UART clients expect
-    // * to check interrupt status during the callback.
-    // */
-    //   MAP_UART_disableInterrupt((unsigned long)config->base, int_status);
+    if (dev_data->cb) {
+        dev_data->cb(dev);
+    }
+    /*
+    * Clear interrupts only after cb called, as Zephyr UART clients expect
+    * to check interrupt status during the callback.
+    */
+    MAP_UARTIntDisable((unsigned long)config->base, int_status);
 }
 #endif /* CONFIG_UART_INTERRUPT_DRIVEN */
 

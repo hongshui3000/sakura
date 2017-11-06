@@ -23,6 +23,7 @@
 			compatible = "ti,tm4c123-uart";
 			reg = <0x4000C000 0x1000>;
 			interrupts = <21 0>;
+			interrupt-names = "status";
 			status = "disabled";
 			label = "UART_0";
 		};
