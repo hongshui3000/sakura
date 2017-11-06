@@ -1,4 +1,4 @@
-# Kconfig - TI TM4C123GX LaunchXL Board
+# Kconfig - TI TM4C123GX LaunchPad Board
 #
 
 config  BOARD_TI_TM4C123GXL_LAUNCHPAD

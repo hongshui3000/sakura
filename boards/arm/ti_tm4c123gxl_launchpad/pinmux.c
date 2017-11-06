@@ -60,9 +60,8 @@
  */
 int pinmux_initialize(struct device* port)
 {
-    (void)port;
 
-#if defined(CONFIG_UART0_TM4C123) || (CONFIG_SSI0_TM4C123)
+#if defined(CONFIG_UART_TM4C123) || (CONFIG_SSI0_TM4C123)
     /* Enable Peripheral Clocks */
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 #endif
@@ -93,7 +92,7 @@ int pinmux_initialize(struct device* port)
     /* Configure the GPIO Pin Mux for PF2 for GPIO_PF2 */
     MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2);
 #endif
-#ifdef CONFIG_UART0_TM4C123
+#ifdef CONFIG_UART_TM4C123
 
     /* Configure the GPIO Pin Mux for PA0 for U0RX */
     MAP_GPIOPinConfigure(GPIO_PA0_U0RX);

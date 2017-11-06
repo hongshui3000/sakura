@@ -1,7 +1,7 @@
-.. _tm4c123gxl_launchxl:
+.. _ti_tm4c123gxl_launchpad:
 
-TM4C123GXL LaunchXL
-###################
+TM4C123GXL Launchpad
+####################
 
 Overview
 ********
