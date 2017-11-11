@@ -16,7 +16,7 @@
 #include <kernel.h>
 #include <misc/printk.h>
 #include <misc/stack.h>
-#include <drivers/rand32.h>
+#include <random/rand32.h>
 #include <linker/sections.h>
 #include <toolchain.h>
 #include <kernel_structs.h>
@@ -26,6 +26,7 @@
 #include <ksched.h>
 #include <version.h>
 #include <string.h>
+#include <misc/dlist.h>
 
 /* kernel build timestamp items */
 
@@ -66,14 +67,6 @@ u64_t __noinit __main_time_stamp;  /* timestamp when main task starts */
 u64_t __noinit __idle_time_stamp;  /* timestamp when CPU goes idle */
 #endif
 
-#ifdef CONFIG_EXECUTION_BENCHMARKING
-u64_t __noinit __start_swap_time;
-u64_t __noinit __end_swap_time;
-u64_t __noinit __start_intr_time;
-u64_t __noinit __end_intr_time;
-u64_t __noinit __start_tick_time;
-u64_t __noinit __end_tick_time;
-#endif
 /* init/main and idle threads */
 
 #define IDLE_STACK_SIZE CONFIG_IDLE_STACK_SIZE
@@ -111,7 +104,6 @@ k_tid_t const _idle_thread = (k_tid_t)&_idle_thread_s;
 K_THREAD_STACK_DEFINE(_interrupt_stack, CONFIG_ISR_STACK_SIZE);
 
 #ifdef CONFIG_SYS_CLOCK_EXISTS
-	#include <misc/dlist.h>
 	#define initialize_timeouts() do { \
 		sys_dlist_init(&_timeout_q); \
 	} while ((0))
@@ -193,6 +185,12 @@ static void _main(void *unused1, void *unused2, void *unused3)
 	ARG_UNUSED(unused3);
 
 	_sys_device_do_config_level(_SYS_INIT_LEVEL_POST_KERNEL);
+	if (boot_delay > 0) {
+		printk("***** delaying boot " STRINGIFY(CONFIG_BOOT_DELAY)
+		       "ms (per build configuration) *****\n");
+		k_busy_wait(CONFIG_BOOT_DELAY * USEC_PER_MSEC);
+	}
+	PRINT_BOOT_BANNER();
 
 	/* Final init level before app starts */
 	_sys_device_do_config_level(_SYS_INIT_LEVEL_APPLICATION);
@@ -205,12 +203,6 @@ static void _main(void *unused1, void *unused2, void *unused3)
 	__do_init_array_aux();
 #endif
 
-	if (boot_delay > 0) {
-		printk("***** delaying boot " STRINGIFY(CONFIG_BOOT_DELAY)
-		       "ms (per build configuration) *****\n");
-		k_sleep(CONFIG_BOOT_DELAY);
-	}
-	PRINT_BOOT_BANNER();
 	_init_static_threads();
 
 
@@ -263,10 +255,16 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 
 	dummy_thread->base.user_options = K_ESSENTIAL;
 	dummy_thread->base.thread_state = _THREAD_DUMMY;
+#ifdef CONFIG_THREAD_STACK_INFO
+	dummy_thread->stack_info.start = 0;
+	dummy_thread->stack_info.size = 0;
+#endif
+#ifdef CONFIG_USERSPACE
+	dummy_thread->mem_domain_info.mem_domain = 0;
+#endif
 #endif
 
 	/* _kernel.ready_q is all zeroes */
-
 
 	/*
 	 * The interrupt library needs to be initialized early since a series
@@ -295,16 +293,16 @@ static void prepare_multithreading(struct k_thread *dummy_thread)
 	 */
 	_ready_q.cache = _main_thread;
 
-	_new_thread(_main_thread, _main_stack,
-		    MAIN_STACK_SIZE, _main, NULL, NULL, NULL,
-		    CONFIG_MAIN_THREAD_PRIORITY, K_ESSENTIAL);
+	_setup_new_thread(_main_thread, _main_stack,
+			  MAIN_STACK_SIZE, _main, NULL, NULL, NULL,
+			  CONFIG_MAIN_THREAD_PRIORITY, K_ESSENTIAL);
 	_mark_thread_as_started(_main_thread);
 	_add_thread_to_ready_q(_main_thread);
 
 #ifdef CONFIG_MULTITHREADING
-	_new_thread(_idle_thread, _idle_stack,
-		    IDLE_STACK_SIZE, idle, NULL, NULL, NULL,
-		    K_LOWEST_THREAD_PRIO, K_ESSENTIAL);
+	_setup_new_thread(_idle_thread, _idle_stack,
+			  IDLE_STACK_SIZE, idle, NULL, NULL, NULL,
+			  K_LOWEST_THREAD_PRIO, K_ESSENTIAL);
 	_mark_thread_as_started(_idle_thread);
 	_add_thread_to_ready_q(_idle_thread);
 #endif
@@ -351,8 +349,11 @@ FUNC_NORETURN void _Cstart(void)
 #ifdef CONFIG_ARCH_HAS_CUSTOM_SWAP_TO_MAIN
 	struct k_thread *dummy_thread = NULL;
 #else
-	struct k_thread dummy_thread_memory;
-	struct k_thread *dummy_thread = &dummy_thread_memory;
+	/* Normally, kernel objects are not allowed on the stack, special case
+	 * here since this is just being used to bootstrap the first _Swap()
+	 */
+	char dummy_thread_memory[sizeof(struct k_thread)];
+	struct k_thread *dummy_thread = (struct k_thread *)&dummy_thread_memory;
 #endif
 
 	/*

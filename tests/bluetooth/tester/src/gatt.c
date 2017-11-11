@@ -9,6 +9,7 @@
 #include <zephyr/types.h>
 #include <string.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <toolchain.h>
 #include <bluetooth/bluetooth.h>
@@ -297,6 +298,19 @@ static ssize_t read_value(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 				 value->len);
 }
 
+static void attr_value_changed_ev(u16_t handle, const u8_t *value, u16_t len)
+{
+	u8_t buf[len + sizeof(struct gatt_attr_value_changed_ev)];
+	struct gatt_attr_value_changed_ev *ev = (void *) buf;
+
+	ev->handle = sys_cpu_to_le16(handle);
+	ev->data_length = sys_cpu_to_le16(len);
+	memcpy(ev->data, value, len);
+
+	tester_send(BTP_SERVICE_ID_GATT, GATT_EV_ATTR_VALUE_CHANGED,
+		    CONTROLLER_INDEX, buf, sizeof(buf));
+}
+
 static ssize_t write_value(struct bt_conn *conn,
 			   const struct bt_gatt_attr *attr, const void *buf,
 			   u16_t len, u16_t offset, u8_t flags)
@@ -326,6 +340,11 @@ static ssize_t write_value(struct bt_conn *conn,
 	}
 
 	memcpy(value->data + offset, buf, len);
+
+	/* Maximum attribute value size is 512 bytes */
+	assert(value->len < 512);
+
+	attr_value_changed_ev(attr->handle, value->data, value->len);
 
 	return len;
 }
@@ -634,6 +653,8 @@ static int alloc_included(struct bt_gatt_attr *attr,
 		return -EINVAL;
 	}
 
+	attr_incl->user_data = attr;
+
 	*included_service_id = attr_incl->handle;
 	return 0;
 }
@@ -771,24 +792,9 @@ static void set_value(u8_t *data, u16_t len)
 		   status);
 }
 
-static void update_incl_svc_offset(u16_t db_attr_off)
-{
-	struct bt_gatt_attr *attr = server_db;
-	struct bt_gatt_include *incl;
-
-	while (attr++ < server_db + attr_count) {
-		if (!bt_uuid_cmp(attr->uuid, BT_UUID_GATT_INCLUDE)) {
-			incl = attr->user_data;
-			incl->start_handle += db_attr_off;
-			incl->end_handle += db_attr_off;
-		}
-	}
-}
-
 static void start_server(u8_t *data, u16_t len)
 {
 	struct gatt_start_server_rp rp;
-	u16_t db_attr_off;
 
 	/* Register last defined service */
 	if (register_service()) {
@@ -796,15 +802,6 @@ static void start_server(u8_t *data, u16_t len)
 			   CONTROLLER_INDEX, BTP_STATUS_FAILED);
 		return;
 	}
-
-	/* All handles of gatt db are now assigned by
-	 * bt_gatt_service_register().
-	 */
-	db_attr_off = server_db[0].handle - 1;
-
-	update_incl_svc_offset(db_attr_off);
-	rp.db_attr_off = sys_cpu_to_le16(db_attr_off);
-	rp.db_attr_cnt = attr_count;
 
 	tester_send(BTP_SERVICE_ID_GATT, GATT_START_SERVER, CONTROLLER_INDEX,
 		    (u8_t *) &rp, sizeof(rp));

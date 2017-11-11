@@ -16,6 +16,7 @@
 #include <init.h>
 #include <toolchain.h>
 #include <linker/sections.h>
+#include <syscall_handler.h>
 
 extern struct k_alert _k_alert_list_start[];
 extern struct k_alert _k_alert_list_end[];
@@ -69,9 +70,11 @@ void k_alert_init(struct k_alert *alert, k_alert_handler_t handler,
 	alert->work_item = (struct k_work)_K_WORK_INITIALIZER(_alert_deliver);
 	k_sem_init(&alert->sem, 0, max_num_pending_alerts);
 	SYS_TRACING_OBJ_INIT(k_alert, alert);
+
+	_k_object_init(alert);
 }
 
-void k_alert_send(struct k_alert *alert)
+void _impl_k_alert_send(struct k_alert *alert)
 {
 	if (alert->handler == K_ALERT_IGNORE) {
 		/* ignore the alert */
@@ -88,7 +91,19 @@ void k_alert_send(struct k_alert *alert)
 	}
 }
 
-int k_alert_recv(struct k_alert *alert, s32_t timeout)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER1_SIMPLE_VOID(k_alert_send, K_OBJ_ALERT, struct k_alert *);
+#endif
+
+int _impl_k_alert_recv(struct k_alert *alert, s32_t timeout)
 {
 	return k_sem_take(&alert->sem, timeout);
 }
+
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER(k_alert_recv, alert, timeout)
+{
+	_SYSCALL_OBJ(alert, K_OBJ_ALERT);
+	return _impl_k_alert_recv((struct k_alert *)alert, timeout);
+}
+#endif

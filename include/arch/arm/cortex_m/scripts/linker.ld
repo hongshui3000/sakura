@@ -117,6 +117,9 @@ SECTIONS
 	*(.text)
 	*(".text.*")
 	*(.gnu.linkonce.t.*)
+
+#include <linker/kobject-text.ld>
+
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	_image_text_end = .;
@@ -148,6 +151,9 @@ SECTIONS
 /* Located in project source directory */
 #include <custom-rodata.ld>
 #endif
+
+#include <linker/kobject-rom.ld>
+
 	/*
 	 * For XIP images, in order to avoid the situation when __data_rom_start
 	 * is 32-bit aligned, but the actual data is placed right after rodata
@@ -174,6 +180,16 @@ SECTIONS
 #endif
 
     GROUP_START(RAMABLE_REGION)
+
+#if defined(CONFIG_SOC_SERIES_STM32F0X) && !defined(CONFIG_IS_BOOTLOADER)
+    /* Must be first in ramable region */
+	SECTION_PROLOGUE(.st_stm32f0x_vt,(NOLOAD),)
+	{
+        _ram_vector_start = .;
+        . += _vector_end - _vector_start;
+        _ram_vector_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
+#endif
 
 #ifdef CONFIG_APPLICATION_MEMORY
 	SECTION_DATA_PROLOGUE(_APP_DATA_SECTION_NAME, (OPTIONAL),)
@@ -208,30 +224,6 @@ SECTIONS
 	__app_ram_end = .;
 #endif /* CONFIG_APPLICATION_MEMORY */
 
-
-    SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
-	{
-#ifndef CONFIG_APPLICATION_MEMORY
-	_image_ram_start = .;
-#endif
-	__kernel_ram_start = .;
-	__data_ram_start = .;
-	KERNEL_INPUT_SECTION(.data)
-	KERNEL_INPUT_SECTION(".data.*")
-
-#ifdef CONFIG_CUSTOM_RWDATA_LD
-/* Located in project source directory */
-#include <custom-rwdata.ld>
-#endif
-
-	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
-
-    __data_rom_start = LOADADDR(_DATA_SECTION_NAME);
-
-#include <linker/common-ram.ld>
-
-    __data_ram_end = .;
-
     SECTION_DATA_PROLOGUE(_BSS_SECTION_NAME,(NOLOAD),)
 	{
         /*
@@ -240,9 +232,16 @@ SECTIONS
          */
         . = ALIGN(4);
 	__bss_start = .;
+#ifndef CONFIG_APPLICATION_MEMORY
+	_image_ram_start = .;
+#endif
+	__kernel_ram_start = .;
+
 	KERNEL_INPUT_SECTION(.bss)
 	KERNEL_INPUT_SECTION(".bss.*")
 	KERNEL_INPUT_SECTION(COMMON)
+	*(".kernel_bss.*")
+
         /*
          * As memory is cleared in words only, it is simpler to ensure the BSS
          * section ends on a 4 byte boundary. This wastes a maximum of 3 bytes.
@@ -258,12 +257,31 @@ SECTIONS
          */
         KERNEL_INPUT_SECTION(.noinit)
         KERNEL_INPUT_SECTION(".noinit.*")
-
-	/* Put all the stacks here in the kernel noinit */
-	*(.stacks)
-	*(".stacks.*")
+	*(".kernel_noinit.*")
 
         } GROUP_LINK_IN(RAMABLE_REGION)
+
+    SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME,,)
+	{
+	__data_ram_start = .;
+	KERNEL_INPUT_SECTION(.data)
+	KERNEL_INPUT_SECTION(".data.*")
+	*(".kernel.*")
+
+#ifdef CONFIG_CUSTOM_RWDATA_LD
+/* Located in project source directory */
+#include <custom-rwdata.ld>
+#endif
+
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+    __data_rom_start = LOADADDR(_DATA_SECTION_NAME);
+
+#include <linker/common-ram.ld>
+#include <linker/kobject.ld>
+
+    __data_ram_end = .;
+
 
     /* Define linker symbols */
 

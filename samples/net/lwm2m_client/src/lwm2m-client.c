@@ -11,15 +11,7 @@
 #include <board.h>
 #include <zephyr.h>
 #include <gpio.h>
-#include <net/net_core.h>
-#include <net/net_pkt.h>
-#include <net/net_app.h>
 #include <net/lwm2m.h>
-
-#if defined(CONFIG_NET_L2_BT)
-#include <bluetooth/bluetooth.h>
-#include <gatt/ipss.h>
-#endif
 
 #define APP_BANNER "Run LWM2M client"
 
@@ -61,13 +53,12 @@ static int usb_current = 900;
 static struct device *led_dev;
 static u32_t led_state;
 
-#if defined(CONFIG_NET_IPV6)
-static struct net_app_ctx udp6;
-#endif
-#if defined(CONFIG_NET_IPV4)
-static struct net_app_ctx udp4;
-#endif
+static struct lwm2m_ctx client;
 static struct k_sem quit_lock;
+
+#if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_OBJ_SUPPORT)
+static u8_t firmware_buf[64];
+#endif
 
 #if defined(CONFIG_NET_CONTEXT_NET_PKT_POOL)
 NET_PKT_TX_SLAB_DEFINE(lwm2m_tx_udp, 5);
@@ -146,7 +137,7 @@ static int device_reboot_cb(u16_t obj_inst_id)
 	/* Change the battery voltage for testing */
 	lwm2m_device_set_pwrsrc_voltage_mv(pwrsrc_bat, --battery_voltage);
 
-	return 1;
+	return 0;
 }
 
 static int device_factory_default_cb(u16_t obj_inst_id)
@@ -157,13 +148,30 @@ static int device_factory_default_cb(u16_t obj_inst_id)
 	/* Change the USB current for testing */
 	lwm2m_device_set_pwrsrc_current_ma(pwrsrc_usb, --usb_current);
 
-	return 1;
+	return 0;
 }
 
+#if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_PULL_SUPPORT)
 static int firmware_update_cb(u16_t obj_inst_id)
 {
 	SYS_LOG_DBG("UPDATE");
-	return 1;
+
+	/* TODO: kick off update process */
+
+	/* If success, set the update result as RESULT_SUCCESS.
+	 * In reality, it should be set at function lwm2m_setup()
+	 */
+	lwm2m_engine_set_u8("5/0/3", STATE_IDLE);
+	lwm2m_engine_set_u8("5/0/5", RESULT_SUCCESS);
+	return 0;
+}
+#endif
+
+#if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_OBJ_SUPPORT)
+static void *firmware_get_buf(u16_t obj_inst_id, size_t *data_len)
+{
+	*data_len = sizeof(firmware_buf);
+	return firmware_buf;
 }
 
 static int firmware_block_received_cb(u16_t obj_inst_id,
@@ -172,23 +180,9 @@ static int firmware_block_received_cb(u16_t obj_inst_id,
 {
 	SYS_LOG_INF("FIRMWARE: BLOCK RECEIVED: len:%u last_block:%d",
 		    data_len, last_block);
-	return 1;
-}
-
-static int set_endpoint_name(char *ep_name, sa_family_t family)
-{
-	int ret;
-
-	ret = snprintk(ep_name, ENDPOINT_LEN, "%s-%s-%u",
-		       CONFIG_BOARD, (family == AF_INET6 ? "ipv6" : "ipv4"),
-		       sys_rand32_get());
-	if (ret < 0 || ret >= ENDPOINT_LEN) {
-		SYS_LOG_ERR("Can't fill name buffer");
-		return -EINVAL;
-	}
-
 	return 0;
 }
+#endif
 
 static int lwm2m_setup(void)
 {
@@ -232,10 +226,14 @@ static int lwm2m_setup(void)
 
 	/* setup FIRMWARE object */
 
-	lwm2m_engine_register_post_write_callback("5/0/0",
-						  firmware_block_received_cb);
+#if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_OBJ_SUPPORT)
+	/* setup data buffer for block-wise transfer */
+	lwm2m_engine_register_pre_write_callback("5/0/0", firmware_get_buf);
 	lwm2m_firmware_set_write_cb(firmware_block_received_cb);
-	lwm2m_engine_register_exec_callback("5/0/2", firmware_update_cb);
+#endif
+#if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_PULL_SUPPORT)
+	lwm2m_firmware_set_update_cb(firmware_update_cb);
+#endif
 
 	/* setup TEMP SENSOR object */
 
@@ -255,41 +253,57 @@ static int lwm2m_setup(void)
 	return 0;
 }
 
-int setup_net_app_ctx(struct net_app_ctx *ctx, const char *peer)
+static void rd_client_event(struct lwm2m_ctx *client,
+			    enum lwm2m_rd_client_event client_event)
 {
-	int ret;
+	switch (client_event) {
 
-	ret = net_app_init_udp_client(ctx, NULL, NULL, peer,
-				      CONFIG_LWM2M_PEER_PORT, WAIT_TIME, NULL);
-	if (ret < 0) {
-		SYS_LOG_ERR("Cannot init UDP client (%d)", ret);
-		return ret;
+	case LWM2M_RD_CLIENT_EVENT_NONE:
+		/* do nothing */
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_FAILURE:
+		SYS_LOG_DBG("Bootstrap failure!");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_BOOTSTRAP_COMPLETE:
+		SYS_LOG_DBG("Bootstrap complete");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_FAILURE:
+		SYS_LOG_DBG("Registration failure!");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_REGISTRATION_COMPLETE:
+		SYS_LOG_DBG("Registration complete");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_FAILURE:
+		SYS_LOG_DBG("Registration update failure!");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_REG_UPDATE_COMPLETE:
+		SYS_LOG_DBG("Registration update complete");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_DEREGISTER_FAILURE:
+		SYS_LOG_DBG("Deregister failure!");
+		break;
+
+	case LWM2M_RD_CLIENT_EVENT_DISCONNECT:
+		SYS_LOG_DBG("Disconnected");
+		break;
+
 	}
-
-#if defined(CONFIG_NET_CONTEXT_NET_PKT_POOL)
-	net_app_set_net_pkt_pool(ctx, tx_udp_slab, data_udp_pool);
-#endif
-
-	return ret;
 }
 
 void main(void)
 {
 	int ret;
-	char ep_name[ENDPOINT_LEN];
 
 	SYS_LOG_INF(APP_BANNER);
 
 	k_sem_init(&quit_lock, 0, UINT_MAX);
-
-#if defined(CONFIG_NET_L2_BT)
-	if (bt_enable(NULL)) {
-		SYS_LOG_ERR("Bluetooth init failed");
-		return;
-	}
-	ipss_init();
-	ipss_advertise();
-#endif
 
 	ret = lwm2m_setup();
 	if (ret < 0) {
@@ -297,76 +311,31 @@ void main(void)
 		return;
 	}
 
+	memset(&client, 0x0, sizeof(client));
+	client.net_init_timeout = WAIT_TIME;
+	client.net_timeout = CONNECT_TIME;
+#if defined(CONFIG_NET_CONTEXT_NET_PKT_POOL)
+	client.tx_slab = tx_udp_slab;
+	client.data_pool = data_udp_pool;
+#endif
+
 #if defined(CONFIG_NET_IPV6)
-	ret = setup_net_app_ctx(&udp6, CONFIG_NET_APP_PEER_IPV6_ADDR);
-	if (ret < 0) {
-		goto cleanup_ipv6;
-	}
-
-	ret = set_endpoint_name(ep_name, udp6.ipv6.local.sa_family);
-	if (ret < 0) {
-		SYS_LOG_ERR("Cannot set IPv6 endpoint name (%d)", ret);
-		goto cleanup_ipv6;
-	}
-
-
-	ret = lwm2m_engine_start(udp6.ipv6.ctx);
-	if (ret < 0) {
-		SYS_LOG_ERR("Cannot init LWM2M IPv6 engine (%d)", ret);
-		goto cleanup_ipv6;
-	}
-
-	ret = lwm2m_rd_client_start(udp6.ipv6.ctx, &udp6.ipv6.remote,
-				    ep_name);
-	if (ret < 0) {
-		SYS_LOG_ERR("LWM2M init LWM2M IPv6 RD client error (%d)",
-			ret);
-		goto cleanup_ipv6;
-	}
-
-	SYS_LOG_INF("IPv6 setup complete.");
+	ret = lwm2m_rd_client_start(&client, CONFIG_NET_APP_PEER_IPV6_ADDR,
+				    CONFIG_LWM2M_PEER_PORT, CONFIG_BOARD,
+				    rd_client_event);
+#elif defined(CONFIG_NET_IPV4)
+	ret = lwm2m_rd_client_start(&client, CONFIG_NET_APP_PEER_IPV4_ADDR,
+				    CONFIG_LWM2M_PEER_PORT, CONFIG_BOARD,
+				    rd_client_event);
+#else
+	SYS_LOG_ERR("LwM2M client requires IPv4 or IPv6.");
+	ret = -EPROTONOSUPPORT;
 #endif
-
-#if defined(CONFIG_NET_IPV4)
-	ret = setup_net_app_ctx(&udp4, CONFIG_NET_APP_PEER_IPV4_ADDR);
 	if (ret < 0) {
-		goto cleanup_ipv4;
-	}
-
-	ret = set_endpoint_name(ep_name, udp4.ipv4.local.sa_family);
-	if (ret < 0) {
-		SYS_LOG_ERR("Cannot set IPv4 endpoint name (%d)", ret);
-		goto cleanup_ipv4;
-	}
-
-	ret = lwm2m_engine_start(udp4.ipv4.ctx);
-	if (ret < 0) {
-		SYS_LOG_ERR("Cannot init LWM2M IPv4 engine (%d)", ret);
-		goto cleanup_ipv4;
-	}
-
-	ret = lwm2m_rd_client_start(udp4.ipv4.ctx, &udp4.ipv4.remote,
-				    ep_name);
-	if (ret < 0) {
-		SYS_LOG_ERR("LWM2M init LWM2M IPv4 RD client error (%d)",
+		SYS_LOG_ERR("LWM2M init LWM2M RD client error (%d)",
 			ret);
-		goto cleanup_ipv4;
+		return;
 	}
-
-	SYS_LOG_INF("IPv4 setup complete.");
-#endif
 
 	k_sem_take(&quit_lock, K_FOREVER);
-
-#if defined(CONFIG_NET_IPV4)
-cleanup_ipv4:
-	net_app_close(&udp4);
-	net_app_release(&udp4);
-#endif
-
-#if defined(CONFIG_NET_IPV6)
-cleanup_ipv6:
-	net_app_close(&udp6);
-	net_app_release(&udp6);
-#endif
 }

@@ -52,11 +52,21 @@ environment for Windows. Follow the steps below to set it up:
       $ export http_proxy=http://proxy.mycompany.com:123
       $ export https_proxy=$http_proxy
 
-#. Install the dependencies required to build Zephyr:
+#. Update MSYS2's packages and install the dependencies required to build
+   Zephyr (you may need to restart the MSYS2 shell):
 
    .. code-block:: console
 
-      $ pacman -S git make gcc dtc diffutils ncurses-devel python3
+      $ pacman -Syu
+      $ pacman -S git cmake make gcc dtc diffutils ncurses-devel python3 gperf
+
+#. From within the MSYS2 MSYS Shell, clone a copy of the Zephyr source into
+   your home directory using Git:
+
+   .. code-block:: console
+
+      $ cd ~
+      $ git clone https://github.com/zephyrproject-rtos/zephyr.git
 
 #. Install pip and the required Python modules::
 
@@ -95,15 +105,7 @@ environment for Windows. Follow the steps below to set it up:
    * For ARM, install GNU ARM Embedded from the ARM developer website:
      `GNU ARM Embedded`_ (install to :file:`c:\\gccarmemb`).
 
-#. From within the MSYS2 MSYS Shell, clone a copy of the Zephyr source into
-   your home directory using Git:
-
-   .. code-block:: console
-
-      $ cd ~
-      $ git clone https://github.com/zephyrproject-rtos/zephyr.git
-
-#. Also within the MSYS console, set up environment variables for the installed
+#. Within the MSYS console, set up environment variables for the installed
    tools and for the Zephyr environment (using the provided shell script):
 
    For x86:
@@ -128,28 +130,44 @@ environment for Windows. Follow the steps below to set it up:
    .. code-block:: console
 
       $ unset ZEPHYR_SDK_INSTALL_DIR
-      $ source ~/zephyr/zephyr-env.sh
+      $ cd <zephyr git clone location>
+      $ source zephyr-env.sh
+
+#. Within the MSYS console, build Kconfig in :file:`$ZEPHYR_BASE/build` and
+    add it to path
+
+   .. code-block:: console
+
+      $ cd $ZEPHYR_BASE
+      $ mkdir build && cd build
+      $ cmake $ZEPHYR_BASE/scripts
+      $ make
+      $ echo "export PATH=$PWD/kconfig:\$PATH" >> $HOME/.zephyrrc
+      $ source $ZEPHYR_BASE/zephyr-env.sh
+
+    .. note::
+
+        You only need to do this once after cloning the git repository.
 
 #. Finally, you can try building the :ref:`hello_world` sample to check things
    out.
 
-   To build for the Intel |reg| Quark |trade| (x86-based) Arduino 101:
+To build for the Intel |reg| Quark |trade| (x86-based) Arduino 101:
 
-    .. code-block:: console
+.. zephyr-app-commands::
+  :zephyr-app: samples/hello_world
+  :board: arduino_101
+  :goals: build
 
-       $ cd $ZEPHYR_BASE/samples/hello_world
-       $ make BOARD=arduino_101
+To build for the ARM-based Nordic nRF52 Development Kit:
 
-   To build for the ARM-based Nordic nRF52 Development Kit:
+.. zephyr-app-commands::
+  :zephyr-app: samples/hello_world
+  :board: nrf52_pca10040
+  :goals: build
 
-    .. code-block:: console
-
-       $ cd $ZEPHYR_BASE/samples/hello_world
-       $ make BOARD=nrf52_pca10040
-
-
-    This should check that all the tools and toolchain are set up correctly for
-    your own Zephyr development.
+This should check that all the tools and toolchain are set up correctly for
+your own Zephyr development.
 
 Using Windows 10 WSL (Windows Subsystem for Linux)
 ==================================================

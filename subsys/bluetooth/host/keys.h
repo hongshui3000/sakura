@@ -22,6 +22,8 @@ enum {
 enum {
 	BT_KEYS_AUTHENTICATED,
 	BT_KEYS_DEBUG,
+	BT_KEYS_ID_PENDING_ADD,
+	BT_KEYS_ID_PENDING_DEL,
 
 	/* Total number of flags - must be at the end of the enum */
 	BT_KEYS_NUM_FLAGS,
@@ -58,6 +60,8 @@ struct bt_keys {
 	struct bt_ltk		slave_ltk;
 #endif /* CONFIG_BT_SMP_SC_ONLY */
 };
+
+void bt_keys_foreach(int type, void (*func)(struct bt_keys *keys));
 
 struct bt_keys *bt_keys_get_addr(const bt_addr_le_t *addr);
 struct bt_keys *bt_keys_get_type(int type, const bt_addr_le_t *addr);

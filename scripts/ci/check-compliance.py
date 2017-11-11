@@ -69,7 +69,7 @@ def run_gitlint(tc, commit_range):
 
     if msg != "":
         failure = ET.SubElement(tc, 'failure', type="failure", message="commit message error on range: %s" %commit_range)
-        failure.text = (str(msg))
+        failure.text = (msg.decode('utf8'))
         return 1
 
     return 0
@@ -86,10 +86,10 @@ def run_checkpatch(tc, commit_range):
             stderr=subprocess.STDOUT, shell=True)
 
     except subprocess.CalledProcessError as ex:
-        m = re.search("([1-9][0-9]*) errors,", str(ex.output))
+        m = re.search("([1-9][0-9]*) errors,", ex.output.decode('utf8'))
         if m:
             failure = ET.SubElement(tc, 'failure', type="failure", message="checkpatch issues")
-            failure.text = (str(ex.output))
+            failure.text = (ex.output.decode('utf8'))
             return 1
 
     return 0
@@ -98,11 +98,11 @@ def run_checkpatch(tc, commit_range):
 def check_doc(tc, range):
 
     if os.path.exists(DOCS_WARNING_FILE) and os.path.getsize(DOCS_WARNING_FILE) > 0:
-        with open(DOCS_WARNING_FILE, "r") as f:
+        with open(DOCS_WARNING_FILE, "rb") as f:
             log = f.read()
             failure = ET.SubElement(tc, 'failure', type="failure",
                         message="documentation issues")
-            failure.text = (str(log))
+            failure.text = (log.decode('utf8'))
         return 1
 
     return 0

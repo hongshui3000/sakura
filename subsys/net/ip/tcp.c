@@ -45,8 +45,6 @@
 #define NET_MAX_TCP_CONTEXT CONFIG_NET_MAX_CONTEXTS
 static struct net_tcp tcp_context[NET_MAX_TCP_CONTEXT];
 
-#define INIT_RETRY_MS 200
-
 /* 2MSL timeout, where "MSL" is arbitrarily 2 minutes in the RFC */
 #if defined(CONFIG_NET_TCP_2MSL_TIME)
 #define TIME_WAIT_MS K_SECONDS(CONFIG_NET_TCP_2MSL_TIME)
@@ -121,7 +119,8 @@ static void net_tcp_trace(struct net_pkt *pkt, struct net_tcp *tcp)
 
 static inline u32_t retry_timeout(const struct net_tcp *tcp)
 {
-	return ((u32_t)1 << tcp->retry_timeout_shift) * INIT_RETRY_MS;
+	return ((u32_t)1 << tcp->retry_timeout_shift) *
+				CONFIG_NET_TCP_INIT_RETRANSMISSION_TIMEOUT;
 }
 
 #define is_6lo_technology(pkt)						    \
@@ -164,9 +163,9 @@ static void abort_connection(struct net_tcp *tcp)
 	net_context_unref(ctx);
 }
 
-static void tcp_retry_expired(struct k_timer *timer)
+static void tcp_retry_expired(struct k_work *work)
 {
-	struct net_tcp *tcp = CONTAINER_OF(timer, struct net_tcp, retry_timer);
+	struct net_tcp *tcp = CONTAINER_OF(work, struct net_tcp, retry_timer);
 	struct net_pkt *pkt;
 
 	/* Double the retry period for exponential backoff and resent
@@ -180,7 +179,7 @@ static void tcp_retry_expired(struct k_timer *timer)
 			return;
 		}
 
-		k_timer_start(&tcp->retry_timer, retry_timeout(tcp), 0);
+		k_delayed_work_submit(&tcp->retry_timer, retry_timeout(tcp));
 
 		pkt = CONTAINER_OF(sys_slist_peek_head(&tcp->sent_list),
 				   struct net_pkt, sent_list);
@@ -193,10 +192,12 @@ static void tcp_retry_expired(struct k_timer *timer)
 		net_pkt_set_queued(pkt, true);
 
 		if (net_tcp_send_pkt(pkt) < 0 && !is_6lo_technology(pkt)) {
-			NET_DBG("[%p] pkt %p send failed", tcp, pkt);
+			NET_DBG("retry %u: [%p] pkt %p send failed",
+				tcp->retry_timeout_shift, tcp, pkt);
 			net_pkt_unref(pkt);
 		} else {
-			NET_DBG("[%p] sent pkt %p", tcp, pkt);
+			NET_DBG("retry %u: [%p] sent pkt %p",
+				tcp->retry_timeout_shift, tcp, pkt);
 			if (IS_ENABLED(CONFIG_NET_STATISTICS_TCP) &&
 			    !is_6lo_technology(pkt)) {
 				net_stats_update_tcp_seg_rexmit();
@@ -237,10 +238,11 @@ struct net_tcp *net_tcp_alloc(struct net_context *context)
 	tcp_context[i].send_seq = tcp_init_isn();
 	tcp_context[i].recv_max_ack = tcp_context[i].send_seq + 1u;
 	tcp_context[i].recv_wnd = min(NET_TCP_MAX_WIN, NET_TCP_BUF_MAX_LEN);
+	tcp_context[i].send_mss = NET_TCP_DEFAULT_MSS;
 
 	tcp_context[i].accept_cb = NULL;
 
-	k_timer_init(&tcp_context[i].retry_timer, tcp_retry_expired, NULL);
+	k_delayed_work_init(&tcp_context[i].retry_timer, tcp_retry_expired);
 	k_sem_init(&tcp_context[i].connect_wait, 0, UINT_MAX);
 
 	return &tcp_context[i];
@@ -254,6 +256,11 @@ static void ack_timer_cancel(struct net_tcp *tcp)
 static void fin_timer_cancel(struct net_tcp *tcp)
 {
 	k_delayed_work_cancel(&tcp->fin_timer);
+}
+
+static void retry_timer_cancel(struct net_tcp *tcp)
+{
+	k_delayed_work_cancel(&tcp->retry_timer);
 }
 
 int net_tcp_release(struct net_tcp *tcp)
@@ -272,7 +279,7 @@ int net_tcp_release(struct net_tcp *tcp)
 		net_pkt_unref(pkt);
 	}
 
-	k_timer_stop(&tcp->retry_timer);
+	retry_timer_cancel(tcp);
 	k_sem_reset(&tcp->connect_wait);
 
 	ack_timer_cancel(tcp);
@@ -333,6 +340,7 @@ static struct net_pkt *prepare_segment(struct net_tcp *tcp,
 	struct net_context *context = tcp->context;
 	struct net_tcp_hdr *tcp_hdr;
 	u16_t dst_port, src_port;
+	bool pkt_allocated;
 	u8_t optlen = 0;
 
 	NET_ASSERT(context);
@@ -345,11 +353,14 @@ static struct net_pkt *prepare_segment(struct net_tcp *tcp,
 		 */
 		tail = pkt->frags;
 		pkt->frags = NULL;
+		pkt_allocated = false;
 	} else {
 		pkt = net_pkt_get_tx(context, ALLOC_TIMEOUT);
 		if (!pkt) {
 			return NULL;
 		}
+
+		pkt_allocated = true;
 	}
 
 #if defined(CONFIG_NET_IPV4)
@@ -377,13 +388,20 @@ static struct net_pkt *prepare_segment(struct net_tcp *tcp,
 	{
 		NET_DBG("[%p] Protocol family %d not supported", tcp,
 			net_pkt_family(pkt));
-		net_pkt_unref(pkt);
+
+		if (pkt_allocated) {
+			net_pkt_unref(pkt);
+		}
+
 		return NULL;
 	}
 
 	header = net_pkt_get_data(context, ALLOC_TIMEOUT);
 	if (!header) {
-		net_pkt_unref(pkt);
+		if (pkt_allocated) {
+			net_pkt_unref(pkt);
+		}
+
 		return NULL;
 	}
 
@@ -412,7 +430,10 @@ static struct net_pkt *prepare_segment(struct net_tcp *tcp,
 	}
 
 	if (finalize_segment(context, pkt) < 0) {
-		net_pkt_unref(pkt);
+		if (pkt_allocated) {
+			net_pkt_unref(pkt);
+		}
+
 		return NULL;
 	}
 
@@ -471,22 +492,12 @@ int net_tcp_prepare_segment(struct net_tcp *tcp, u8_t flags,
 		 * have ACK set.
 		 */
 		flags |= NET_TCP_ACK;
-		/* FIXME: We apparently miss increment in another
-		 * transition of the state machine, so have to
-		 * adjust seq no by 2 here. This is required for
-		 * Linux to detect active close on server side, and
-		 * to make Wireshark happy about sequence numbers.
-		 */
-		seq += 2;
+		seq++;
 
 		if (net_tcp_get_state(tcp) == NET_TCP_ESTABLISHED ||
 		    net_tcp_get_state(tcp) == NET_TCP_SYN_RCVD) {
 			net_tcp_change_state(tcp, NET_TCP_FIN_WAIT_1);
 		}
-	}
-
-	if (flags & NET_TCP_SYN) {
-		seq++;
 	}
 
 	wnd = net_tcp_get_recv_wnd(tcp);
@@ -565,7 +576,21 @@ u16_t net_tcp_get_recv_mss(const struct net_tcp *tcp)
 	}
 #if defined(CONFIG_NET_IPV6)
 	else if (family == AF_INET6) {
-		return 1280;
+		struct net_if *iface = net_context_get_iface(tcp->context);
+		int mss = 0;
+
+		if (iface && iface->mtu >= NET_IPV6TCPH_LEN) {
+			/* Detect MSS based on interface MTU minus "TCP,IP
+			 * header size"
+			 */
+			mss = iface->mtu - NET_IPV6TCPH_LEN;
+		}
+
+		if (mss < NET_IPV6_MTU) {
+			mss = NET_IPV6_MTU;
+		}
+
+		return mss;
 	}
 #endif /* CONFIG_NET_IPV6 */
 
@@ -575,7 +600,7 @@ u16_t net_tcp_get_recv_mss(const struct net_tcp *tcp)
 static void net_tcp_set_syn_opt(struct net_tcp *tcp, u8_t *options,
 				u8_t *optionlen)
 {
-	u16_t recv_mss;
+	u32_t recv_mss;
 
 	*optionlen = 0;
 
@@ -586,7 +611,8 @@ static void net_tcp_set_syn_opt(struct net_tcp *tcp, u8_t *options,
 		recv_mss = 0;
 	}
 
-	UNALIGNED_PUT(htonl((u32_t)recv_mss | NET_TCP_MSS_HEADER),
+	recv_mss |= (NET_TCP_MSS_OPT << 24) | (NET_TCP_MSS_SIZE << 16);
+	UNALIGNED_PUT(htonl(recv_mss),
 		      (u32_t *)(options + *optionlen));
 
 	*optionlen += NET_TCP_MSS_SIZE;
@@ -603,8 +629,6 @@ int net_tcp_prepare_ack(struct net_tcp *tcp, const struct sockaddr *remote,
 		/* In the SYN_RCVD state acknowledgment must be with the
 		 * SYN flag.
 		 */
-		tcp->send_seq--;
-
 		net_tcp_set_syn_opt(tcp, options, &optionlen);
 
 		return net_tcp_prepare_segment(tcp, NET_TCP_SYN | NET_TCP_ACK,
@@ -615,8 +639,6 @@ int net_tcp_prepare_ack(struct net_tcp *tcp, const struct sockaddr *remote,
 		/* In the FIN_WAIT_1 and LAST_ACK states acknowledgment must
 		 * be with the FIN flag.
 		 */
-		tcp->send_seq--;
-
 		return net_tcp_prepare_segment(tcp, NET_TCP_FIN | NET_TCP_ACK,
 					       0, 0, NULL, remote, pkt);
 	default:
@@ -711,9 +733,9 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 	sys_slist_append(&context->tcp->sent_list, &pkt->sent_list);
 
 	/* We need to restart retry_timer if it is stopped. */
-	if (k_timer_remaining_get(&context->tcp->retry_timer) == 0) {
-		k_timer_start(&context->tcp->retry_timer,
-			      retry_timeout(context->tcp), 0);
+	if (k_delayed_work_remaining_get(&context->tcp->retry_timer) == 0) {
+		k_delayed_work_submit(&context->tcp->retry_timer,
+				      retry_timeout(context->tcp));
 	}
 
 	do_ref_if_needed(context->tcp, pkt);
@@ -819,17 +841,17 @@ static void restart_timer(struct net_tcp *tcp)
 	if (!sys_slist_is_empty(&tcp->sent_list)) {
 		tcp->flags |= NET_TCP_RETRYING;
 		tcp->retry_timeout_shift = 0;
-		k_timer_start(&tcp->retry_timer, retry_timeout(tcp), 0);
+		k_delayed_work_submit(&tcp->retry_timer, retry_timeout(tcp));
 	} else if (IS_ENABLED(CONFIG_NET_TCP_TIME_WAIT)) {
 		if (tcp->fin_sent && tcp->fin_rcvd) {
 			/* We know sent_list is empty, which means if
 			 * fin_sent is true it must have been ACKd
 			 */
-			k_timer_start(&tcp->retry_timer, TIME_WAIT_MS, 0);
+			k_delayed_work_submit(&tcp->retry_timer, TIME_WAIT_MS);
 			net_context_ref(tcp->context);
 		}
 	} else {
-		k_timer_stop(&tcp->retry_timer);
+		k_delayed_work_cancel(&tcp->retry_timer);
 		tcp->flags &= ~NET_TCP_RETRYING;
 	}
 }
@@ -1213,4 +1235,78 @@ struct net_buf *net_tcp_set_chksum(struct net_pkt *pkt, struct net_buf *frag)
 	NET_ASSERT(frag);
 
 	return frag;
+}
+
+int net_tcp_parse_opts(struct net_pkt *pkt, int opt_totlen,
+		       struct net_tcp_options *opts)
+{
+	struct net_buf *frag = pkt->frags;
+	u16_t pos = net_pkt_ip_hdr_len(pkt)
+		  + net_pkt_ipv6_ext_len(pkt)
+		  + sizeof(struct net_tcp_hdr);
+	u8_t opt, optlen;
+
+	/* TODO: this should be done for each TCP pkt, on reception */
+	if (pos + opt_totlen > net_pkt_get_len(pkt)) {
+		NET_ERR("Truncated pkt len: %d, expected: %d",
+			(int)net_pkt_get_len(pkt), pos + opt_totlen);
+		return -EINVAL;
+	}
+
+	while (opt_totlen) {
+		frag = net_frag_read(frag, pos, &pos, sizeof(opt), &opt);
+		opt_totlen--;
+
+		/* https://www.iana.org/assignments/tcp-parameters/tcp-parameters.xhtml#tcp-parameters-1 */
+		/* "Options 0 and 1 are exactly one octet which is their
+		 * kind field.  All other options have their one octet
+		 * kind field, followed by a one octet length field,
+		 * followed by length-2 octets of option data."
+		 */
+		if (opt == NET_TCP_END_OPT) {
+			break;
+		} else if (opt == NET_TCP_NOP_OPT) {
+			continue;
+		}
+
+		if (!opt_totlen) {
+			optlen = 0;
+			goto error;
+		}
+
+		frag = net_frag_read(frag, pos, &pos, sizeof(optlen), &optlen);
+		opt_totlen--;
+		if (optlen < 2) {
+			goto error;
+		}
+
+		/* Subtract opt/optlen size now to avoid doing this
+		 * repeatedly.
+		 */
+		optlen -= 2;
+		if (opt_totlen < optlen) {
+			goto error;
+		}
+
+		switch (opt) {
+		case NET_TCP_MSS_OPT:
+			if (optlen != 2) {
+				goto error;
+			}
+			frag = net_frag_read_be16(frag, pos, &pos,
+						  &opts->mss);
+			break;
+		default:
+			frag = net_frag_skip(frag, pos, &pos, optlen);
+			break;
+		}
+
+		opt_totlen -= optlen;
+	}
+
+	return 0;
+
+error:
+	NET_ERR("Invalid TCP opt: %d len: %d", opt, optlen);
+	return -EINVAL;
 }

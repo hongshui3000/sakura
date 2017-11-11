@@ -52,6 +52,7 @@ void _sys_device_do_config_level(int level)
 		struct device_config *device = info->config;
 
 		device->init(info);
+		_k_object_init(info);
 	}
 }
 
@@ -60,7 +61,15 @@ struct device *device_get_binding(const char *name)
 	struct device *info;
 
 	for (info = __device_init_start; info != __device_init_end; info++) {
-		if (info->driver_api && !strcmp(name, info->config->name)) {
+		if (!info->driver_api) {
+			continue;
+		}
+
+		if (name == info->config->name) {
+			return info;
+		}
+
+		if (!strcmp(name, info->config->name)) {
 			return info;
 		}
 	}

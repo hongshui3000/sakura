@@ -8,7 +8,7 @@
  * @file
  * @brief Per-arch thread definition
  *
- * This file contains defintions for
+ * This file contains definitions for
  *
  *  struct _thread_arch
  *  struct _callee_saved
@@ -110,7 +110,7 @@ typedef struct s_FpReg {
  * The following is the "normal" floating point register save area, or
  * more accurately the save area required by the 'fnsave' and 'frstor'
  * instructions.  The structure matches the layout described in the
- * "Intel® 64 and IA-32 Architectures Software Developer’s Manual
+ * "Intel(r) 64 and IA-32 Architectures Software Developer's Manual
  * Volume 1: Basic Architecture": Protected Mode x87 FPU State Image in
  * Memory, 32-Bit Format.
  */
@@ -258,13 +258,13 @@ struct _thread_arch {
 	/*
 	 * The location of all floating point related structures/fields MUST be
 	 * located at the end of struct tcs.  This way only the
-	 * fibers/tasks that actually utilize non-integer capabilities need to
+	 * threads that actually utilize non-integer capabilities need to
 	 * account for the increased memory required for storing FP state when
 	 * sizing stacks.
 	 *
 	 * Given that stacks "grow down" on IA-32, and the TCS is located
 	 * at the start of a thread's "workspace" memory, the stacks of
-	 * fibers/tasks that do not utilize floating point instruction can
+	 * threads that do not utilize floating point instruction can
 	 * effectively consume the memory occupied by the 'tCoopFloatReg' and
 	 * 'tPreempFloatReg' structures without ill effect.
 	 */

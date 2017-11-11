@@ -1,0 +1,39 @@
+# Kconfig.defconfig.tm4c123gh6pm - TI tm4c12x TM4C123gxl SoC
+#
+
+if SOC_TM4C123GH6PM
+
+config SOC
+	string
+	default tm4c123gh6pm
+
+config NUM_IRQS
+	int
+	# must be >= the highest interrupt number used
+	# This includes the NWP interrupt
+	default 154
+
+config SYS_CLOCK_HW_CYCLES_PER_SEC
+	int
+	default 80000000
+
+# if GPIO
+#
+# config GPIO_TM4C123GH6PM
+# 	def_bool y
+#
+# config GPIO_GPIO_TM4C123GXL_A0
+# 	default n
+#
+# config GPIO_GPIO_TM4C123GXL_A1
+# 	default y
+#
+# config GPIO_GPIO_TM4C123GXL_A2
+# 	default y
+#
+# config GPIO_GPIO_TM4C123GXL_A3
+# 	default n
+#
+# endif # GPIO
+
+endif # SOC_TM4C123GH6PM

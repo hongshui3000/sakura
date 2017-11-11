@@ -21,8 +21,8 @@
 
 #include <net/buf.h>
 
-#include <usb_device.h>
-#include <usb_common.h>
+#include <usb/usb_device.h>
+#include <usb/usb_common.h>
 
 #include <net/ieee802154_radio.h>
 #include <net_private.h>
@@ -224,9 +224,11 @@ static struct usb_ep_cfg_data wpanusb_ep[] = {
 	},
 };
 
-static void wpanusb_status_cb(enum usb_dc_status_code status)
+static void wpanusb_status_cb(enum usb_dc_status_code status, u8_t *param)
 {
 	struct wpanusb_dev_data_t * const dev_data = DEV_DATA(wpanusb_dev);
+
+	ARG_UNUSED(param);
 
 	/* Store the new status */
 	dev_data->usb_status = status;
@@ -314,8 +316,18 @@ static int set_ieee_addr(void *data, int len)
 
 	SYS_LOG_DBG("len %u", len);
 
-	return radio_api->set_ieee_addr(ieee802154_dev,
-					(u8_t *)&req->ieee_addr);
+	if (IEEE802154_HW_FILTER &
+	    radio_api->get_capabilities(ieee802154_dev)) {
+		struct ieee802154_filter filter;
+
+		filter.ieee_addr = (u8_t *)&req->ieee_addr;
+
+		return radio_api->set_filter(ieee802154_dev,
+					     IEEE802154_FILTER_TYPE_IEEE_ADDR,
+					     &filter);
+	}
+
+	return 0;
 }
 
 static int set_short_addr(void *data, int len)
@@ -324,7 +336,19 @@ static int set_short_addr(void *data, int len)
 
 	SYS_LOG_DBG("len %u", len);
 
-	return radio_api->set_short_addr(ieee802154_dev, req->short_addr);
+
+	if (IEEE802154_HW_FILTER &
+	    radio_api->get_capabilities(ieee802154_dev)) {
+		struct ieee802154_filter filter;
+
+		filter.short_addr = req->short_addr;
+
+		return radio_api->set_filter(ieee802154_dev,
+					     IEEE802154_FILTER_TYPE_SHORT_ADDR,
+					     &filter);
+	}
+
+	return 0;
 }
 
 static int set_pan_id(void *data, int len)
@@ -333,7 +357,18 @@ static int set_pan_id(void *data, int len)
 
 	SYS_LOG_DBG("len %u", len);
 
-	return radio_api->set_pan_id(ieee802154_dev, req->pan_id);
+	if (IEEE802154_HW_FILTER &
+	    radio_api->get_capabilities(ieee802154_dev)) {
+		struct ieee802154_filter filter;
+
+		filter.pan_id = req->pan_id;
+
+		return radio_api->set_filter(ieee802154_dev,
+					     IEEE802154_FILTER_TYPE_PAN_ID,
+					     &filter);
+	}
+
+	return 0;
 }
 
 static int start(void)

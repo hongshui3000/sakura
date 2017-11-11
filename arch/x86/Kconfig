@@ -13,17 +13,15 @@ choice
 	source "arch/x86/soc/*/Kconfig.soc"
 endchoice
 
-menu "x86 Options"
+menu "X86 Architecture Options"
 	depends on X86
 
 config ARCH
 	default "x86"
 
-
 config ARCH_DEFCONFIG
 	string
 	default "arch/x86/defconfig"
-
 
 source "arch/x86/core/Kconfig"
 
@@ -36,11 +34,15 @@ config CPU_ATOM
 	bool
 	select CMOV
 	select CPU_HAS_FPU
+	select ARCH_HAS_STACK_PROTECTION if X86_MMU
+	select ARCH_HAS_USERSPACE if X86_MMU
 	help
 	This option signifies the use of a CPU from the Atom family.
 
 config CPU_MINUTEIA
 	# Hidden
+	select ARCH_HAS_STACK_PROTECTION if X86_MMU
+	select ARCH_HAS_USERSPACE if X86_MMU
 	bool
 	help
 	This option signifies the use of a CPU from the Minute IA family.
@@ -70,25 +72,61 @@ config X86_IAMCU
 	assembly code will need to be updated to conform to the new calling
 	convention.  If in doubt say N
 
+menu "Memory Management"
 config X86_MMU
 	bool
 	default n
-	prompt "Memory Management Unit"
+	prompt "Enable Memory Management Unit"
 	help
 	This options enables the memory management unit present in x86. Enabling
 	this will create boot time page table structure.
 
+config X86_PAE_MODE
+	bool
+	depends on X86_MMU
+	default n
+	prompt "Enable PAE page tables"
+	help
+	When selected the Page address extension mode is enabled. The PAE
+	page tables provides a mechanism to selectively disable execution.
+	So any Page Table Entry (PTE) that sets the XD bit will have all
+	instruction fetches disabled in that 4KB region. The amount of RAM
+	needed for PAE tables is more than twice that of 32-Bit paging
+	because each PAE entry is 64bits wide.
+	Note: Do not enable in RAM constrained devices.
+endmenu
+
+config X86_ENABLE_TSS
+	bool
+	help
+	This hidden option enables defining a Task State Segment (TSS) for
+	kernel execution. This is needed to handle double-faults or
+	do privilege elevation. It also defines a special TSS and handler
+	for correctly handling double-fault exceptions, instead of just
+	letting the system triple-fault and reset.
+
 config X86_STACK_PROTECTION
 	bool
-	default n
-	depends on X86_MMU
+	default y if HW_STACK_PROTECTION
 	select SET_GDT
 	select GDT_DYNAMIC
-	prompt "MMU-based stack overflow protection"
+	select X86_ENABLE_TSS
 	help
 	This option leverages the MMU to cause a system fatal error if the
 	bounds of the current process stack are overflowed. This is done
 	by preceding all stack areas with a 4K guard page.
+
+config X86_USERSPACE
+	bool
+	default y if USERSPACE
+	select THREAD_STACK_INFO
+	select SET_GDT
+	select GDT_DYNAMIC
+	select X86_ENABLE_TSS
+	help
+	This option enables APIs to drop a thread's privileges down to ring 3,
+	supporting user-level threads that are protected from each other and
+	from crashing the kernel.
 
 menu "Floating Point Options"
 depends on CPU_HAS_FPU
@@ -247,9 +285,7 @@ config CACHE_FLUSHING
 	This links in the sys_cache_flush() function. A mechanism for flushing the
 	cache must be selected as well. By default, that mechanism is discovered at
 	runtime.
-endmenu
 
-menu "Board Capabilities"
 config PIC_DISABLE
 	bool "Disable PIC"
 	default n
@@ -307,8 +343,6 @@ config X86_FIXED_IRQ_MAPPING
 	mapping between IDT vectors and IRQ lines.
 
 endmenu
-
-
 
 source "arch/x86/soc/*/Kconfig"
 

@@ -2,6 +2,42 @@
 
 .. _zephyr_1.9:
 
+Zephyr Kernel 1.9.2
+###################
+
+This is a maintenance release with fixes.
+
+Kernel
+******
+* Generic queue item acquisition fixed to always return a valid item when
+  using K_FOREVER
+
+Bluetooth
+*********
+* Multiple stability fixes for BLE Mesh
+* Multiple stability fixes for the BLE Controller
+
+Zephyr Kernel 1.9.1
+###################
+
+This is a maintenance release with fixes and a two new features in the
+BLE Controller.
+
+Drivers and Sensors
+*******************
+* mcux ethernet driver buffer overflow fixed
+* STM32 PWM prescaler issue fixed
+
+Networking
+**********
+* Support for IPv6 in DNS fixed
+
+Bluetooth
+*********
+* Multiple stability fixes for the BLE Controller
+* Support for PA/LNA amplifiers in the BLE Controller
+* Support for additional VS commands in the BLE Controller
+
 Zephyr Kernel 1.9.0
 ###################
 
@@ -210,7 +246,7 @@ JIRA Related Items
 * :jira:`ZEP-2151` - Move Quark D2000 to device tree
 * :jira:`ZEP-2156` - Build warnings [-Wformat] with LLVM/icx (tests/kernel/sprintf)
 * :jira:`ZEP-2168` - Timers seem to be broken with TICKLESS_KERNEL on nRF51 (Cortex M0)
-* :jira:`ZEP-2171` - Move all board pinmux code from drivers/pinmux/stm32 to the corrosponding board/soc locations
+* :jira:`ZEP-2171` - Move all board pinmux code from drivers/pinmux/stm32 to the corresponding board/soc locations
 * :jira:`ZEP-2184` - Split data, bss, noinit sections into application and kernel areas
 * :jira:`ZEP-2188` - x86: Implement simple stack memory protection
 * :jira:`ZEP-2217` - schedule_api test fails on ARM with tickless kernel enabled

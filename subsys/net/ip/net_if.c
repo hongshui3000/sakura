@@ -42,6 +42,12 @@ static struct net_if_router routers[CONFIG_NET_MAX_ROUTERS];
  */
 static sys_slist_t link_callbacks;
 
+#if defined(CONFIG_NET_IPV6)
+/* Multicast join/leave tracking.
+ */
+static sys_slist_t mcast_monitor_callbacks;
+#endif
+
 NET_STACK_DEFINE(TX, tx_stack, CONFIG_NET_TX_STACK_SIZE,
 		 CONFIG_NET_TX_STACK_SIZE);
 static struct k_thread tx_thread_data;
@@ -832,6 +838,35 @@ struct net_if_mcast_addr *net_if_ipv6_maddr_lookup(const struct in6_addr *maddr,
 	return NULL;
 }
 
+void net_if_mcast_mon_register(struct net_if_mcast_monitor *mon,
+			       struct net_if *iface,
+			       net_if_mcast_callback_t cb)
+{
+	sys_slist_find_and_remove(&mcast_monitor_callbacks, &mon->node);
+	sys_slist_prepend(&mcast_monitor_callbacks, &mon->node);
+
+	mon->iface = iface;
+	mon->cb = cb;
+}
+
+void net_if_mcast_mon_unregister(struct net_if_mcast_monitor *mon)
+{
+	sys_slist_find_and_remove(&mcast_monitor_callbacks, &mon->node);
+}
+
+void net_if_mcast_monitor(struct net_if *iface, const struct in6_addr *addr,
+			  bool is_joined)
+{
+	struct net_if_mcast_monitor *mon, *tmp;
+
+	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&mcast_monitor_callbacks,
+					  mon, tmp, node) {
+		if (iface == mon->iface) {
+			mon->cb(iface, addr, is_joined);
+		}
+	}
+}
+
 static struct net_if_ipv6_prefix *ipv6_prefix_find(struct net_if *iface,
 						   struct in6_addr *prefix,
 						   u8_t prefix_len)
@@ -1588,6 +1623,97 @@ bool net_if_ipv4_addr_rm(struct net_if *iface, struct in_addr *addr)
 
 	return false;
 }
+
+static struct net_if_mcast_addr *ipv4_maddr_find(struct net_if *iface,
+						 bool is_used,
+						 const struct in_addr *addr)
+{
+	int i;
+
+	for (i = 0; i < NET_IF_MAX_IPV4_MADDR; i++) {
+		if ((is_used && !iface->ipv4.mcast[i].is_used) ||
+		    (!is_used && iface->ipv4.mcast[i].is_used)) {
+			continue;
+		}
+
+		if (addr) {
+			if (!net_ipv4_addr_cmp(
+				    &iface->ipv4.mcast[i].address.in_addr,
+				    addr)) {
+				continue;
+			}
+		}
+
+		return &iface->ipv4.mcast[i];
+	}
+
+	return NULL;
+}
+
+struct net_if_mcast_addr *net_if_ipv4_maddr_add(struct net_if *iface,
+						const struct in_addr *addr)
+{
+	struct net_if_mcast_addr *maddr;
+
+	if (!net_is_ipv4_addr_mcast(addr)) {
+		NET_DBG("Address %s is not a multicast address.",
+			net_sprint_ipv4_addr(addr));
+		return NULL;
+	}
+
+	maddr = ipv4_maddr_find(iface, false, NULL);
+	if (maddr) {
+		maddr->is_used = true;
+		maddr->address.family = AF_INET;
+		maddr->address.in_addr.s4_addr32[0] = addr->s4_addr32[0];
+
+		NET_DBG("interface %p address %s added", iface,
+			net_sprint_ipv4_addr(addr));
+	}
+
+	return maddr;
+}
+
+bool net_if_ipv4_maddr_rm(struct net_if *iface, const struct in_addr *addr)
+{
+	struct net_if_mcast_addr *maddr;
+
+	maddr = ipv4_maddr_find(iface, true, addr);
+	if (maddr) {
+		maddr->is_used = false;
+
+		NET_DBG("interface %p address %s removed",
+			iface, net_sprint_ipv4_addr(addr));
+
+		return true;
+	}
+
+	return false;
+}
+
+struct net_if_mcast_addr *net_if_ipv4_maddr_lookup(const struct in_addr *maddr,
+						   struct net_if **ret)
+{
+	struct net_if_mcast_addr *addr;
+	struct net_if *iface;
+
+	for (iface = __net_if_start; iface != __net_if_end; iface++) {
+		if (ret && *ret && iface != *ret) {
+			continue;
+		}
+
+		addr = ipv4_maddr_find(iface, true, maddr);
+		if (addr) {
+			if (ret) {
+				*ret = iface;
+			}
+
+			return addr;
+		}
+	}
+
+	return NULL;
+}
 #endif /* CONFIG_NET_IPV4 */
 
 void net_if_register_link_cb(struct net_if_link_cb *link,
@@ -1738,7 +1864,7 @@ void net_if_init(struct k_sem *startup_sync)
 	}
 
 	if (iface == __net_if_start) {
-		NET_WARN("There is no network interface to work with!");
+		NET_ERR("There is no network interface to work with!");
 		return;
 	}
 

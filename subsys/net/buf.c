@@ -64,6 +64,15 @@ static int pool_id(struct net_buf_pool *pool)
 #define UNINIT_BUF(pool, n) (struct net_buf *)(((u8_t *)(pool->__bufs)) + \
 					       ((n) * BUF_SIZE(pool)))
 
+int net_buf_id(struct net_buf *buf)
+{
+	struct net_buf_pool *pool = net_buf_pool_get(buf->pool_id);
+	u8_t *pool_start = (u8_t *)pool->__bufs;
+	u8_t *buf_ptr = (u8_t *)buf;
+
+	return (buf_ptr - pool_start) / BUF_SIZE(pool);
+}
+
 static inline struct net_buf *pool_get_uninit(struct net_buf_pool *pool,
 					      u16_t uninit_count)
 {
@@ -222,6 +231,56 @@ void net_buf_reserve(struct net_buf *buf, size_t reserve)
 	NET_BUF_DBG("buf %p reserve %zu", buf, reserve);
 
 	buf->data = buf->__buf + reserve;
+}
+
+void net_buf_slist_put(sys_slist_t *list, struct net_buf *buf)
+{
+	struct net_buf *tail;
+	unsigned int key;
+
+	NET_BUF_ASSERT(list);
+	NET_BUF_ASSERT(buf);
+
+	for (tail = buf; tail->frags; tail = tail->frags) {
+		tail->flags |= NET_BUF_FRAGS;
+	}
+
+	key = irq_lock();
+	sys_slist_append_list(list, &buf->node, &tail->node);
+	irq_unlock(key);
+}
+
+struct net_buf *net_buf_slist_get(sys_slist_t *list)
+{
+	struct net_buf *buf, *frag;
+	unsigned int key;
+
+	NET_BUF_ASSERT(list);
+
+	key = irq_lock();
+	buf = (void *)sys_slist_get(list);
+	irq_unlock(key);
+
+	if (!buf) {
+		return NULL;
+	}
+
+	/* Get any fragments belonging to this buffer */
+	for (frag = buf; (frag->flags & NET_BUF_FRAGS); frag = frag->frags) {
+		key = irq_lock();
+		frag->frags = (void *)sys_slist_get(list);
+		irq_unlock(key);
+
+		NET_BUF_ASSERT(frag->frags);
+
+		/* The fragments flag is only for list-internal usage */
+		frag->flags &= ~NET_BUF_FRAGS;
+	}
+
+	/* Mark the end of the fragment list */
+	frag->frags = NULL;
+
+	return buf;
 }
 
 void net_buf_put(struct k_fifo *fifo, struct net_buf *buf)

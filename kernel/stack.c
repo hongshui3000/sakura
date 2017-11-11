@@ -17,6 +17,7 @@
 #include <wait_q.h>
 #include <misc/__assert.h>
 #include <init.h>
+#include <syscall_handler.h>
 
 extern struct k_stack _k_stack_list_start[];
 extern struct k_stack _k_stack_list_end[];
@@ -44,16 +45,30 @@ SYS_INIT(init_stack_module, PRE_KERNEL_1, CONFIG_KERNEL_INIT_PRIORITY_OBJECTS);
 
 #endif /* CONFIG_OBJECT_TRACING */
 
-void k_stack_init(struct k_stack *stack, u32_t *buffer, int num_entries)
+void _impl_k_stack_init(struct k_stack *stack, u32_t *buffer,
+			unsigned int num_entries)
 {
 	sys_dlist_init(&stack->wait_q);
 	stack->next = stack->base = buffer;
 	stack->top = stack->base + num_entries;
 
 	SYS_TRACING_OBJ_INIT(k_stack, stack);
+	_k_object_init(stack);
 }
 
-void k_stack_push(struct k_stack *stack, u32_t data)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER(k_stack_init, stack, buffer, num_entries)
+{
+	_SYSCALL_OBJ_INIT(stack, K_OBJ_STACK);
+	_SYSCALL_MEMORY_ARRAY_WRITE(buffer, num_entries, sizeof(u32_t));
+
+	_impl_k_stack_init((struct k_stack *)stack, (u32_t *)buffer,
+			   num_entries);
+	return 0;
+}
+#endif
+
+void _impl_k_stack_push(struct k_stack *stack, u32_t data)
 {
 	struct k_thread *first_pending_thread;
 	unsigned int key;
@@ -83,7 +98,20 @@ void k_stack_push(struct k_stack *stack, u32_t data)
 	irq_unlock(key);
 }
 
-int k_stack_pop(struct k_stack *stack, u32_t *data, s32_t timeout)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER(k_stack_push, stack_p, data)
+{
+	struct k_stack *stack = (struct k_stack *)stack_p;
+
+	_SYSCALL_OBJ(stack, K_OBJ_STACK);
+	_SYSCALL_VERIFY_MSG(stack->next != stack->top, "stack is full");
+
+	_impl_k_stack_push(stack, data);
+	return 0;
+}
+#endif
+
+int _impl_k_stack_pop(struct k_stack *stack, u32_t *data, s32_t timeout)
 {
 	unsigned int key;
 	int result;
@@ -110,3 +138,14 @@ int k_stack_pop(struct k_stack *stack, u32_t *data, s32_t timeout)
 	}
 	return result;
 }
+
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER(k_stack_pop, stack, data, timeout)
+{
+	_SYSCALL_OBJ(stack, K_OBJ_STACK);
+	_SYSCALL_MEMORY_WRITE(data, sizeof(u32_t));
+
+	return _impl_k_stack_pop((struct k_stack *)stack, (u32_t *)data,
+				 timeout);
+}
+#endif

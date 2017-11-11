@@ -68,8 +68,8 @@ static u8_t *upipe_rx(u8_t *buf, size_t *off)
 
 		net_pkt_frag_insert(pkt, frag);
 
-		memcpy(frag->data, upipe->rx_buf, upipe->rx_len - 2);
-		net_buf_add(frag, upipe->rx_len - 2);
+		memcpy(frag->data, upipe->rx_buf, upipe->rx_len);
+		net_buf_add(frag, upipe->rx_len);
 
 		if (ieee802154_radio_handle_ack(upipe->iface, pkt) == NET_OK) {
 			SYS_LOG_DBG("ACK packet handled");
@@ -93,7 +93,12 @@ flush:
 done:
 	*off = 0;
 
-	return pkt;
+	return buf;
+}
+
+static enum ieee802154_hw_caps upipe_get_capabilities(struct device *dev)
+{
+	return IEEE802154_HW_FCS | IEEE802154_HW_2_4_GHZ;
 }
 
 static int upipe_cca(struct device *dev)
@@ -108,39 +113,6 @@ static int upipe_cca(struct device *dev)
 }
 
 static int upipe_set_channel(struct device *dev, u16_t channel)
-{
-	struct upipe_context *upipe = dev->driver_data;
-
-	if (upipe->stopped) {
-		return -EIO;
-	}
-
-	return 0;
-}
-
-static int upipe_set_pan_id(struct device *dev, u16_t pan_id)
-{
-	struct upipe_context *upipe = dev->driver_data;
-
-	if (upipe->stopped) {
-		return -EIO;
-	}
-
-	return 0;
-}
-
-static int upipe_set_short_addr(struct device *dev, u16_t short_addr)
-{
-	struct upipe_context *upipe = dev->driver_data;
-
-	if (upipe->stopped) {
-		return -EIO;
-	}
-
-	return 0;
-}
-
-static int upipe_set_ieee_addr(struct device *dev, const u8_t *ieee_addr)
 {
 	struct upipe_context *upipe = dev->driver_data;
 
@@ -180,17 +152,12 @@ static int upipe_tx(struct device *dev,
 	data = UART_PIPE_RADIO_15_4_FRAME_TYPE;
 	uart_pipe_send(&data, 1);
 
-	data = len + 2;
+	data = len;
 	uart_pipe_send(&data, 1);
 
 	for (i = 0; i < len; i++) {
 		uart_pipe_send(pkt_buf+i, 1);
 	}
-
-	/* The 2 dummy bytes representing FCS */
-	data = 0xFF;
-	uart_pipe_send(&data, 1);
-	uart_pipe_send(&data, 1);
 
 	return 0;
 }
@@ -271,11 +238,9 @@ static struct ieee802154_radio_api upipe_radio_api = {
 	.iface_api.init		= upipe_iface_init,
 	.iface_api.send		= ieee802154_radio_send,
 
+	.get_capabilities	= upipe_get_capabilities,
 	.cca			= upipe_cca,
 	.set_channel		= upipe_set_channel,
-	.set_pan_id		= upipe_set_pan_id,
-	.set_short_addr		= upipe_set_short_addr,
-	.set_ieee_addr		= upipe_set_ieee_addr,
 	.set_txpower		= upipe_set_txpower,
 	.tx			= upipe_tx,
 	.start			= upipe_start,

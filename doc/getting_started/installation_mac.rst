@@ -1,12 +1,12 @@
 .. _installing_zephyr_mac:
 
-Development Environment Setup on Mac OS
-#######################################
+Development Environment Setup on macOS
+######################################
 
-This section describes how to set up a Mac OS development system.
+This section describes how to set up a macOS development system.
 
 After completing these steps, you will be able to compile and run your Zephyr
-applications on the following Mac OS version:
+applications on the following macOS version:
 
 * Mac OS X 10.11 (El Capitan)
 * macOS Sierra 10.12
@@ -57,11 +57,48 @@ Install tools to build Zephyr binaries:
 
 .. code-block:: console
 
-   $ brew install dfu-util doxygen qemu dtc python3
+   $ brew install cmake dfu-util doxygen qemu dtc python3 gperf
    $ curl -O 'https://bootstrap.pypa.io/get-pip.py'
    $ ./get-pip.py
    $ rm get-pip.py
    $ pip3 install --user -r scripts/requirements.txt
+
+Source :file:`zephyr-env.sh` wherever you have cloned the Zephyr Git repository:
+
+.. code-block:: console
+
+   $ unset ZEPHYR_SDK_INSTALL_DIR
+   $ cd <zephyr git clone location>
+   $ source zephyr-env.sh
+
+Build Kconfig in :file:`$ZEPHYR_BASE/build` and add it to path
+
+.. code-block:: console
+
+   $ cd $ZEPHYR_BASE
+   $ mkdir build && cd build
+   $ cmake $ZEPHYR_BASE/scripts
+   $ make
+   $ echo "export PATH=$PWD/kconfig:\$PATH" >> $HOME/.zephyrrc
+   $ source $ZEPHYR_BASE/zephyr-env.sh
+
+.. note::
+
+   You only need to do this once after cloning the git repository.
+
+Finally, assuming you are using a 3rd-party toolchain you can try building the :ref:`hello_world` sample to check things out.
+
+To build for the ARM-based Nordic nRF52 Development Kit:
+
+.. zephyr-app-commands::
+  :zephyr-app: samples/hello_world
+  :board: nrf52_pca10040
+  :goals: build
+
+.. _setting_up_mac_toolchain:
+
+Setting Up the Toolchain
+************************
 
 Install tools needed for building the toolchain (if needed):
 
@@ -92,11 +129,6 @@ latest version usually supports the latest released compilers.
    $ ./configure
    $ make
    $ make install
-
-.. _setting_up_mac_toolchain:
-
-Setting Up the Toolchain
-************************
 
 Creating a Case-sensitive File System
 =====================================
@@ -132,7 +164,7 @@ Setting the Toolchain Options
 =============================
 
 In the Zephyr kernel source tree we provide two configurations for
-both ARM and X86 that can be used to pre-select the options needed
+both ARM and X86 that can be used to preselect the options needed
 for building the toolchain.
 The configuration files can be found in :file:`${ZEPHYR_BASE}/scripts/cross_compiler/`.
 
@@ -152,7 +184,7 @@ yourself using the configuration menus:
 .. code-block:: console
 
    $ export CT_PREFIX=/Volumes/CrossToolNG
-   $ ct-ng menuconfig
+   $ ct-ng oldconfig
 
 Verifying the Configuration of the Toolchain
 ============================================

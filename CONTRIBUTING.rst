@@ -22,20 +22,50 @@ software continues to be available under the terms that the author desired.
 
 .. _GitHub repo: https://github.com/zephyrproject-rtos/zephyr
 
-Zephyr uses the `Apache 2.0 license`_ (as found in the LICENSE file in the
-project's `GitHub repo`_) to strike a balance between open contribution and
-allowing you to use the software however you would like to. There are some
-imported or reused components of the Zephyr project that use other licensing,
-as described in `Zephyr Licensing`_.
+Zephyr uses the `Apache 2.0 license`_ (as found in the LICENSE file in
+the project's `GitHub repo`_) to strike a balance between open
+contribution and allowing you to use the software however you would like
+to.  The Apache 2.0 license is a permisive open source license that
+allows you to freely use, modify, distribute and sell your own products
+that include Apache 2.0 licensed software.  (For more information about
+this, check out articles such as `Why choose Apache 2.0 licensing`_ and
+`Top 10 Apache License Questions Answered`_).
 
-.. _Zephyr Licensing:
-   https://www.zephyrproject.org/doc/LICENSING.html
+.. _Why choose Apache 2.0 licensing:
+   https://www.zephyrproject.org/about/#faq
 
-The license tells you what rights you have as a developer, provided by the
+.. _Top 10 Apache License Questions Answered:
+   https://www.whitesourcesoftware.com/whitesource-blog/top-10-apache-license-questions-answered/
+
+A license tells you what rights you have as a developer, as provided by the
 copyright holder. It is important that the contributor fully understands the
 licensing rights and agrees to them. Sometimes the copyright holder isn't the
 contributor, such as when the contributor is doing work on behalf of a
 company.
+
+Components using other Licenses
+===============================
+
+There are some imported or reused components of the Zephyr project that
+use other licensing, as described in `Zephyr Licensing`_.
+
+.. _Zephyr Licensing:
+   https://www.zephyrproject.org/doc/LICENSING.html
+
+Importing code into the Zephyr OS from other projects that use a license
+other than the Apache 2.0 license needs to be fully understood in
+context and approved by the Zephyr governing board.
+
+By carefully reviewing potential contributions and also enforcing a
+:ref:`DCO` for contributed code, we can ensure that
+the Zephyr community can develop products with the Zephyr Project
+without concerns over patent or copyright issues.
+
+See `Contributing non-Apache 2.0 components`_ for more information about
+this contributing and review process for imported components.
+
+.. _Contributing non-Apache 2.0 components:
+   https://www.zephyrproject.org/doc/contribute/contribute_non-apache.html
 
 .. _DCO:
 
@@ -114,7 +144,7 @@ and how to set up your development environment as introduced in the Zephyr
    https://www.zephyrproject.org/doc/getting_started/getting_started.html
 
 The examples below use a Linux host environment for Zephyr development.
-You should be familiar with common developer tools such as Git and Make, and
+You should be familiar with common developer tools such as Git and CMake, and
 platforms such as GitHub.
 
 If you haven't already done so, you'll need to create a (free) GitHub account
@@ -139,14 +169,14 @@ available for developers to contribute to and enhance.
 Pull Requests and Issues
 ************************
 
-.. _Zephyr Project Issues: https://jira.zephyrproject.org
+.. _Zephyr Project Issues: https://github.com/zephyrproject-rtos/zephyr/issues
 
 .. _open pull requests: https://github.com/zephyrproject-rtos/zephyr/pulls
 
 .. _Zephyr-devel mailing list:
    https://lists.zephyrproject.org/mailman/listinfo/zephyr-devel
 
-Before starting on a patch, first check in our Jira `Zephyr Project Issues`_
+Before starting on a patch, first check in our issues `Zephyr Project Issues`_
 system to see what's been reported on the issue you'd like to address.  Have a
 conversation on the `Zephyr-devel mailing list`_ (or the #zephyrproject IRC
 channel on freenode.net) to see what others think of your issue (and proposed
@@ -161,7 +191,7 @@ triage team will review and comment on the submission, typically within a few
 business days.
 
 You can find all `open pull requests`_ on GitHub and open `Zephyr Project
-Issues`_ in Jira.
+Issues`_ in Github issues.
 
 Development Tools and Git Setup
 *******************************
@@ -203,18 +233,14 @@ run the same tests the CI system runs, follow these steps from within your
 local Zephyr source working directory::
 
     $ source zephyr-env.sh
-    $ make host-tools
-    $ export PREBUILT_HOST_TOOLS=${ZEPHYR_BASE}/bin
-    $ export USE_CCACHE=1
     $ ./scripts/sanitycheck
 
 The above will execute the basic sanitycheck script, which will run various
 kernel tests using the QEMU emulator.  It will also do some build tests on
 various samples with advanced features that can't run in QEMU.
 
-We highly recommend you run these tests locally to avoid any CI failures.
-Using CCACHE and pre-built host tools is optional, however it speeds up the
-execution time considerably.
+We highly recommend you run these tests locally to avoid any CI
+failures.
 
 
 Coding Style
@@ -247,6 +273,8 @@ it when committing code, edit your *.git/hooks/pre-commit* file to contain:
     #!/bin/sh
     set -e exec
     exec git diff --cached | ${ZEPHYR_BASE}/scripts/checkpatch.pl - || true
+
+.. _Contribution workflow:
 
 Contribution Workflow
 *********************
@@ -284,7 +312,7 @@ workflow here:
      $ git remote -v
 
 #. Create a topic branch (off of master) for your work (if you're addressing
-   Jira issue, we suggest including the Jira issue number in the branch name)::
+   an issue, we suggest including the issue number in the branch name)::
 
      $ git checkout master
      $ git checkout -b fix_comment_typo
@@ -402,9 +430,9 @@ Changes are submitted as Git commits. Each commit message must contain:
 * A Signed-off-by line, ``Signed-off-by: <name> <email>`` typically added
   automatically by using ``git commit -s``
 
-* If the change address a Jira issue, include a line of the form::
+* If the change addresses an issue, include a line of the form::
 
-      Jira: ZEP-xxx
+      Fixes #<issue number>.
 
 
 All changes and topics sent to GitHub must be well-formed, as described above.

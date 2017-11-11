@@ -13,7 +13,7 @@ writing and executing via an LwM2M server in a very lightweight environment.
 This LwM2M client sample application for Zephyr implements the LwM2M library
 and establishes both IPv4 and IPv6 connections to an LwM2M server using
 the `Open Mobile Alliance Lightweight Machine to Machine Technical
-Specification`_ (Section 5.3: Client Registration Inferface).
+Specification`_ (Section 5.3: Client Registration Interface).
 
 .. _Open Mobile Alliance Lightweight Machine to Machine Technical Specification:
     http://www.openmobilealliance.org/release/LightweightM2M/V1_0-20170208-A/OMA-TS-LightweightM2M-V1_0-20170208-A.pdf
@@ -31,25 +31,23 @@ Requirements
 Building and Running
 ********************
 
-There are configuration files for various hardware setups in the
+There are configuration files for various setups in the
 samples/net/lwm2m_client directory:
 
-- :file:`prj_frdm_k64f.conf`
-  Use this for FRDM-K64F board with built-in ethernet.
-
-- :file:`prj_qemu_x86.conf`
-  Use this for x86 QEMU.
+- :file:`prj.conf`
+  This is the standard default config.
 
 Build the lwm2m-client sample application like this:
 
-.. code-block:: console
-
-    $ cd $ZEPHYR_BASE/samples/net/lwm2m_client
-    $ make pristine && make CONF_FILE=<your desired conf file> \
-      BOARD=<board to use>
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/lwm2m_client
+   :board: <board to use>
+   :conf: <config file to use>
+   :goals: build
+   :compact:
 
 The easiest way to setup this sample application is to build and run it
-via QEMU using the configuration :file:`prj_qemu_x86.conf`.
+via QEMU using the default configuration :file:`prj.conf`.
 This requires a small amount of setup described in :ref:`networking_with_qemu`.
 
 Download and run the latest build of the Leshan Demo Server:
@@ -64,10 +62,11 @@ can watch and manage connected LwM2M devices.
 
 Build the lwm2m-client sample application for QEMU like this:
 
-.. code-block:: console
-
-    $ cd $ZEPHYR_BASE/samples/net/lwm2m_client
-    $ make pristine && make run
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/lwm2m_client
+   :board: qemu_x86
+   :goals: run
+   :compact:
 
 The sample will start and automatically connect to the Leshan Demo Server with
 both an IPv4 client endpoint (qemu_x86-ipv4-########) and an IPV6 client

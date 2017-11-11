@@ -8,7 +8,7 @@ Overview
 
 This sample application shows how to create HTTP 1.1 requests to
 an HTTP server and how to parse the incoming responses.
-Supported HTTP 1.1 methods are: GET, HEAD, OPTIONS and POST.
+Supported HTTP 1.1 methods are: GET, HEAD and POST.
 
 The source code for this sample application can be found at:
 :file:`samples/net/http_client`.
@@ -64,11 +64,9 @@ to match the HTTP server setup, for example:
 
 .. code-block:: c
 
-   #define SERVER_PORT		80
+   #define SERVER_PORT		8000
 
-assumes that the HTTP server is listening at the TCP port 80.
-If the default example HTTP server is used, then the default
-port is 8000.
+assumes that the HTTP server is listening at the TCP port 8000.
 
 HTTP Server
 ===========
@@ -107,7 +105,6 @@ HTTP 1.1 requests and printing some output. The requests are:
 
 - GET "/index.html"
 - HEAD "/"
-- OPTIONS "/index.html"
 - POST "/post_test.php"
 - GET "/big-file.html"
 
@@ -116,16 +113,36 @@ to the following:
 
 .. code-block:: console
 
-   [http-client] [INF] response: Received 364 bytes piece of data
+   [http-client] [INF] do_sync_http_req: [19] Send /index.html
+   [http-client] [INF] do_sync_http_req: HTTP server response status: OK
+   [http-client] [INF] do_sync_http_req: HTTP body: 170 bytes, expected: 170 bytes
+   [http-client] [INF] do_sync_http_req: [19] Send /
+   [http-client] [INF] do_sync_http_req: HTTP server response status: OK
+   [http-client] [INF] do_sync_http_req: [19] Send /post_test.php
+   [http-client] [INF] do_sync_http_req: HTTP server response status: OK
+   [http-client] [INF] do_sync_http_req: HTTP body: 24 bytes, expected: 24 bytes
+   [http-client] [INF] do_sync_http_req: [20] Send /index.html
+   [http-client] [INF] do_sync_http_req: HTTP server response status: OK
+   [http-client] [INF] do_sync_http_req: HTTP body: 170 bytes, expected: 170 bytes
+   [http-client] [INF] do_sync_http_req: [20] Send /
+   [http-client] [INF] do_sync_http_req: HTTP server response status: OK
+   [http-client] [INF] do_sync_http_req: [20] Send /post_test.php
+   [http-client] [INF] do_sync_http_req: HTTP server response status: OK
+   [http-client] [INF] do_sync_http_req: HTTP body: 24 bytes, expected: 24 bytes
+   [http-client] [INF] main: --------Sending 20 async request--------
+   [http-client] [INF] do_async_http_req: [1] Send /index.html
+   [http-client] [INF] response: Received 356 bytes piece of data
    [http-client] [INF] response: HTTP server response status: OK
-   [http-client] [INF] response: HTTP body: 178 bytes, expected: 178 bytes
+   [http-client] [INF] response: HTTP body: 170 bytes, expected: 170 bytes
+   [http-client] [INF] do_async_http_req: [1] Send /
    [http-client] [INF] response: HTTP server response status: OK
-   [http-client] [INF] response: HTTP server response status: Unsupported method ('OPTIONS')
+   [http-client] [INF] do_async_http_req: [1] Send /post_test.php
    [http-client] [INF] response: Received 163 bytes piece of data
    [http-client] [INF] response: HTTP server response status: OK
    [http-client] [INF] response: HTTP body: 24 bytes, expected: 24 bytes
+   [http-client] [INF] do_async_http_req: [1] Send /big-file.html
    [http-client] [INF] response: Received 657 bytes piece of data
    [http-client] [INF] response: Received 640 bytes piece of data
-   [http-client] [INF] response: Received 446 bytes piece of data
+   [http-client] [INF] response: Received 418 bytes piece of data
    [http-client] [INF] response: HTTP server response status: OK
-   [http-client] [INF] response: HTTP body: 1556 bytes, expected: 1556 bytes
+   [http-client] [INF] response: HTTP body: 1528 bytes, expected: 1528 bytes

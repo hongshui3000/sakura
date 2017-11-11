@@ -75,8 +75,6 @@ source "drivers/serial/Kconfig.stellaris"
 
 source "drivers/serial/Kconfig.nsim"
 
-source "drivers/serial/Kconfig.atmel_sam3"
-
 source "drivers/serial/Kconfig.usart_sam"
 
 source "drivers/serial/Kconfig.uart_sam"
@@ -98,6 +96,12 @@ source "drivers/serial/Kconfig.riscv_qemu"
 source "drivers/serial/Kconfig.fe310"
 
 source "drivers/serial/Kconfig.esp32"
+
+source "drivers/serial/Kconfig.tm4c123"
+
+source "drivers/serial/Kconfig.gecko"
+
+source "drivers/serial/Kconfig.msp432p4xx"
 
 source "drivers/serial/Kconfig.tm4c123"
 

@@ -22,7 +22,7 @@ source "drivers/console/Kconfig"
 
 source "drivers/ethernet/Kconfig"
 
-source "drivers/slip/Kconfig"
+source "drivers/net/Kconfig"
 
 source "drivers/serial/Kconfig"
 
@@ -30,7 +30,7 @@ source "drivers/interrupt_controller/Kconfig"
 
 source "drivers/timer/Kconfig"
 
-source "drivers/random/Kconfig"
+source "drivers/entropy/Kconfig"
 
 source "drivers/grove/Kconfig"
 
@@ -75,5 +75,7 @@ source "drivers/usb/Kconfig"
 source "drivers/crypto/Kconfig"
 
 source "drivers/display/Kconfig"
+
+source "drivers/led_strip/Kconfig"
 
 endmenu

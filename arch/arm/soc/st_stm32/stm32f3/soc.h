@@ -9,8 +9,8 @@
  *
  * Based on reference manual:
  *   STM32F303xB/C/D/E, STM32F303x6/8, STM32F328x8, STM32F358xC,
- *   STM32F398xE advanced ARM ® -based MCUs
- *   STM32F37xx advanced ARM ® -based MCUs
+ *   STM32F398xE advanced ARM(r)-based MCUs
+ *   STM32F37xx advanced ARM(r)-based MCUs
  *
  * Chapter 3.3: Memory organization
  */
@@ -27,24 +27,9 @@
 
 #include <device.h>
 #include <misc/util.h>
-#include <drivers/rand32.h>
+#include <random/rand32.h>
 
 #include <stm32f3xx.h>
-
-/* IO pin functions */
-enum stm32f3x_pin_config_mode {
-	STM32F3X_PIN_CONFIG_BIAS_HIGH_IMPEDANCE = 0,
-	STM32F3X_PIN_CONFIG_BIAS_PULL_UP,
-	STM32F3X_PIN_CONFIG_BIAS_PULL_DOWN,
-	STM32F3X_PIN_CONFIG_ANALOG,
-	STM32F3X_PIN_CONFIG_DRIVE_OPEN_DRAIN,
-	STM32F3X_PIN_CONFIG_DRIVE_PUSH_PULL,
-	STM32F3X_PIN_CONFIG_DRIVE_OPEN_DRAIN_PU,
-	STM32F3X_PIN_CONFIG_DRIVE_OPEN_DRAIN_PD,
-	STM32F3X_PIN_CONFIG_DRIVE_PUSH_PULL_PU,
-	STM32F3X_PIN_CONFIG_DRIVE_PUSH_PULL_PD,
-	STM32F3X_PIN_CONFIG_AF,
-};
 
 #include "soc_irq.h"
 
@@ -62,6 +47,10 @@ enum stm32f3x_pin_config_mode {
 
 #ifdef CONFIG_I2C
 #include <stm32f3xx_ll_i2c.h>
+#endif
+
+#ifdef CONFIG_IWDG_STM32
+#include <stm32f3xx_ll_iwdg.h>
 #endif
 
 #endif /* !_ASMLANGUAGE */

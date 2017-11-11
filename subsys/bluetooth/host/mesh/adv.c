@@ -63,13 +63,13 @@ static const u8_t adv_type[] = {
 NET_BUF_POOL_DEFINE(adv_buf_pool, CONFIG_BT_MESH_ADV_BUF_COUNT,
 		    BT_MESH_ADV_DATA_SIZE, sizeof(struct bt_mesh_adv), NULL);
 
-static inline void adv_sent(struct net_buf *buf, int err)
+static inline void adv_sent(struct net_buf *buf, u16_t duration, int err)
 {
 	if (BT_MESH_ADV(buf)->busy) {
 		BT_MESH_ADV(buf)->busy = 0;
 
 		if (BT_MESH_ADV(buf)->sent) {
-			BT_MESH_ADV(buf)->sent(buf, err);
+			BT_MESH_ADV(buf)->sent(buf, duration, err);
 		}
 	}
 
@@ -103,7 +103,7 @@ static inline void adv_send(struct net_buf *buf)
 	param.own_addr = NULL;
 
 	err = bt_le_adv_start(&param, &ad, 1, NULL, 0);
-	adv_sent(buf, err);
+	adv_sent(buf, duration, err);
 	if (err) {
 		BT_ERR("Advertising failed: err %d", err);
 		return;
@@ -168,13 +168,15 @@ void bt_mesh_adv_update(void)
 	k_fifo_cancel_wait(&adv_queue);
 }
 
-struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit_count,
-				   u8_t xmit_int, s32_t timeout)
+struct net_buf *bt_mesh_adv_create_from_pool(struct net_buf_pool *pool,
+					     enum bt_mesh_adv_type type,
+					     u8_t xmit_count, u8_t xmit_int,
+					     s32_t timeout)
 {
 	struct bt_mesh_adv *adv;
 	struct net_buf *buf;
 
-	buf = net_buf_alloc(&adv_buf_pool, timeout);
+	buf = net_buf_alloc(pool, timeout);
 	if (!buf) {
 		return NULL;
 	}
@@ -187,6 +189,13 @@ struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit_count,
 	adv->adv_int      = xmit_int;
 
 	return buf;
+}
+
+struct net_buf *bt_mesh_adv_create(enum bt_mesh_adv_type type, u8_t xmit_count,
+				   u8_t xmit_int, s32_t timeout)
+{
+	return bt_mesh_adv_create_from_pool(&adv_buf_pool, type, xmit_count,
+					    xmit_int, timeout);
 }
 
 void bt_mesh_adv_send(struct net_buf *buf, bt_mesh_adv_func_t sent)

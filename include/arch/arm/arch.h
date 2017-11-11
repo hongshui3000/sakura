@@ -135,7 +135,7 @@ extern "C" {
  * @param size Size of the stack memory region
  */
 #define _ARCH_THREAD_STACK_DEFINE(sym, size) \
-	struct _k_thread_stack_element __noinit __aligned(STACK_ALIGN) \
+	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
 		sym[size+MPU_GUARD_ALIGN_AND_SIZE]
 
 /**
@@ -152,7 +152,7 @@ extern "C" {
  * @param size Size of the stack memory region
  */
 #define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
-	struct _k_thread_stack_element __noinit __aligned(STACK_ALIGN) \
+	struct _k_thread_stack_element __kernel_noinit __aligned(STACK_ALIGN) \
 		sym[nmemb][size+MPU_GUARD_ALIGN_AND_SIZE]
 
 /**
@@ -199,6 +199,164 @@ extern "C" {
  */
 #define _ARCH_THREAD_STACK_BUFFER(sym) \
 		((char *)(sym) + MPU_GUARD_ALIGN_AND_SIZE)
+
+#ifdef CONFIG_USERSPACE
+#ifdef CONFIG_ARM_MPU
+#ifndef _ASMLANGUAGE
+#include <arch/arm/cortex_m/mpu/arm_mpu.h>
+
+#define K_MEM_PARTITION_P_NA_U_NA	(NO_ACCESS | NOT_EXEC)
+#define K_MEM_PARTITION_P_RW_U_RW	(P_RW_U_RW | NOT_EXEC)
+#define K_MEM_PARTITION_P_RW_U_RO	(P_RW_U_RO | NOT_EXEC)
+#define K_MEM_PARTITION_P_RW_U_NA	(P_RW_U_NA | NOT_EXEC)
+#define K_MEM_PARTITION_P_RO_U_RO	(P_RO_U_RO | NOT_EXEC)
+#define K_MEM_PARTITION_P_RO_U_NA	(P_RO_U_NA | NOT_EXEC)
+
+/* Execution-allowed attributes */
+#define K_MEM_PARTITION_P_RWX_U_RWX	(P_RW_U_RW)
+#define K_MEM_PARTITION_P_RWX_U_RX	(P_RW_U_RO)
+#define K_MEM_PARTITION_P_RX_U_RX	(P_RO_U_RO)
+
+#define K_MEM_PARTITION_IS_WRITABLE(attr) \
+	({ \
+		int __is_writable__; \
+		switch (attr) { \
+		case P_RW_U_RW: \
+		case P_RW_U_RO: \
+		case P_RW_U_NA: \
+			__is_writable__ = 1; \
+			break; \
+		default: \
+			__is_writable__ = 0; \
+		} \
+		__is_writable__; \
+	})
+#define K_MEM_PARTITION_IS_EXECUTABLE(attr) \
+	(!((attr) & (NOT_EXEC)))
+
+#endif /* _ASMLANGUAGE */
+#define _ARCH_MEM_PARTITION_ALIGN_CHECK(start, size) \
+	BUILD_ASSERT_MSG(!(((size) & ((size) - 1))) && (size) >= 32 && \
+		!((u32_t)(start) & ((size) - 1)), \
+		"the size of the partition must be power of 2" \
+		" and greater than or equal to 32." \
+		"start address of the partition must align with size.")
+#endif /* CONFIG_ARM_MPU*/
+#ifdef CONFIG_NXP_MPU
+#ifndef _ASMLANGUAGE
+#include <arch/arm/cortex_m/mpu/nxp_mpu.h>
+
+#define K_MEM_PARTITION_P_NA_U_NA	(MPU_REGION_SU)
+#define K_MEM_PARTITION_P_RW_U_RW	(MPU_REGION_READ | MPU_REGION_WRITE | \
+					 MPU_REGION_SU)
+#define K_MEM_PARTITION_P_RW_U_RO	(MPU_REGION_READ | MPU_REGION_SU_RW)
+#define K_MEM_PARTITION_P_RW_U_NA	(MPU_REGION_SU_RW)
+#define K_MEM_PARTITION_P_RO_U_RO	(MPU_REGION_READ | MPU_REGION_SU)
+#define K_MEM_PARTITION_P_RO_U_NA	(MPU_REGION_SU_RX)
+
+/* Execution-allowed attributes */
+#define K_MEM_PARTITION_P_RWX_U_RWX	(MPU_REGION_READ | MPU_REGION_WRITE | \
+					 MPU_REGION_EXEC | MPU_REGION_SU)
+#define K_MEM_PARTITION_P_RWX_U_RX	(MPU_REGION_READ | MPU_REGION_EXEC | \
+					 MPU_REGION_SU_RWX)
+#define K_MEM_PARTITION_P_RX_U_RX	(MPU_REGION_READ | MPU_REGION_EXEC | \
+					 MPU_REGION_SU)
+
+#define K_MEM_PARTITION_IS_WRITABLE(attr) \
+	({ \
+		int __is_writable__; \
+		switch (attr) { \
+		case MPU_REGION_WRITE: \
+		case MPU_REGION_SU_RW: \
+			__is_writable__ = 1; \
+			break; \
+		default: \
+			__is_writable__ = 0; \
+		} \
+		__is_writable__; \
+	})
+#define K_MEM_PARTITION_IS_EXECUTABLE(attr) \
+	({ \
+		int __is_executable__; \
+		switch (attr) { \
+		case MPU_REGION_SU_RX: \
+		case MPU_REGION_EXEC: \
+			__is_executable__ = 1; \
+			break; \
+		default: \
+			__is_executable__ = 0; \
+		} \
+		__is_executable__; \
+	})
+
+#endif /* _ASMLANGUAGE */
+#define _ARCH_MEM_PARTITION_ALIGN_CHECK(start, size) \
+	BUILD_ASSERT_MSG((size) % 32 == 0 && (size) >= 32 && \
+		(u32_t)(start) % 32 == 0, \
+		"the size of the partition must align with 32" \
+		" and greater than or equal to 32." \
+		"start address of the partition must align with 32.")
+#endif  /* CONFIG_NXP_MPU */
+#endif /* CONFIG_USERSPACE */
+
+#ifndef _ASMLANGUAGE
+/* Typedef for the k_mem_partition attribute*/
+typedef u32_t k_mem_partition_attr_t;
+#endif /* _ASMLANGUAGE */
+
+#ifdef CONFIG_ARM_USERSPACE
+#ifndef _ASMLANGUAGE
+/* Syscall invocation macros. arm-specific machine constraints used to ensure
+ * args land in the proper registers. Currently, they are all stub functions
+ * just for enabling CONFIG_USERSPACE on arm w/o errors.
+ */
+
+static inline u32_t _arch_syscall_invoke6(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t arg4, u32_t arg5, u32_t arg6,
+					  u32_t call_id)
+{
+	return 0;
+}
+
+static inline u32_t _arch_syscall_invoke5(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t arg4, u32_t arg5, u32_t call_id)
+{
+	return 0;
+}
+
+static inline u32_t _arch_syscall_invoke4(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t arg4, u32_t call_id)
+{
+	return 0;
+}
+
+static inline u32_t _arch_syscall_invoke3(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t call_id)
+{
+	return 0;
+}
+
+static inline u32_t _arch_syscall_invoke2(u32_t arg1, u32_t arg2, u32_t call_id)
+{
+	return 0;
+}
+
+static inline u32_t _arch_syscall_invoke1(u32_t arg1, u32_t call_id)
+{
+	return 0;
+}
+
+static inline u32_t _arch_syscall_invoke0(u32_t call_id)
+{
+	return 0;
+}
+
+static inline int _arch_is_user_context(void)
+{
+	return 0;
+}
+#endif /* _ASMLANGUAGE */
+#endif /* CONFIG_ARM_USERSPACE */
 
 #ifdef __cplusplus
 }

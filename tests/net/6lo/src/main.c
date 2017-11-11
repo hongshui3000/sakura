@@ -7,6 +7,7 @@
  */
 
 #include <zephyr.h>
+#include <ztest.h>
 #include <linker/sections.h>
 
 #include <zephyr/types.h>
@@ -33,9 +34,8 @@
 #define SIZE_OF_SMALL_DATA 40
 #define SIZE_OF_LARGE_DATA 120
 
-/**
-  * IPv6 Source and Destination address
-  * Example addresses are based on SAC (Source Adddress Compression),
+ /* IPv6 Source and Destination address
+  * Example addresses are based on SAC (Source Address Compression),
   * SAM (Source Address Mode), DAC (Destination Address Compression),
   * DAM (Destination Address Mode) and also if the destination address
   * is Multicast address.
@@ -353,7 +353,8 @@ static struct net_pkt *create_pkt(struct net_6lo_data *data)
 	}
 
 	/* length is not set in net_6lo_data data pointer, calculate and set
-	 * in ipv6, udp and in data pointer too (it's required in comparison) */
+	 * in ipv6, udp and in data pointer too (it's required in comparison)
+	 */
 	frag->data[4] = len >> 8;
 	frag->data[5] = (u8_t) len;
 
@@ -629,8 +630,23 @@ static struct net_6lo_data test_data_13 = {
 	.iphc = true
 };
 
-#if defined(CONFIG_NET_6LO_CONTEXT)
 static struct net_6lo_data test_data_14 = {
+	.ipv6.vtc = 0x60,
+	.ipv6.tcflow = 0x00,
+	.ipv6.flow = 0x00,
+	.ipv6.len = { 0x00, 0x00 },
+	.ipv6.nexthdr = NET_IPV6_NEXTHDR_NONE,
+	.ipv6.hop_limit = 0xff,
+	.ipv6.src = src_sac1_sam00,
+	.ipv6.dst = dst_m1_dam11,
+	.nh_udp = false,
+	.nh_icmp = false,
+	.small = true,
+	.iphc = true
+};
+
+#if defined(CONFIG_NET_6LO_CONTEXT)
+static struct net_6lo_data test_data_15 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x20,
 	.ipv6.flow = 0x3412,
@@ -649,7 +665,7 @@ static struct net_6lo_data test_data_14 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_15 = {
+static struct net_6lo_data test_data_16 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x21,
 	.ipv6.flow = 0x3412,
@@ -668,7 +684,7 @@ static struct net_6lo_data test_data_15 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_16 = {
+static struct net_6lo_data test_data_17 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x21,
 	.ipv6.flow = 0x3412,
@@ -687,7 +703,7 @@ static struct net_6lo_data test_data_16 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_17 = {
+static struct net_6lo_data test_data_18 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x20,
 	.ipv6.flow = 0x3412,
@@ -706,7 +722,7 @@ static struct net_6lo_data test_data_17 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_18 = {
+static struct net_6lo_data test_data_19 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x20,
 	.ipv6.flow = 0x3412,
@@ -725,7 +741,7 @@ static struct net_6lo_data test_data_18 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_19 = {
+static struct net_6lo_data test_data_20 = {
 	.ipv6.vtc = 0x61,
 	.ipv6.tcflow = 0x23,
 	.ipv6.flow = 0x4567,
@@ -743,7 +759,7 @@ static struct net_6lo_data test_data_19 = {
 	.small = true,
 	.iphc = true
 };
-static struct net_6lo_data test_data_20 = {
+static struct net_6lo_data test_data_21 = {
 	.ipv6.vtc = 0x61,
 	.ipv6.tcflow = 0x23,
 	.ipv6.flow = 0x4567,
@@ -762,7 +778,7 @@ static struct net_6lo_data test_data_20 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_21 = {
+static struct net_6lo_data test_data_22 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x0,
 	.ipv6.flow = 0x0,
@@ -781,7 +797,7 @@ static struct net_6lo_data test_data_21 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_22 = {
+static struct net_6lo_data test_data_23 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x0,
 	.ipv6.flow = 0x0,
@@ -796,7 +812,7 @@ static struct net_6lo_data test_data_22 = {
 	.iphc = true
 };
 
-static struct net_6lo_data test_data_23 = {
+static struct net_6lo_data test_data_24 = {
 	.ipv6.vtc = 0x60,
 	.ipv6.tcflow = 0x20,
 	.ipv6.flow = 0x3412,
@@ -814,54 +830,60 @@ static struct net_6lo_data test_data_23 = {
 	.small = false,
 	.iphc = true
 };
+
+static struct net_6lo_data test_data_25 = {
+	.ipv6.vtc = 0x60,
+	.ipv6.tcflow = 0x00,
+	.ipv6.flow = 0x00,
+	.ipv6.len = { 0x00, 0x00 },
+	.ipv6.nexthdr = IPPROTO_UDP,
+	.ipv6.hop_limit = 0xff,
+	.ipv6.src = src_sac1_sam00,
+	.ipv6.dst = dst_m1_dam00,
+	.nh.udp.src_port = htons(udp_src_port_8bit_y),
+	.nh.udp.dst_port = htons(udp_dst_port_8bit),
+	.nh.udp.len = 0x00,
+	.nh.udp.chksum = 0x00,
+	.nh_udp = true,
+	.nh_icmp = false,
+	.small = true,
+	.iphc = true
+};
+
 #endif
 
-static int test_6lo(struct net_6lo_data *data)
+static void test_6lo(struct net_6lo_data *data)
 {
 	struct net_pkt *pkt;
-	int result = TC_FAIL;
 
 	pkt = create_pkt(data);
-	if (!pkt) {
-		TC_PRINT("%s: failed to create buffer\n", __func__);
-		goto end;
-	}
-
+	zassert_not_null(pkt, "failed to create buffer");
 #if DEBUG > 0
 	TC_PRINT("length before compression %zu\n",
 		 net_pkt_get_len(pkt));
-	net_hexdump_frags("before-compression", pkt);
+	net_hexdump_frags("before-compression", pkt, false);
 #endif
 
-	if (!net_6lo_compress(pkt, data->iphc, NULL)) {
-		TC_PRINT("compression failed\n");
-		goto end;
-	}
+	zassert_true(net_6lo_compress(pkt, data->iphc, NULL),
+		     "compression failed");
 
 #if DEBUG > 0
 	TC_PRINT("length after compression %zu\n",
 		 net_pkt_get_len(pkt));
-	net_hexdump_frags("after-compression", pkt);
+	net_hexdump_frags("after-compression", pkt, false);
 #endif
 
-	if (!net_6lo_uncompress(pkt)) {
-		TC_PRINT("uncompression failed\n");
-		goto end;
-	}
-
+	zassert_true(net_6lo_uncompress(pkt),
+		     "uncompression failed");
 #if DEBUG > 0
 	TC_PRINT("length after uncompression %zu\n",
 	       net_pkt_get_len(pkt));
-	net_hexdump_frags("after-uncompression", pkt);
+	net_hexdump_frags("after-uncompression", pkt, false);
 #endif
 
-	if (compare_data(pkt, data)) {
-		result = TC_PASS;
-	}
+	zassert_true(compare_data(pkt, data), NULL);
 
-end:
 	net_pkt_unref(pkt);
-	return result;
 }
 
 /* tests names are based on traffic class, flow label, source address mode
@@ -885,23 +907,25 @@ static const struct {
 	{ "test_6lo_ipv6_dispatch_big_no_udp", &test_data_11},
 	{ "test_6lo_ipv6_dispatch_big_iphc", &test_data_12},
 	{ "test_6lo_sam11_dam11", &test_data_13},
+	{ "test_6lo_sac1_sam00_m1_dam11", &test_data_14},
 #if defined(CONFIG_NET_6LO_CONTEXT)
-	{ "test_6lo_sac1_sam01_dac1_dam01", &test_data_14},
-	{ "test_6lo_sac1_sam10_dac1_dam10", &test_data_15},
-	{ "test_6lo_sac1_sam11_dac1_dam11", &test_data_16},
-	{ "test_6lo_sac0_sam01_dac1_dam01", &test_data_17},
-	{ "test_6lo_sac1_sam01_dac0_dam01", &test_data_18},
-	{ "test_6lo_sac1_sam01_m1_dam00", &test_data_19},
-	{ "test_6lo_sac1_sam01_m1_dam01", &test_data_20},
-	{ "test_6lo_sac1_sam10_m1_dam10", &test_data_21},
-	{ "test_6lo_sac1_sam11_m1_dam10", &test_data_22},
-	{ "test_6lo_sac0_sam00_dac1_dam01", &test_data_23},
+	{ "test_6lo_sac1_sam01_dac1_dam01", &test_data_15},
+	{ "test_6lo_sac1_sam10_dac1_dam10", &test_data_16},
+	{ "test_6lo_sac1_sam11_dac1_dam11", &test_data_17},
+	{ "test_6lo_sac0_sam01_dac1_dam01", &test_data_18},
+	{ "test_6lo_sac1_sam01_dac0_dam01", &test_data_19},
+	{ "test_6lo_sac1_sam01_m1_dam00", &test_data_20},
+	{ "test_6lo_sac1_sam01_m1_dam01", &test_data_21},
+	{ "test_6lo_sac1_sam10_m1_dam10", &test_data_22},
+	{ "test_6lo_sac1_sam11_m1_dam10", &test_data_23},
+	{ "test_6lo_sac0_sam00_dac1_dam01", &test_data_24},
+	{ "test_6lo_sac1_sam00_m1_dam00", &test_data_25},
 #endif
 };
 
-void main(void)
+void test_loop(void)
 {
-	int count, pass;
+	int count;
 
 	k_thread_priority_set(k_current_get(), K_PRIO_COOP(7));
 
@@ -910,18 +934,17 @@ void main(void)
 	net_6lo_set_context(net_if_get_default(), &ctx2);
 #endif
 
-	for (count = 0, pass = 0; count < ARRAY_SIZE(tests); count++) {
+	for (count = 0; count < ARRAY_SIZE(tests); count++) {
 		TC_START(tests[count].name);
 
-		if (test_6lo(tests[count].data)) {
-			TC_END(FAIL, "failed\n");
-		} else {
-			TC_END(PASS, "passed\n");
-			pass++;
-		}
+		test_6lo(tests[count].data);
 	}
-
 	net_pkt_print();
+}
 
-	TC_END_REPORT(((pass != ARRAY_SIZE(tests)) ? TC_FAIL : TC_PASS));
+/*test case main entry*/
+void test_main(void)
+{
+	ztest_test_suite(test_6lo, ztest_unit_test(test_loop));
+	ztest_run_test_suite(test_6lo);
 }

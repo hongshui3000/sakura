@@ -22,6 +22,13 @@ config ADC_MCUX_ADC16
 
 endif # ADC
 
+if CLOCK_CONTROL
+
+config CLOCK_CONTROL_MCUX_SIM
+	def_bool y
+
+endif # CLOCK_CONTROL
+
 if PINMUX
 
 config PINMUX_MCUX

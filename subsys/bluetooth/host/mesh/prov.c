@@ -188,13 +188,14 @@ static const struct bt_mesh_prov *prov;
 static void close_link(u8_t err, u8_t reason);
 
 #if defined(CONFIG_BT_MESH_PB_ADV)
-static void buf_sent(struct net_buf *buf, int err)
+static void buf_sent(struct net_buf *buf, u16_t duration, int err)
 {
 	if (!link.tx.buf[0]) {
 		return;
 	}
 
-	k_delayed_work_submit(&link.tx.retransmit, RETRANSMIT_TIMEOUT);
+	k_delayed_work_submit(&link.tx.retransmit,
+			      duration + RETRANSMIT_TIMEOUT);
 }
 
 static void free_segments(void)
@@ -266,7 +267,7 @@ static struct net_buf *adv_buf_create(void)
 
 static u8_t pending_ack = XACT_NVAL;
 
-static void ack_complete(struct net_buf *buf, int err)
+static void ack_complete(struct net_buf *buf, u16_t duration, int err)
 {
 	BT_DBG("xact %u complete", (u8_t)pending_ack);
 	pending_ack = XACT_NVAL;
@@ -617,7 +618,8 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 		}
 
 		if (output == BT_MESH_DISPLAY_STRING) {
-			u8_t i, str[9];
+			char str[9];
+			u8_t i;
 
 			bt_rand(str, size);
 
@@ -1194,12 +1196,6 @@ static void prov_msg_recv(void)
 
 	BT_DBG("type 0x%02x len %u", type, link.rx.buf->len);
 
-	if (type != PROV_FAILED && type != link.expect) {
-		BT_WARN("Unexpected msg 0x%02x != 0x%02x", type, link.expect);
-		prov_send_fail_msg(PROV_ERR_UNEXP_PDU);
-		return;
-	}
-
 	if (!bt_mesh_fcs_check(link.rx.buf, link.rx.fcs)) {
 		BT_ERR("Incorrect FCS");
 		return;
@@ -1208,6 +1204,12 @@ static void prov_msg_recv(void)
 	gen_prov_ack_send(link.rx.id);
 	link.rx.prev_id = link.rx.id;
 	link.rx.id = 0;
+
+	if (type != PROV_FAILED && type != link.expect) {
+		BT_WARN("Unexpected msg 0x%02x != 0x%02x", type, link.expect);
+		prov_send_fail_msg(PROV_ERR_UNEXP_PDU);
+		return;
+	}
 
 	if (type >= ARRAY_SIZE(prov_handlers)) {
 		BT_ERR("Unknown provisioning PDU type 0x%02x", type);
@@ -1482,14 +1484,18 @@ bool bt_prov_active(void)
 	return atomic_test_bit(link.flags, LINK_ACTIVE);
 }
 
-void bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
+int bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
 {
+	int err;
+
 	static struct bt_pub_key_cb pub_key_cb = {
 		.func = pub_key_ready,
 	};
 
-	if (bt_pub_key_gen(&pub_key_cb)) {
-		BT_ERR("Failed to generate public key");
+	err = bt_pub_key_gen(&pub_key_cb);
+	if (err) {
+		BT_ERR("Failed to generate public key (%d)", err);
+		return err;
 	}
 
 	prov = prov_info;
@@ -1512,4 +1518,6 @@ void bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
 		memcpy(uuid.val, prov->uuid, 16);
 		BT_INFO("Device UUID: %s", bt_uuid_str(&uuid.uuid));
 	}
+
+	return 0;
 }

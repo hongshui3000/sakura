@@ -23,6 +23,10 @@ extern "C" {
 #define BT_ADDR_LE_PUBLIC_ID    0x02
 #define BT_ADDR_LE_RANDOM_ID    0x03
 
+/* Special own address types for LL privacy (used in adv & scan parameters) */
+#define BT_HCI_OWN_ADDR_RPA_OR_PUBLIC  0x02
+#define BT_HCI_OWN_ADDR_RPA_OR_RANDOM  0x03
+
 typedef struct {
 	u8_t  val[6];
 } bt_addr_t;
@@ -215,6 +219,8 @@ struct bt_hci_cmd_hdr {
 						BT_LE_FEAT_BIT_PHY_2M)
 #define BT_FEAT_LE_PHY_CODED(feat)              BT_LE_FEAT_TEST(feat, \
 						BT_LE_FEAT_BIT_PHY_CODED)
+#define BT_FEAT_LE_PRIVACY(feat)                BT_LE_FEAT_TEST(feat, \
+						BT_LE_FEAT_BIT_PRIVACY)
 
 /* LE States */
 #define BT_LE_STATES_SLAVE_CONN_ADV(states)     (states & 0x0000004000000000)

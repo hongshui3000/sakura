@@ -5,6 +5,9 @@ Zephyr Project
 
    <a href="https://bestpractices.coreinfrastructure.org/projects/74"><img
    src="https://bestpractices.coreinfrastructure.org/projects/74/badge"></a>
+   <img
+   src="https://api.shippable.com/projects/58ffb2b8baa5e307002e1d79/badge?branch=master">
+
 
 The Zephyr Project is a scalable real-time operating system (RTOS) supporting
 multiple hardware architectures, optimized for resource constrained devices,
@@ -48,7 +51,7 @@ support systems:
   `Zephyr Introduction`_ and `Getting Started Guide`_.
 
 * **Releases**: Source code for Zephyr kernel releases are available at
-  https://zephyrproject.org/downloads. On this page,
+  https://zephyrproject.org/developers/#downloads. On this page,
   you'll find release information, and links to download or clone source
   code from our GitHub repository.  You'll also find links for the Zephyr
   SDK, a moderated collection of tools and libraries used to develop your
@@ -69,14 +72,17 @@ support systems:
   the `Zephyr GitHub wiki`_.
 
 * **Issue Reporting and Tracking**: Requirements and Issue tracking is done in
-  our JIRA system: https://jira.zephyrproject.org. You can browse through the
-  reported issues and submit issues of your own.
+  the Github issues system: https://github.com/zephyrproject-rtos/zephyr/issues.
+  You can browse through the reported issues and submit issues of your own.
 
-* **Security-related Issue Reporting**: For security-related inquiries or
-  reporting suspected security-related bugs in the Zephyr OS, please
-  send email to vulnerabilities@zephyrproject.org.  We will assess and fix
-  flaws according to our security policy outlined in the Zephyr Project
+* **Security-related Issue Reporting and Tracking**: For security-related
+  inquiries or reporting suspected security-related bugs in the Zephyr OS,
+  please send email to vulnerabilities@zephyrproject.org.  We will assess and
+  fix flaws according to our security policy outlined in the Zephyr Project
   `Security Overview`_.
+
+  Security related issue tracking is done in JIRA.  The location of this JIRA
+  is https://zephyrprojectsec.atlassian.net.
 
 * **Mailing List**: The `Zephyr Mailing Lists`_ are perhaps the most convenient
   way to track developer discussions and to ask your own support questions to

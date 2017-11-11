@@ -7,14 +7,14 @@
 #
 
 menuconfig BT_MESH
-	bool "Smart Mesh support"
+	bool "Bluetooth Mesh support"
 	select TINYCRYPT
 	select TINYCRYPT_AES
 	select TINYCRYPT_AES_CMAC
 	help
-	  This option enables Smart Mesh support. The specific features
-	  that will be available is dependent on other features that have
-	  been enabled in the stack, such as GATT support.
+	  This option enables Bluetooth Mesh support. The specific
+	  features that are available may depend on other features
+	  that have been enabled in the stack, such as GATT support.
 
 if BT_MESH
 
@@ -66,14 +66,6 @@ config BT_MESH_PROXY_FILTER_SIZE
 endif # BT_MESH_PROXY
 
 endif # BT_CONN
-
-config BT_MESH_LOCAL_INTERFACE
-	bool "Local network interface"
-	default y
-	help
-	  This is needed in order to send messages between two local Mesh
-	  elements. Only disable it if you're sure this will not be needed
-	  (which helps save a little bit of memory).
 
 config BT_MESH_SELF_TEST
 	bool "Perform self-tests"
@@ -194,6 +186,42 @@ config BT_MESH_LOW_POWER
 	  Enable this option to be able to act as a Low Power Node.
 
 if BT_MESH_LOW_POWER
+
+config BT_MESH_LPN_ESTABLISHMENT
+	bool "Perform Friendship establishment using low power"
+	default y
+	help
+	  Perform the Friendship establishment using low power, with
+	  the help of a reduced scan duty cycle. The downside of this
+	  is that the node may miss out on messages intended for it
+	  until it has successfully set up Friendship with a Friend
+	  node.
+
+config BT_MESH_LPN_AUTO
+	bool "Automatically start looking for Friend nodes once provisioned"
+	default y
+	help
+	  Automatically enable LPN functionality once provisioned and start
+	  looking for Friend nodes. If this option is disabled LPN mode
+	  needs to be manually enabled by calling bt_mesh_lpn_set(true).
+
+config BT_MESH_LPN_AUTO_TIMEOUT
+	int "Time from last received message before going to LPN mode"
+	default 15
+	range 0 3600
+	depends on BT_MESH_LPN_AUTO
+	help
+	  Time in seconds from the last received message, that the node
+	  will wait before starting to look for Friend nodes.
+
+config BT_MESH_LPN_RETRY_TIMEOUT
+	int "Retry timeout for Friend requests"
+	default 8
+	range 1 3600
+	help
+	  Time in seconds between Friend Requests, if a previous Friend
+	  Request did not receive any acceptable Friend Offers.
+
 config BT_MESH_LPN_RSSI_FACTOR
 	int "RSSIFactor, used in the Friend Offer Delay calculation"
 	range 0 3
@@ -223,7 +251,7 @@ config BT_MESH_LPN_MIN_QUEUE_SIZE
 config BT_MESH_LPN_RECV_DELAY
 	int "Receive delay requested by the local node"
 	range 10 255
-	default 20
+	default 100
 	help
 	  The ReceiveDelay is the time between the Low Power node
 	  sending a request and listening for a response. This delay
@@ -273,16 +301,17 @@ config BT_MESH_FRIEND_RECV_WIN
 	  Receive Window in milliseconds supported by the Friend node.
 
 config BT_MESH_FRIEND_QUEUE_SIZE
-	int "Friend Queue Size"
-	range 1 BT_MESH_ADV_BUF_COUNT
+	int "Minimum number of buffers supported per Friend Queue"
+	range 2 65536
 	default 16
 	help
-	  Queue Size available on the Friend node.
+	  Minimum number of buffers available to be stored for each
+	  local Friend Queue.
 
 config BT_MESH_FRIEND_SUB_LIST_SIZE
 	int "Friend Subscription List Size"
-	range 1 255
-	default 16
+	range 0 1023
+	default 3
 	help
 	  Size of the Subscription List that can be supported by a
 	  Friend node for a Low Power node.
@@ -290,10 +319,20 @@ config BT_MESH_FRIEND_SUB_LIST_SIZE
 config BT_MESH_FRIEND_LPN_COUNT
 	int "Number of supported LPN nodes"
 	range 1 1000
-	default 1
+	default 2
 	help
 	  Number of Low Power Nodes the Friend can have a Friendship
 	  with simultaneously.
+
+config BT_MESH_FRIEND_SEG_RX
+	int "Number of incomplete segment lists per LPN"
+	range 1 1000
+	default 1
+	help
+	  Number of incomplete segment lists that we track for each LPN
+	  that we are Friends for. In other words, this determines how
+	  many elements we can simultaneously be receiving segmented
+	  messages from when the messages are going into the Friend queue.
 
 endif # BT_MESH_FRIEND
 

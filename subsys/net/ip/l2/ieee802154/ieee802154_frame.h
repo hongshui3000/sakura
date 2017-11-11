@@ -453,6 +453,8 @@ struct ieee802154_aux_security_hdr *
 ieee802154_validate_aux_security_hdr(u8_t *buf, u8_t **p_buf);
 #endif
 
+struct ieee802154_fcf_seq *ieee802154_validate_fc_seq(u8_t *buf, u8_t **p_buf);
+
 bool ieee802154_validate_frame(u8_t *buf, u8_t length,
 			       struct ieee802154_mpdu *mpdu);
 
@@ -479,14 +481,6 @@ struct ieee802154_command *ieee802154_get_mac_command(struct net_pkt *pkt)
 bool ieee802154_create_ack_frame(struct net_if *iface,
 				 struct net_pkt *pkt, u8_t seq);
 #endif
-
-static inline bool ieee802154_ack_required(struct net_pkt *pkt)
-{
-	struct ieee802154_fcf_seq *fs =
-		(struct ieee802154_fcf_seq *)net_pkt_ll(pkt);
-
-	return fs->fc.ar;
-}
 
 #ifdef CONFIG_NET_L2_IEEE802154_SECURITY
 bool ieee802154_decipher_data_frame(struct net_if *iface, struct net_pkt *pkt,

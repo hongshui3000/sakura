@@ -8,6 +8,8 @@
 #ifndef _kernel_offsets__h_
 #define _kernel_offsets__h_
 
+#include <syscall_list.h>
+
 /*
  * The final link step uses the symbol _OffsetAbsSyms to force the linkage of
  * offsets.o into the ELF image.
@@ -69,5 +71,9 @@ GEN_ABSOLUTE_SYM(K_THREAD_SIZEOF, sizeof(struct k_thread));
 
 /* size of the device structure. Used by linker scripts */
 GEN_ABSOLUTE_SYM(_DEVICE_STRUCT_SIZE, sizeof(struct device));
+
+/* Access to enum values in asm code */
+GEN_ABSOLUTE_SYM(_SYSCALL_LIMIT, K_SYSCALL_LIMIT);
+GEN_ABSOLUTE_SYM(_SYSCALL_BAD, K_SYSCALL_BAD);
 
 #endif /* _kernel_offsets__h_ */

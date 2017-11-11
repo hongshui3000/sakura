@@ -27,7 +27,7 @@
 #ifdef CONFIG_ARMV6_M
 
 #define VECTOR_ADDRESS 0
-static inline void relocate_vector_table(void)
+void __weak relocate_vector_table(void)
 {
 #if defined(CONFIG_XIP) && (CONFIG_FLASH_BASE_ADDRESS != 0) || \
     !defined(CONFIG_XIP) && (CONFIG_SRAM_BASE_ADDRESS != 0)
@@ -73,7 +73,7 @@ static inline void enable_floating_point(void)
 	 * Although automatic state preservation is enabled, the processor
 	 * does not automatically save the volatile FP registers until they
 	 * have first been touched. Perform a dummy move operation so that
-	 * the stack frames are created as expected before any task or fiber
+	 * the stack frames are created as expected before any thread
 	 * context switching can occur.
 	 */
 	__asm__ volatile(

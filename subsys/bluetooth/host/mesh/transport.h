@@ -6,8 +6,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#define TRANS_SEQ_AUTH_NVAL 0xffffffffffffffff
+
 #define BT_MESH_TX_SEG_COUNT (CONFIG_BT_MESH_ADV_BUF_COUNT - 3)
 #define BT_MESH_TX_SDU_MAX (BT_MESH_TX_SEG_COUNT * 12)
+
+#define TRANS_CTL_OP_MASK              ((u8_t)BIT_MASK(7))
+#define TRANS_CTL_OP(data)             ((data)[0] & TRANS_CTL_OP_MASK)
+#define TRANS_CTL_HDR(op, seg)         ((op & TRANS_CTL_OP_MASK) | (seg << 7))
 
 #define TRANS_CTL_OP_ACK               0x00
 #define TRANS_CTL_OP_FRIEND_POLL       0x01
@@ -58,6 +64,7 @@ struct bt_mesh_ctl_friend_clear_confirm {
 	u16_t lpn_counter;
 } __packed;
 
+#define BT_MESH_FRIEND_SUB_MIN_LEN (1 + 2)
 struct bt_mesh_ctl_friend_sub {
 	u8_t  xact;
 	u16_t addr_list[5];
@@ -67,6 +74,8 @@ struct bt_mesh_ctl_friend_sub_confirm {
 	u8_t xact;
 } __packed;
 
+void bt_mesh_set_hb_sub_dst(u16_t addr);
+
 struct bt_mesh_app_key *bt_mesh_app_key_find(u16_t app_idx);
 
 bool bt_mesh_tx_in_progress(void);
@@ -74,7 +83,7 @@ bool bt_mesh_tx_in_progress(void);
 void bt_mesh_rx_reset(void);
 
 int bt_mesh_ctl_send(struct bt_mesh_net_tx *tx, u8_t ctl_op, void *data,
-		     size_t data_len, bt_mesh_adv_func_t cb);
+		     size_t data_len, u64_t *seq_auth, bt_mesh_adv_func_t cb);
 
 int bt_mesh_trans_send(struct bt_mesh_net_tx *tx, struct net_buf_simple *msg,
 		       bt_mesh_cb_t cb, void *cb_data);

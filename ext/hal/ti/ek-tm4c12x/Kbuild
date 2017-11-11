@@ -1,3 +1,0 @@
-ccflags-$(CONFIG_HAS_TM4C123X_SDK) += -D$(COMPILER)
-# Need to build prcm and utils for TM4C123X MCUInit, which is not in ROM
-obj-$(CONFIG_HAS_TM4C12X_SDK) += ek-tm4c12x/source/driverlib/gpio.o

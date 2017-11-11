@@ -68,11 +68,9 @@ static void prepare_thread_to_run(struct k_thread *thread, void *data)
 #endif /* CONFIG_POLL */
 
 /* returns 1 if a reschedule must take place, 0 otherwise */
-static inline int handle_poll_events(struct k_queue *queue)
+static inline int handle_poll_events(struct k_queue *queue, u32_t state)
 {
 #ifdef CONFIG_POLL
-	u32_t state = K_POLL_STATE_DATA_AVAILABLE;
-
 	return _handle_obj_poll_events(&queue->poll_events, state);
 #else
 	return 0;
@@ -95,7 +93,7 @@ void k_queue_cancel_wait(struct k_queue *queue)
 		}
 	}
 #else
-	if (handle_poll_events(queue)) {
+	if (handle_poll_events(queue, K_POLL_STATE_NOT_READY)) {
 		(void)_Swap(key);
 		return;
 	}
@@ -126,7 +124,7 @@ void k_queue_insert(struct k_queue *queue, void *prev, void *data)
 	sys_slist_insert(&queue->data_q, prev, data);
 
 #if defined(CONFIG_POLL)
-	if (handle_poll_events(queue)) {
+	if (handle_poll_events(queue, K_POLL_STATE_DATA_AVAILABLE)) {
 		(void)_Swap(key);
 		return;
 	}
@@ -171,7 +169,7 @@ void k_queue_append_list(struct k_queue *queue, void *head, void *tail)
 	}
 #else
 	sys_slist_append_list(&queue->data_q, head, tail);
-	if (handle_poll_events(queue)) {
+	if (handle_poll_events(queue, K_POLL_STATE_DATA_AVAILABLE)) {
 		(void)_Swap(key);
 		return;
 	}
@@ -199,20 +197,32 @@ static void *k_queue_poll(struct k_queue *queue, s32_t timeout)
 {
 	struct k_poll_event event;
 	int err;
+	unsigned int key;
+	void *val;
 
 	k_poll_event_init(&event, K_POLL_TYPE_FIFO_DATA_AVAILABLE,
 			  K_POLL_MODE_NOTIFY_ONLY, queue);
 
-	event.state = K_POLL_STATE_NOT_READY;
+	do {
+		event.state = K_POLL_STATE_NOT_READY;
 
-	err = k_poll(&event, 1, timeout);
-	if (err) {
-		return NULL;
-	}
+		err = k_poll(&event, 1, timeout);
+		if (err) {
+			return NULL;
+		}
 
-	__ASSERT_NO_MSG(event.state == K_POLL_STATE_FIFO_DATA_AVAILABLE);
+		__ASSERT_NO_MSG(event.state ==
+				K_POLL_STATE_FIFO_DATA_AVAILABLE);
 
-	return sys_slist_get(&queue->data_q);
+		/* sys_slist_* aren't threadsafe, so must be always protected by
+		 * irq_lock.
+		 */
+		key = irq_lock();
+		val = sys_slist_get(&queue->data_q);
+		irq_unlock(key);
+	} while (!val && timeout == K_FOREVER);
+
+	return val;
 }
 #endif /* CONFIG_POLL */
 

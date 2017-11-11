@@ -7,7 +7,7 @@ Overview
 ********
 
 The sockets/echo-async sample application for Zephyr implements an
-asyncronous IPv4/IPv6 TCP echo server using a BSD Sockets compatible API
+asynchronous IPv4/IPv6 TCP echo server using a BSD Sockets compatible API
 with non-blocking sockets and a ``poll()`` call. This is an extension of
 the :ref:`sockets-echo-sample` sample. It's a more involved application,
 supporting both IPv4 and IPv6 with concurrent connections, limiting
@@ -27,11 +27,11 @@ Building and Running
 
 Build the Zephyr version of the sockets/echo_async application like this:
 
-.. code-block:: console
-
-    $ cd $ZEPHYR_BASE/samples/net/sockets/echo_async
-    $ make pristine
-    $ make BOARD=<board_to_use>
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/sockets/echo_async
+   :board: <board_to_use>
+   :goals: build
+   :compact:
 
 ``board_to_use`` defaults to ``qemu_x86``. In this case, you can run the
 application in QEMU using ``make run``. If you used another BOARD, you

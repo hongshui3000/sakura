@@ -167,7 +167,7 @@ int ataes132a_init(struct device *dev)
 {
 	struct ataes132a_device_data *ataes132a = dev->driver_data;
 	const struct ataes132a_device_config *cfg = dev->config->config_info;
-	union dev_config i2c_cfg;
+	u32_t i2c_cfg;
 
 	SYS_LOG_DBG("ATAES132A INIT");
 
@@ -177,11 +177,9 @@ int ataes132a_init(struct device *dev)
 		return -EINVAL;
 	}
 
-	i2c_cfg.raw = 0;
-	i2c_cfg.bits.is_master_device = 1;
-	i2c_cfg.bits.speed = ATAES132A_BUS_SPEED;
+	i2c_cfg = I2C_MODE_MASTER | I2C_SPEED_SET(ATAES132A_BUS_SPEED);
 
-	i2c_configure(ataes132a->i2c, i2c_cfg.raw);
+	i2c_configure(ataes132a->i2c, i2c_cfg);
 
 	k_sem_init(&ataes132a->device_sem, 1, UINT_MAX);
 
@@ -716,7 +714,7 @@ static int do_ccm_encrypt_mac(struct cipher_ctx *ctx,
 }
 
 static int do_ccm_decrypt_auth(struct cipher_ctx *ctx,
-			   struct cipher_aead_pkt *aead_op, u8_t *nonce)
+			       struct cipher_aead_pkt *aead_op, u8_t *nonce)
 {
 	struct device *dev = ctx->device;
 	struct ataes132a_driver_state *state = ctx->drv_sessn_state;
@@ -781,7 +779,8 @@ static int do_block(struct cipher_ctx *ctx, struct cipher_pkt *pkt)
 	return ataes132a_aes_ecb_block(dev, key_id, pkt);
 }
 
-int ataes132a_session_free(struct device *dev, struct cipher_ctx *session)
+static int ataes132a_session_free(struct device *dev,
+				  struct cipher_ctx *session)
 {
 	struct ataes132a_driver_state *state = session->drv_sessn_state;
 
@@ -792,9 +791,9 @@ int ataes132a_session_free(struct device *dev, struct cipher_ctx *session)
 	return 0;
 }
 
-int ataes132a_session_setup(struct device *dev, struct cipher_ctx *ctx,
-			     enum cipher_algo algo, enum cipher_mode mode,
-			     enum cipher_op op_type)
+static int ataes132a_session_setup(struct device *dev, struct cipher_ctx *ctx,
+				   enum cipher_algo algo, enum cipher_mode mode,
+				   enum cipher_op op_type)
 {
 	u8_t key_id = *((u8_t *)ctx->key.handle);
 	struct ataes132a_device_data *data = dev->driver_data;
@@ -876,7 +875,7 @@ int ataes132a_session_setup(struct device *dev, struct cipher_ctx *ctx,
 	return 0;
 }
 
-int ataes132a_query_caps(struct device *dev)
+static int ataes132a_query_caps(struct device *dev)
 {
 	return (CAP_OPAQUE_KEY_HNDL | CAP_SEPARATE_IO_BUFS |
 		CAP_SYNC_OPS | CAP_AUTONONCE);

@@ -25,7 +25,7 @@ static inline int aloha_tx_fragment(struct net_if *iface,
 {
 	u8_t retries = CONFIG_NET_L2_IEEE802154_RADIO_TX_RETRIES;
 	struct ieee802154_context *ctx = net_if_l2_data(iface);
-	bool ack_required = prepare_for_ack(ctx, pkt);
+	bool ack_required = prepare_for_ack(ctx, pkt, frag);
 	const struct ieee802154_radio_api *radio = iface->dev->driver_api;
 	int ret = -EIO;
 
@@ -39,7 +39,7 @@ static inline int aloha_tx_fragment(struct net_if *iface,
 			continue;
 		}
 
-		ret = wait_for_ack(ctx, ack_required);
+		ret = wait_for_ack(iface, ack_required);
 		if (!ret) {
 			break;
 		}

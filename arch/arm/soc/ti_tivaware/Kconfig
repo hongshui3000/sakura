@@ -1,0 +1,15 @@
+# Kconfig - Texas Instruments Tivaware Family
+#
+
+config SOC_FAMILY_TIVAWARE
+	bool
+	# omit prompt to signify a "hidden" option
+	default n
+
+if SOC_FAMILY_TIVAWARE
+config SOC_FAMILY
+	string
+	default ti_tivaware
+endif
+
+source "arch/arm/soc/ti_tivaware/*/Kconfig.soc"

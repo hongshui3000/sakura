@@ -38,8 +38,7 @@ const u8_t level_2_tag_size[4] = {
 };
 #endif
 
-static inline struct ieee802154_fcf_seq *
-validate_fc_seq(u8_t *buf, u8_t **p_buf)
+struct ieee802154_fcf_seq *ieee802154_validate_fc_seq(u8_t *buf, u8_t **p_buf)
 {
 	struct ieee802154_fcf_seq *fs = (struct ieee802154_fcf_seq *)buf;
 
@@ -81,7 +80,10 @@ validate_fc_seq(u8_t *buf, u8_t **p_buf)
 		return NULL;
 	}
 #endif
-	*p_buf = buf + 3;
+
+	if (p_buf) {
+		*p_buf = buf + 3;
+	}
 
 	return fs;
 }
@@ -378,7 +380,7 @@ bool ieee802154_validate_frame(u8_t *buf, u8_t length,
 		return false;
 	}
 
-	mpdu->mhr.fs = validate_fc_seq(buf, &p_buf);
+	mpdu->mhr.fs = ieee802154_validate_fc_seq(buf, &p_buf);
 	if (!mpdu->mhr.fs) {
 		return false;
 	}
@@ -407,6 +409,14 @@ bool ieee802154_validate_frame(u8_t *buf, u8_t length,
 #endif
 
 	return validate_payload_and_mfr(mpdu, buf, p_buf, length);
+}
+
+bool ieee802154_is_ar_flag_set(struct net_pkt *pkt)
+{
+	struct ieee802154_fcf_seq *fs =
+		(struct ieee802154_fcf_seq *)net_pkt_ll(pkt);
+
+	return !!(fs->fc.ar);
 }
 
 u16_t ieee802154_compute_header_size(struct net_if *iface,
@@ -554,6 +564,7 @@ bool data_addr_to_fs_settings(struct net_linkaddr *dst,
 		if (broadcast) {
 			params->dst.short_addr = IEEE802154_BROADCAST_ADDRESS;
 			params->dst.len = IEEE802154_SHORT_ADDR_LENGTH;
+			fs->fc.ar = 0;
 		} else {
 			params->dst.ext_addr = dst->addr;
 			params->dst.len = dst->len;

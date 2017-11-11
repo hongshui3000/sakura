@@ -172,10 +172,7 @@ struct bt_mesh_msg_ctx {
 	u16_t addr;
 
 	/** Received TTL value. Not used for sending. */
-	u8_t  recv_ttl:7;
-
-	/** Whether friend credentials are used. */
-	u8_t  friend_cred:1;
+	u8_t  recv_ttl;
 
 	/** TTL, or BT_MESH_TTL_DEFAULT for default TTL. */
 	u8_t  send_ttl;
@@ -291,9 +288,6 @@ extern const struct bt_mesh_model_op bt_mesh_cfg_op[];
 /** Mesh Health Server Model Context */
 struct bt_mesh_health {
 	struct bt_mesh_model *model;
-
-	/* Health Period (divider) */
-	u8_t period;
 
 	/* Fetch current faults */
 	int (*fault_get_cur)(struct bt_mesh_model *model, u8_t *test_id,

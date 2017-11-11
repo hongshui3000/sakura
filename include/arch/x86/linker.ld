@@ -65,10 +65,24 @@
 SECTIONS
 	{
 	GROUP_START(ROMABLE_REGION)
+#ifdef CONFIG_JAILHOUSE
+	/* 16-bit sections */
+	. = PHYS_RAM_ADDR;
+
+	SECTION_PROLOGUE(boot, (OPTIONAL),)
+	{
+	*(.boot)
+	. = ALIGN(16);
+	} GROUP_LINK_IN(ROMABLE_REGION)
+#endif
+	. = ALIGN(8);
 
 	_image_rom_start = PHYS_LOAD_ADDR;
+#ifndef CONFIG_JAILHOUSE
 	_image_text_start = PHYS_LOAD_ADDR;
-
+#else
+	_image_text_start = .;
+#endif
 	SECTION_PROLOGUE(_TEXT_SECTION_NAME, (OPTIONAL),)
 	{
 	. = CONFIG_TEXT_SECTION_OFFSET;
@@ -83,6 +97,9 @@ SECTIONS
 	*(.eini)
 	KEEP(*(.openocd_dbg))
 	KEEP(*(".openocd_dbg.*"))
+
+#include <linker/kobject-text.ld>
+
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	_image_text_end = .;
@@ -95,7 +112,6 @@ SECTIONS
 	*(.rodata)
 	*(".rodata.*")
 	*(.gnu.linkonce.r.*)
-
 	. = ALIGN(8);
 	_idt_base_address = .;
 #ifdef LINKER_PASS2
@@ -119,15 +135,20 @@ SECTIONS
 #include <custom-rodata.ld>
 #endif
 
+#include <linker/kobject-rom.ld>
 	} GROUP_LINK_IN(ROMABLE_REGION)
 
 	_image_rodata_end = .;
-
-	/* This align directive needs to be after __data_rom_start or XIP
-	 * won't be copying the data from the right LMA
-	 */
 	MMU_PAGE_ALIGN
+#ifdef CONFIG_XIP
+	/* Kernel ROM extends to the end of flash. Need to do this to program
+	 * the MMU
+	 */
+	_image_rom_end = _image_rom_start + KB(CONFIG_ROM_SIZE);
+#else
+	/* ROM ends here, position counter will now be in RAM areas */
 	_image_rom_end = .;
+#endif
 	_image_rom_size = _image_rom_end - _image_rom_start;
 
 	GROUP_END(ROMABLE_REGION)
@@ -170,68 +191,27 @@ SECTIONS
 	__app_ram_size = __app_ram_end - __app_ram_start;
 #endif /* CONFIG_APPLICATION_MEMORY */
 
-
-	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME, (OPTIONAL),)
-	{
-#ifndef CONFIG_APPLICATION_MEMORY
-	_image_ram_start = .;
-#endif
-	__kernel_ram_start = .;
-	__data_ram_start = .;
-
-	KERNEL_INPUT_SECTION(.data)
-	KERNEL_INPUT_SECTION(".data.*")
-	*(".kernel.*")
-
-#ifdef CONFIG_CUSTOM_RWDATA_LD
-/* Located in project source directory */
-#include <custom-rwdata.ld>
-#endif
-
-#ifdef CONFIG_GDT_DYNAMIC
-	KEEP(*(.tss))
-	. = ALIGN(8);
-	_gdt = .;
-#ifdef LINKER_PASS2
-	KEEP(*(gdt_ram_data))
-#else /* LINKER_PASS2 */
-
-#ifdef CONFIG_X86_STACK_PROTECTION
-#define GDT_NUM_ENTRIES	5
-#else /* CONFIG_X86_STACK_PROTECTION */
-#define GDT_NUM_ENTRIES 3
-#endif /* CONFIG_X86_STACK_PROTECTION */
-
-	. += GDT_NUM_ENTRIES * 8;
-#endif /* LINKER_PASS2 */
-#endif /* CONFIG_GDT_DYNAMIC */
-
-#ifdef CONFIG_X86_MMU
-	/* Page Tables are located here if MMU is enabled.*/
-	MMU_PAGE_ALIGN
-	__mmu_tables_start = .;
-	KEEP(*(.mmu_data));
-	__mmu_tables_end = .;
-#endif
-	. = ALIGN(4);
-	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
-
-	__data_rom_start = LOADADDR(_DATA_SECTION_NAME);
-
-
-#include <linker/common-ram.ld>
-
-	__data_ram_end = .;
-
 	SECTION_PROLOGUE(_BSS_SECTION_NAME, (NOLOAD OPTIONAL),)
 	{
+	/*
+	 * Without Jailhouse, we get the page alignment here for free by
+	 * definition of the beginning of the "RAMable" region on the board
+	 * configurations. With Jailhouse, everything falls in RAM and we
+	 * try to glue sections in sequence, thus we have to realign here so
+	 * that gen_mmu.py does not complain.
+	 */
+#ifdef CONFIG_JAILHOUSE
+	MMU_PAGE_ALIGN
+#endif
 	/*
 	 * For performance, BSS section is forced to be both 4 byte aligned and
 	 * a multiple of 4 bytes.
 	 */
-
 	. = ALIGN(4);
-
+#ifndef CONFIG_APPLICATION_MEMORY
+	_image_ram_start = .;
+#endif
+	__kernel_ram_start = .;
 	__bss_start = .;
 
 	KERNEL_INPUT_SECTION(.bss)
@@ -259,15 +239,71 @@ SECTIONS
 	KERNEL_INPUT_SECTION(".noinit.*")
 	*(".kernel_noinit.*")
 
-	/* All stacks go in kernel's noinit, regardless of where they
-	 * were defined.
-	 */
-	*(.stacks)
-	*(".stacks.*")
-
 	MMU_PAGE_ALIGN
 
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
+
+	SECTION_DATA_PROLOGUE(_DATA_SECTION_NAME, (OPTIONAL),)
+	{
+
+	__data_ram_start = .;
+
+	KERNEL_INPUT_SECTION(.data)
+	KERNEL_INPUT_SECTION(".data.*")
+	*(".kernel.*")
+
+#ifdef CONFIG_CUSTOM_RWDATA_LD
+/* Located in project source directory */
+#include <custom-rwdata.ld>
+#endif
+
+#ifdef CONFIG_GDT_DYNAMIC
+	KEEP(*(.tss))
+	. = ALIGN(8);
+	_gdt = .;
+#ifdef LINKER_PASS2
+	KEEP(*(gdt_ram_data))
+#else /* LINKER_PASS2 */
+
+#ifdef CONFIG_USERSPACE
+    #define GDT_NUM_ENTRIES 7
+#elif defined(CONFIG_HW_STACK_PROTECTION)
+    #define GDT_NUM_ENTRIES 5
+#else
+    #define GDT_NUM_ENTRIES 3
+#endif /* CONFIG_X86_USERSPACE */
+	. += GDT_NUM_ENTRIES * 8;
+#endif /* LINKER_PASS2 */
+#endif /* CONFIG_GDT_DYNAMIC */
+
+	. = ALIGN(4);
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	__data_rom_start = LOADADDR(_DATA_SECTION_NAME);
+
+#include <linker/common-ram.ld>
+
+#ifdef CONFIG_X86_MMU
+	/* Can't really predict the size of this section. Anything after this
+	 * should not be affected if addresses change between builds (currently
+	 * just the gperf tables which is fine).
+	 *
+	 * However, __mmu_tables_start *must* remain stable between builds,
+	 * we can't have anything shifting the memory map beforehand.
+	 */
+	SECTION_DATA_PROLOGUE(mmu_tables, (OPTIONAL),)
+	{
+	/* Page Tables are located here if MMU is enabled.*/
+	MMU_PAGE_ALIGN
+	__mmu_tables_start = .;
+	KEEP(*(.mmu_data));
+	__mmu_tables_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+#endif
+
+#include <linker/kobject.ld>
+
+	__data_ram_end = .;
 
 	/* All unused memory also owned by the kernel for heaps */
 	__kernel_ram_end = PHYS_RAM_ADDR + KB(CONFIG_RAM_SIZE);
@@ -297,7 +333,7 @@ SECTIONS
 	/* Memory management unit*/
 	SECTION_PROLOGUE(mmulist, (OPTIONAL),)
 	{
-	/* get size of the mmu lists needed for gen_mmu.py*/
+	/* get size of the mmu lists needed for gen_mmu_x86.py*/
 	LONG((__MMU_LIST_END__ - __MMU_LIST_START__) / __MMU_REGION_SIZEOF)
 	/* Get the start of mmu tables in data section so that the address
 	 * of the page tables can be calculated.

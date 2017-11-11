@@ -12,6 +12,13 @@
 #define NET_LOG_ENABLED 1
 #endif
 
+#if defined(CONFIG_STDOUT_CONSOLE)
+#include <stdio.h>
+#define  MBEDTLS_PRINT printf
+#else
+#include <misc/printk.h>
+#define  MBEDTLS_PRINT printk
+#endif /* CONFIG_STDOUT_CONSOLE */
 #include <zephyr.h>
 #include <string.h>
 #include <errno.h>
@@ -56,6 +63,11 @@ static void net_app_foreach(net_app_ctx_cb_t cb, enum net_app_type type,
 
 	SYS_SLIST_FOR_EACH_CONTAINER(&_net_app_instances, ctx, node) {
 		if (ctx->is_init && ctx->app_type == type) {
+			if (ctx->app_type == NET_APP_CLIENT &&
+			    !ctx->is_enabled) {
+				continue;
+			}
+
 			cb(ctx, user_data);
 		}
 	}
@@ -108,6 +120,9 @@ char *_net_app_sprint_ipaddr(char *buf, int buflen,
 		snprintk(buf, buflen, "%s:%u", ipaddr,
 			 ntohs(net_sin(addr)->sin_port));
 #endif
+	} else {
+		snprintk(buf, buflen, "<AF_UNSPEC %d>",
+			 addr->sa_family);
 	}
 
 	return buf;
@@ -157,14 +172,26 @@ void _net_app_received(struct net_context *net_ctx,
 #if defined(CONFIG_NET_APP_SERVER)
 	if (ctx->app_type == NET_APP_SERVER) {
 		if (!pkt) {
+#if defined(CONFIG_NET_TCP)
+			int i;
+#endif
+
 			if (ctx->cb.close) {
 				ctx->cb.close(ctx, status, ctx->user_data);
 			}
 
 #if defined(CONFIG_NET_TCP)
-			if (ctx->proto == IPPROTO_TCP) {
-				net_context_put(ctx->server.net_ctx);
-				ctx->server.net_ctx = NULL;
+			for (i = 0;
+			     ctx->proto == IPPROTO_TCP &&
+				     i < CONFIG_NET_APP_SERVER_NUM_CONN;
+			     i++) {
+				if (ctx->server.net_ctxs[i] == net_ctx &&
+				    ctx == net_ctx->net_app) {
+					net_context_put(net_ctx);
+					ctx->server.net_ctxs[i] = NULL;
+					net_ctx->net_app = NULL;
+					break;
+				}
 			}
 #endif
 
@@ -357,6 +384,10 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 			ret = -EPFNOSUPPORT;
 			goto fail;
 		}
+
+		if (!ret) {
+			select_default_ctx(ctx);
+		}
 #endif
 
 #if defined(CONFIG_NET_IPV4)
@@ -367,9 +398,12 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 			ret = -EPFNOSUPPORT;
 			goto fail;
 		}
-#endif
 
-		select_default_ctx(ctx);
+		if (!ret) {
+			select_default_ctx(ctx);
+		}
+#endif
+		return ret;
 	} else {
 		if (addr->sa_family == AF_INET6) {
 #if defined(CONFIG_NET_IPV6)
@@ -474,11 +508,21 @@ struct net_context *select_client_ctx(struct net_app_ctx *ctx,
 		}
 	} else {
 		if (!dst) {
+			if (ctx->default_ctx->ctx &&
+			    atomic_get(&ctx->default_ctx->ctx->refcount) <= 0) {
+				ctx->default_ctx->ctx = NULL;
+			}
+
 			return ctx->default_ctx->ctx;
 		} else {
 		common_checks:
 			if (dst->sa_family == AF_INET) {
 #if defined(CONFIG_NET_IPV4)
+				if (ctx->ipv4.ctx &&
+				    atomic_get(&ctx->ipv4.ctx->refcount) <= 0) {
+					ctx->ipv4.ctx = NULL;
+				}
+
 				return ctx->ipv4.ctx;
 #else
 				return NULL;
@@ -487,6 +531,11 @@ struct net_context *select_client_ctx(struct net_app_ctx *ctx,
 
 			if (dst->sa_family == AF_INET6) {
 #if defined(CONFIG_NET_IPV6)
+				if (ctx->ipv6.ctx &&
+				    atomic_get(&ctx->ipv6.ctx->refcount) <= 0) {
+					ctx->ipv6.ctx = NULL;
+				}
+
 				return ctx->ipv6.ctx;
 #else
 				return NULL;
@@ -494,6 +543,12 @@ struct net_context *select_client_ctx(struct net_app_ctx *ctx,
 			}
 
 			if (dst->sa_family == AF_UNSPEC) {
+				if (ctx->default_ctx->ctx &&
+				    atomic_get(&ctx->default_ctx->ctx->refcount)
+								       <= 0) {
+					ctx->default_ctx->ctx = NULL;
+				}
+
 				return ctx->default_ctx->ctx;
 			}
 		}
@@ -506,13 +561,106 @@ struct net_context *select_client_ctx(struct net_app_ctx *ctx,
 #endif /* CONFIG_NET_APP_CLIENT */
 
 #if defined(CONFIG_NET_APP_SERVER)
+#if defined(CONFIG_NET_TCP)
+static struct net_context *get_server_ctx(struct net_app_ctx *ctx,
+					  const struct sockaddr *dst)
+{
+	int i;
+
+	for (i = 0; i < CONFIG_NET_APP_SERVER_NUM_CONN; i++) {
+		struct net_context *tmp = ctx->server.net_ctxs[i];
+		u16_t port, rport;
+
+		if (!tmp || !net_context_is_used(tmp)) {
+			continue;
+		}
+
+		if (!dst) {
+			if (tmp->net_app == ctx) {
+				NET_DBG("Selecting net_ctx %p iface %p for "
+					"NULL dst",
+					tmp, net_context_get_iface(tmp));
+				return tmp;
+			}
+
+			continue;
+		}
+
+		/* Serve IPv6 first if the user does not care */
+		if (IS_ENABLED(CONFIG_NET_IPV6) &&
+		    (dst->sa_family == AF_UNSPEC ||
+		     (tmp->remote.sa_family == AF_INET6 &&
+		      dst->sa_family == AF_INET6))) {
+			struct in6_addr *addr6 = &net_sin6(dst)->sin6_addr;
+			struct in6_addr *remote6;
+
+			remote6 = &net_sin6(&tmp->remote)->sin6_addr;
+			rport = net_sin6(&tmp->remote)->sin6_port;
+			port = net_sin6(dst)->sin6_port;
+
+			if (net_ipv6_addr_cmp(addr6, remote6) &&
+			    port == rport) {
+				NET_DBG("Selecting net_ctx %p iface %p for "
+					"AF_INET6 port %d", tmp,
+					net_context_get_iface(tmp),
+					ntohs(rport));
+				return tmp;
+			}
+
+			if (tmp->net_app == ctx) {
+				NET_DBG("Selecting net_ctx %p iface %p"
+					" for %s port %d", tmp,
+					net_context_get_iface(tmp),
+					dst->sa_family == AF_UNSPEC ?
+					"AF_UNSPEC" : "AF_INET6",
+					ntohs(rport));
+				return tmp;
+			}
+		}
+
+		if (IS_ENABLED(CONFIG_NET_IPV4) &&
+		    (dst->sa_family == AF_UNSPEC ||
+		     (tmp->remote.sa_family == AF_INET &&
+		      dst->sa_family == AF_INET))) {
+			struct in_addr *addr4 = &net_sin(dst)->sin_addr;
+			struct in_addr *remote4;
+
+			remote4 = &net_sin(&tmp->remote)->sin_addr;
+			rport = net_sin(&tmp->remote)->sin_port;
+			port = net_sin(dst)->sin_port;
+
+			if (net_ipv4_addr_cmp(addr4, remote4) &&
+			    port == rport) {
+				NET_DBG("Selecting net_ctx %p iface %p for "
+					"AF_INET port %d", tmp,
+					net_context_get_iface(tmp),
+					ntohs(port));
+				return tmp;
+			}
+
+			if (tmp->net_app == ctx) {
+				NET_DBG("Selecting net_ctx %p iface %p"
+					" for %s port %d", tmp,
+					net_context_get_iface(tmp),
+					dst->sa_family == AF_UNSPEC ?
+					"AF_UNSPEC" : "AF_INET",
+					ntohs(port));
+				return tmp;
+			}
+		}
+	}
+
+	return NULL;
+}
+#endif /* CONFIG_NET_TCP */
+
 static inline
 struct net_context *select_server_ctx(struct net_app_ctx *ctx,
 				      const struct sockaddr *dst)
 {
 	if (ctx->proto == IPPROTO_TCP) {
 #if defined(CONFIG_NET_TCP)
-		return ctx->server.net_ctx;
+		return get_server_ctx(ctx, dst);
 #else
 		return NULL;
 #endif
@@ -564,18 +712,27 @@ struct net_context *select_server_ctx(struct net_app_ctx *ctx,
 #define select_server_ctx(...) NULL
 #endif /* CONFIG_NET_APP_SERVER */
 
+#if NET_LOG_ENABLED > 0
+struct net_context *_net_app_select_net_ctx_debug(struct net_app_ctx *ctx,
+						  const struct sockaddr *dst,
+						  const char *caller,
+						  int line)
+#else
 struct net_context *_net_app_select_net_ctx(struct net_app_ctx *ctx,
 					    const struct sockaddr *dst)
+#endif
 {
+	struct net_context *net_ctx = NULL;
+
 	if (ctx->app_type == NET_APP_CLIENT) {
-		return select_client_ctx(ctx, dst);
+		net_ctx = select_client_ctx(ctx, dst);
+	} else if (ctx->app_type == NET_APP_SERVER) {
+		net_ctx = select_server_ctx(ctx, dst);
 	}
 
-	if (ctx->app_type == NET_APP_SERVER) {
-		return select_server_ctx(ctx, dst);
-	}
+	NET_DBG("Selecting %p net_ctx (%s():%d)", net_ctx, caller, line);
 
-	return NULL;
+	return net_ctx;
 }
 
 int net_app_set_cb(struct net_app_ctx *ctx,
@@ -788,7 +945,7 @@ struct net_pkt *net_app_get_net_pkt(struct net_app_ctx *ctx,
 				    s32_t timeout)
 {
 	struct net_context *net_ctx;
-	struct sockaddr dst;
+	struct sockaddr dst = { 0 };
 
 	if (!ctx) {
 		return NULL;
@@ -844,10 +1001,84 @@ int net_app_close(struct net_app_ctx *ctx)
 		return -ENOENT;
 	}
 
-	net_ctx = _net_app_select_net_ctx(ctx, NULL);
-	if (!net_ctx) {
-		return -EAFNOSUPPORT;
+#if defined(CONFIG_NET_APP_TLS) || defined(CONFIG_NET_APP_DTLS)
+	if (ctx->tls.tx_pending) {
+		ctx->tls.close_requested = true;
+		return -EINPROGRESS;
 	}
+#endif
+
+	net_ctx = _net_app_select_net_ctx(ctx, NULL);
+
+	if (ctx->cb.close) {
+		ctx->cb.close(ctx, 0, ctx->user_data);
+	}
+
+#if defined(CONFIG_NET_APP_SERVER) && defined(CONFIG_NET_TCP)
+	if (net_ctx && ctx->app_type == NET_APP_SERVER) {
+		int i;
+
+		for (i = 0; i < CONFIG_NET_APP_SERVER_NUM_CONN; i++) {
+			if (ctx->server.net_ctxs[i] == net_ctx) {
+				NET_DBG("Releasing slot %d net_ctx %p",
+					i, net_ctx);
+				ctx->server.net_ctxs[i] = NULL;
+				break;
+			}
+		}
+	}
+#endif
+
+	if (net_ctx) {
+		net_ctx->net_app = NULL;
+		net_context_put(net_ctx);
+
+		NET_DBG("Closing net_ctx %p", net_ctx);
+	}
+
+#if defined(CONFIG_NET_APP_CLIENT)
+	if (ctx->app_type == NET_APP_CLIENT) {
+		ctx->is_enabled = false;
+
+		/* Make sure we do not re-use the same port if we
+		 * re-connect after close.
+		 */
+#if defined(CONFIG_NET_IPV4)
+		net_sin(&ctx->ipv4.local)->sin_port = 0;
+
+		if (ctx->ipv4.ctx) {
+			net_sin_ptr(&ctx->ipv4.ctx->local)->sin_port = 0;
+		}
+#endif
+#if defined(CONFIG_NET_IPV6)
+		net_sin6(&ctx->ipv6.local)->sin6_port = 0;
+
+		if (ctx->ipv6.ctx) {
+			net_sin6_ptr(&ctx->ipv6.ctx->local)->sin6_port = 0;
+		}
+#endif
+	}
+#endif
+
+	return 0;
+}
+
+int net_app_close2(struct net_app_ctx *ctx, struct net_context *net_ctx)
+{
+	if (!ctx || !net_ctx) {
+		return -EINVAL;
+	}
+
+	if (!ctx->is_init) {
+		return -ENOENT;
+	}
+
+#if defined(CONFIG_NET_APP_TLS) || defined(CONFIG_NET_APP_DTLS)
+	if (ctx->tls.tx_pending) {
+		ctx->tls.close_requested = true;
+		return -EINPROGRESS;
+	}
+#endif
 
 	if (ctx->cb.close) {
 		ctx->cb.close(ctx, 0, ctx->user_data);
@@ -855,9 +1086,46 @@ int net_app_close(struct net_app_ctx *ctx)
 
 #if defined(CONFIG_NET_APP_SERVER) && defined(CONFIG_NET_TCP)
 	if (ctx->app_type == NET_APP_SERVER) {
-		ctx->server.net_ctx = NULL;
+		int i;
+
+		for (i = 0; i < CONFIG_NET_APP_SERVER_NUM_CONN; i++) {
+			if (ctx->server.net_ctxs[i] == net_ctx) {
+				ctx->server.net_ctxs[i] = NULL;
+				break;
+			}
+		}
 	}
 #endif
+
+#if defined(CONFIG_NET_APP_CLIENT)
+	if (ctx->app_type == NET_APP_CLIENT) {
+		if (net_ctx != _net_app_select_net_ctx(ctx, NULL)) {
+			return -ENOENT;
+		}
+
+		ctx->is_enabled = false;
+
+		/* Make sure we do not re-use the same port if we
+		 * re-connect after close.
+		 */
+#if defined(CONFIG_NET_IPV4)
+		net_sin(&ctx->ipv4.local)->sin_port = 0;
+
+		if (net_ctx == ctx->ipv4.ctx) {
+			net_sin_ptr(&ctx->ipv4.ctx->local)->sin_port = 0;
+		}
+#endif
+#if defined(CONFIG_NET_IPV6)
+		net_sin6(&ctx->ipv6.local)->sin6_port = 0;
+
+		if (net_ctx == ctx->ipv6.ctx) {
+			net_sin6_ptr(&ctx->ipv6.ctx->local)->sin6_port = 0;
+		}
+#endif
+	}
+#endif
+
+	net_ctx->net_app = NULL;
 
 	net_context_put(net_ctx);
 
@@ -898,6 +1166,32 @@ static void ssl_sent(struct net_context *context,
 	struct net_app_ctx *ctx = user_data;
 
 	k_sem_give(&ctx->tls.mbedtls.ssl_ctx.tx_sem);
+}
+
+int _net_app_tls_trigger_close(struct net_app_ctx *ctx)
+{
+	struct net_app_fifo_block *rx_data = NULL;
+	struct k_mem_block block;
+	int ret;
+
+	ret = k_mem_pool_alloc(ctx->tls.pool, &block,
+			       sizeof(struct net_app_fifo_block),
+			       BUF_ALLOC_TIMEOUT);
+	if (ret < 0) {
+		return ret;
+	}
+
+	rx_data = block.data;
+	rx_data->pkt = NULL;
+	rx_data->dir = NET_APP_PKT_TX;
+
+	memcpy(&rx_data->block, &block, sizeof(struct k_mem_block));
+
+	NET_DBG("Triggering connection close");
+
+	k_fifo_put(&ctx->tls.mbedtls.ssl_ctx.tx_rx_fifo, (void *)rx_data);
+
+	return 0;
 }
 
 /* Send encrypted data */
@@ -948,6 +1242,10 @@ int _net_app_ssl_tx(void *context, const unsigned char *buf, size_t size)
 
 	k_sem_take(&ctx->tls.mbedtls.ssl_ctx.tx_sem, K_FOREVER);
 
+	if (ctx->tls.close_requested) {
+		_net_app_tls_trigger_close(ctx);
+	}
+
 	return len;
 }
 
@@ -969,6 +1267,21 @@ int _net_app_tls_sendto(struct net_pkt *pkt,
 	struct k_mem_block block;
 	int ret;
 
+	if (!ctx->tls.handshake_done) {
+		/* This means that the initial TLS handshake is not yet
+		 * finished so our packet cannot be sent yet. Try sleeping
+		 * a bit and hope things are ok after that. If not, then
+		 * return error.
+		 */
+		k_sleep(MSEC(50));
+
+		if (!ctx->tls.handshake_done) {
+			NET_DBG("TLS handshake not yet done, pkt %p not sent",
+				pkt);
+			return -EBUSY;
+		}
+	}
+
 	ARG_UNUSED(dst_addr);
 	ARG_UNUSED(addrlen);
 
@@ -988,6 +1301,8 @@ int _net_app_tls_sendto(struct net_pkt *pkt,
 	tx_data->dir = NET_APP_PKT_TX;
 	tx_data->token = token;
 	tx_data->cb = cb;
+
+	ctx->tls.tx_pending = true;
 
 	/* For freeing memory later */
 	memcpy(&tx_data->block, &block, sizeof(struct k_mem_block));
@@ -1325,6 +1640,11 @@ void _net_app_tls_received(struct net_context *context,
 	NET_DBG("Encrypted data received in pkt %p", pkt);
 
 	k_fifo_put(&ctx->tls.mbedtls.ssl_ctx.tx_rx_fifo, (void *)rx_data);
+
+	/* Make sure that the tls handler thread runs now, even if we receive
+	 * new packets.
+	 */
+	k_yield();
 }
 
 static int tls_sendto(struct net_app_ctx *ctx,
@@ -1383,6 +1703,8 @@ out:
 
 	net_pkt_unref(tx_data->pkt);
 
+	ctx->tls.tx_pending = false;
+
 	return ret;
 }
 
@@ -1436,15 +1758,15 @@ int _net_app_ssl_mux(void *context, unsigned char *buf, size_t size)
 		rx_data = k_fifo_get(&ctx->tls.mbedtls.ssl_ctx.tx_rx_fifo,
 				     K_FOREVER);
 		if (!rx_data->pkt) {
-			NET_DBG("Closing %p connection", ctx);
 			k_mem_pool_free(&rx_data->block);
+			ctx->tls.connection_closing = true;
 			return -EIO;
 		}
 
-		NET_DBG("%s encrypted data in pkt %p",
-			rx_data->dir == NET_APP_PKT_TX ? "Sending" :
-							"Receiving",
-			rx_data->pkt);
+		NET_DBG("%s data in pkt %p (len %zd)",
+			rx_data->dir == NET_APP_PKT_TX ? "Sending plain" :
+							"Receiving encrypted",
+			rx_data->pkt, net_pkt_get_len(rx_data->pkt));
 
 		/* If the fifo contains something we need to send, then try
 		 * to send it here and then go back waiting more data.
@@ -1598,6 +1920,8 @@ int _net_app_ssl_mainloop(struct net_app_ctx *ctx)
 	size_t len;
 	int ret;
 
+	ctx->tls.connect_cb_called = false;
+
 reset:
 	mbedtls_ssl_session_reset(&ctx->tls.mbedtls.ssl);
 
@@ -1636,15 +1960,33 @@ reset:
 	 * connection establishment.
 	 */
 	/* Waiting SSL handshake */
+	ctx->tls.handshake_done = false;
+
+	NET_DBG("Starting TLS handshake");
+
 	do {
 		ret = mbedtls_ssl_handshake(&ctx->tls.mbedtls.ssl);
 		if (ret != MBEDTLS_ERR_SSL_WANT_READ &&
 		    ret != MBEDTLS_ERR_SSL_WANT_WRITE) {
+			/* If we get MAC verification failure, then it usually
+			 * means that we ran out of heap. As that Invalid MAC
+			 * error is really confusing, give hint about possible
+			 * out of memory issue.
+			 */
+			if (ret == MBEDTLS_ERR_SSL_INVALID_MAC) {
+				NET_DBG("Check CONFIG_MBEDTLS_HEAP_SIZE as "
+					"you could be out of mem in mbedtls");
+			}
+
 			if (ret < 0) {
 				goto close;
 			}
 		}
 	} while (ret != 0);
+
+	ctx->tls.handshake_done = true;
+
+	NET_DBG("TLS handshake done");
 
 	/* We call the connect cb only once for each connection. The TLS
 	 * might require new handshakes etc, but application does not need
@@ -1679,6 +2021,7 @@ reset:
 				break;
 
 			case -EIO:
+				ctx->tls.connection_closing = true;
 				break;
 
 			default:
@@ -1692,11 +2035,25 @@ reset:
 		}
 
 		if (ctx->cb.recv) {
+			struct sockaddr dst = { 0 };
+			struct net_context *net_ctx;
 			struct net_pkt *pkt;
 			int len = ret;
+			int hdr_len = 0;
 
-			pkt = net_pkt_get_rx(_net_app_select_net_ctx(ctx, NULL),
-					     BUF_ALLOC_TIMEOUT);
+			dst.sa_family = AF_UNSPEC;
+
+			/* If we cannot select any net_ctx, then the connection
+			 * is closed already.
+			 */
+			net_ctx = _net_app_select_net_ctx(ctx, &dst);
+			if (!net_ctx) {
+				ctx->tls.connection_closing = true;
+				ret = -EIO;
+				goto close;
+			}
+
+			pkt = net_pkt_get_rx(net_ctx, BUF_ALLOC_TIMEOUT);
 			if (!pkt) {
 				ret = -ENOMEM;
 				goto close;
@@ -1707,8 +2064,23 @@ reset:
 			 * from the IP header.
 			 */
 			if (ctx->tls.mbedtls.ssl_ctx.hdr) {
+				/* Needed to skip the protocol header */
+				hdr_len = ctx->tls.mbedtls.ssl_ctx.hdr->len;
+
 				net_pkt_frag_add(pkt,
 						 ctx->tls.mbedtls.ssl_ctx.hdr);
+#if defined(CONFIG_NET_IPV6)
+				if (net_pkt_family(pkt) == AF_INET6) {
+					net_pkt_set_ip_hdr_len(pkt,
+						sizeof(struct net_ipv6_hdr));
+				}
+#endif
+#if defined(CONFIG_NET_IPV4)
+				if (net_pkt_family(pkt) == AF_INET) {
+					net_pkt_set_ip_hdr_len(pkt,
+						sizeof(struct net_ipv4_hdr));
+				}
+#endif
 				ctx->tls.mbedtls.ssl_ctx.hdr = NULL;
 			}
 
@@ -1723,7 +2095,18 @@ reset:
 			}
 
 			net_pkt_set_appdatalen(pkt, len);
-			net_pkt_set_appdata(pkt, pkt->frags->data);
+
+			if (hdr_len) {
+				struct net_buf *frag;
+				u16_t pos;
+
+				frag = net_frag_get_pos(pkt, hdr_len, &pos);
+				NET_ASSERT(frag);
+
+				net_pkt_set_appdata(pkt, frag->data + pos);
+			} else {
+				net_pkt_set_appdata(pkt, pkt->frags->data);
+			}
 
 			ctx->cb.recv(ctx, pkt, 0, ctx->user_data);
 
@@ -1767,7 +2150,7 @@ int _net_app_tls_init(struct net_app_ctx *ctx, int client_or_server)
 	k_fifo_init(&ctx->tls.mbedtls.ssl_ctx.tx_rx_fifo);
 	k_sem_init(&ctx->tls.mbedtls.ssl_ctx.tx_sem, 0, UINT_MAX);
 
-	mbedtls_platform_set_printf(printk);
+	mbedtls_platform_set_printf(MBEDTLS_PRINT);
 
 #if defined(MBEDTLS_X509_CRT_PARSE_C)
 	if (client_or_server == MBEDTLS_SSL_IS_SERVER) {

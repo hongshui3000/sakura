@@ -10,7 +10,7 @@
  *
  * Based on reference manual:
  *   STM32L4x1, STM32L4x2, STM32L431xx STM32L443xx STM32L433xx, STM32L4x5,
- *   STM32l4x6 advanced ARM ® -based 32-bit MCUs
+ *   STM32l4x6 advanced ARM(r)-based 32-bit MCUs
  *
  * Chapter 2.2.2: Memory map and register boundary addresses
  */
@@ -45,6 +45,15 @@
 
 #ifdef CONFIG_I2C
 #include <stm32l4xx_ll_i2c.h>
+#endif
+
+#ifdef CONFIG_IWDG_STM32
+#include <stm32l4xx_ll_iwdg.h>
+#endif
+
+/* For IMG_MANAGER */
+#if defined(CONFIG_SOC_FLASH_STM32)
+#define FLASH_DRIVER_NAME	CONFIG_SOC_FLASH_STM32_DEV_NAME
 #endif
 
 #endif /* !_ASMLANGUAGE */

@@ -17,8 +17,8 @@
 #include <bluetooth/hci_raw.h>
 #include <bluetooth/l2cap.h>
 
-#include "usb_device.h"
-#include "usb_common.h"
+#include <usb/usb_device.h>
+#include <usb/usb_common.h>
 
 #define BTUSB_BUFFER_SIZE 64
 
@@ -549,9 +549,11 @@ static struct usb_ep_cfg_data btusb_ep[] = {
 #endif
 };
 
-static void btusb_status_cb(enum usb_dc_status_code status)
+static void btusb_status_cb(enum usb_dc_status_code status, u8_t *param)
 {
 	struct btusb_dev_data_t * const dev_data = DEV_DATA(btusb_dev);
+
+	ARG_UNUSED(param);
 
 	/* Store the new status */
 	dev_data->usb_status = status;

@@ -23,10 +23,10 @@ the **bar** component of **foo**, you should copy the sample folder to
 
 The sample contains the following files:
 
-Makefile
+CMakeLists.txt
 
-.. literalinclude:: ../../../samples/testing/integration/Makefile
-   :language: Make
+.. literalinclude:: ../../../samples/testing/integration/CMakeLists.txt
+   :language: CMake
    :linenos:
 
 sample.yaml
@@ -39,12 +39,6 @@ prj.conf
 
 .. literalinclude:: ../../../samples/testing/integration/prj.conf
    :language: text
-   :linenos:
-
-src/Makefile
-
-.. literalinclude:: ../../../samples/testing/integration/src/Makefile
-   :language: Make
    :linenos:
 
 src/main.c
@@ -79,10 +73,10 @@ that interaction.
 The :file:`samples/testing/unit` folder contains an example for testing
 the net-buf api of Zephyr.
 
-Makefile
+CMakeLists.txt
 
-.. literalinclude:: ../../../samples/testing/unit/Makefile
-   :language: Make
+.. literalinclude:: ../../../samples/testing/unit/CMakeLists.txt
+   :language: CMake
    :linenos:
 
 sample.yaml
@@ -105,7 +99,6 @@ Running tests
 
 .. doxygengroup:: ztest_test
    :project: Zephyr
-   :content-only:
 
 Assertions
 ==========
@@ -126,7 +119,6 @@ Example output for a failed macro from
 
 .. doxygengroup:: ztest_assert
    :project: Zephyr
-   :content-only:
 
 Mocking
 =======
@@ -147,4 +139,3 @@ expect the values ``a=2`` and ``b=3``, and telling ``returns_int`` to return
 
 .. doxygengroup:: ztest_mock
    :project: Zephyr
-   :content-only:

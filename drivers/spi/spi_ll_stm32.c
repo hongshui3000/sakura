@@ -16,8 +16,7 @@
 #include <clock_control/stm32_clock_control.h>
 #include <clock_control.h>
 
-#include <drivers/spi/spi_ll_stm32.h>
-#include <spi_ll_stm32.h>
+#include "spi_ll_stm32.h"
 
 #define CONFIG_CFG(cfg)						\
 ((const struct spi_stm32_config * const)(cfg)->dev->config->config_info)
@@ -66,7 +65,7 @@ static void spi_stm32_shift_m(SPI_TypeDef *spi, struct spi_stm32_data *data)
 	}
 	LL_SPI_TransmitData8(spi, tx_frame);
 	/* The update is ignored if TX is off. */
-	spi_context_update_tx(&data->ctx, 1);
+	spi_context_update_tx(&data->ctx, 1, 1);
 
 	while (!LL_SPI_IsActiveFlag_RXNE(spi)) {
 		/* NOP */
@@ -74,7 +73,7 @@ static void spi_stm32_shift_m(SPI_TypeDef *spi, struct spi_stm32_data *data)
 	rx_frame = LL_SPI_ReceiveData8(spi);
 	if (spi_context_rx_on(&data->ctx)) {
 		*data->ctx.rx_buf = rx_frame;
-		spi_context_update_rx(&data->ctx, 1);
+		spi_context_update_rx(&data->ctx, 1, 1);
 	}
 }
 
@@ -88,14 +87,14 @@ static void spi_stm32_shift_s(SPI_TypeDef *spi, struct spi_stm32_data *data)
 	if (LL_SPI_IsActiveFlag_TXE(spi)) {
 		LL_SPI_TransmitData8(spi, tx_frame);
 		/* The update is ignored if TX is off. */
-		spi_context_update_tx(&data->ctx, 1);
+		spi_context_update_tx(&data->ctx, 1, 1);
 	}
 
 	if (LL_SPI_IsActiveFlag_RXNE(spi)) {
 		rx_frame = LL_SPI_ReceiveData8(spi);
 		if (spi_context_rx_on(&data->ctx)) {
 			*data->ctx.rx_buf = rx_frame;
-			spi_context_update_rx(&data->ctx, 1);
+			spi_context_update_rx(&data->ctx, 1, 1);
 		}
 	}
 }
@@ -208,7 +207,7 @@ static int spi_stm32_configure(struct spi_config *config)
 	for (br = 1 ; br <= ARRAY_SIZE(scaler) ; ++br) {
 		u32_t clk = clock >> br;
 
-		if (clk < config->frequency) {
+		if (clk <= config->frequency) {
 			break;
 		}
 	}
@@ -252,7 +251,7 @@ static int spi_stm32_configure(struct spi_config *config)
 		LL_SPI_SetMode(spi, LL_SPI_MODE_MASTER);
 	}
 
-	if (config->vendor & STM32_SPI_NSS_IGNORE) {
+	if (config->cs) {
 		LL_SPI_SetNSSMode(spi, LL_SPI_NSS_SOFT);
 	} else {
 		if (config->operation & SPI_OP_MODE_SLAVE) {

@@ -10,6 +10,7 @@
 #include <ksched.h>
 #include <wait_q.h>
 #include <misc/util.h>
+#include <syscall_handler.h>
 
 /* the only struct _kernel instance */
 struct _kernel _kernel = {0};
@@ -257,12 +258,17 @@ int __must_switch_threads(void)
 #endif
 }
 
-int  k_thread_priority_get(k_tid_t thread)
+int _impl_k_thread_priority_get(k_tid_t thread)
 {
 	return thread->base.prio;
 }
 
-void k_thread_priority_set(k_tid_t tid, int prio)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER1_SIMPLE(k_thread_priority_get, K_OBJ_THREAD,
+			 struct k_thread *);
+#endif
+
+void _impl_k_thread_priority_set(k_tid_t tid, int prio)
 {
 	/*
 	 * Use NULL, since we cannot know what the entry point is (we do not
@@ -277,6 +283,23 @@ void k_thread_priority_set(k_tid_t tid, int prio)
 	_thread_priority_set(thread, prio);
 	_reschedule_threads(key);
 }
+
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER(k_thread_priority_set, thread_p, prio)
+{
+	struct k_thread *thread = (struct k_thread *)thread_p;
+
+	_SYSCALL_OBJ(thread, K_OBJ_THREAD);
+	_SYSCALL_VERIFY_MSG(_VALID_PRIO(prio, NULL),
+			    "invalid thread priority %d", (int)prio);
+	_SYSCALL_VERIFY_MSG(prio >= thread->base.prio,
+			    "thread priority may only be downgraded (%d < %d)",
+			    prio, thread->base.prio);
+
+	_impl_k_thread_priority_set((k_tid_t)thread, prio);
+	return 0;
+}
+#endif
 
 /*
  * Interrupts must be locked when calling this function.
@@ -304,7 +327,7 @@ void _move_thread_to_end_of_prio_q(struct k_thread *thread)
 #endif
 }
 
-void k_yield(void)
+void _impl_k_yield(void)
 {
 	__ASSERT(!_is_in_isr(), "");
 
@@ -322,7 +345,11 @@ void k_yield(void)
 	}
 }
 
-void k_sleep(s32_t duration)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER0_SIMPLE_VOID(k_yield);
+#endif
+
+void _impl_k_sleep(s32_t duration)
 {
 #ifdef CONFIG_MULTITHREADING
 	/* volatile to guarantee that irq_lock() is executed after ticks is
@@ -352,7 +379,21 @@ void k_sleep(s32_t duration)
 #endif
 }
 
-void k_wakeup(k_tid_t thread)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER(k_sleep, duration)
+{
+	/* FIXME there were some discussions recently on whether we should
+	 * relax this, thread would be unscheduled until k_wakeup issued
+	 */
+	_SYSCALL_VERIFY_MSG(duration != K_FOREVER,
+			    "sleeping forever not allowed");
+	_impl_k_sleep(duration);
+
+	return 0;
+}
+#endif
+
+void _impl_k_wakeup(k_tid_t thread)
 {
 	int key = irq_lock();
 
@@ -376,10 +417,18 @@ void k_wakeup(k_tid_t thread)
 	}
 }
 
-k_tid_t k_current_get(void)
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER1_SIMPLE_VOID(k_wakeup, K_OBJ_THREAD, k_tid_t);
+#endif
+
+k_tid_t _impl_k_current_get(void)
 {
 	return _current;
 }
+
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER0_SIMPLE(k_current_get);
+#endif
 
 #ifdef CONFIG_TIMESLICING
 extern s32_t _time_slice_duration;    /* Measured in ms */
@@ -444,7 +493,11 @@ void _update_time_slice_before_swap(void)
 }
 #endif /* CONFIG_TIMESLICING */
 
-int k_is_preempt_thread(void)
+int _impl_k_is_preempt_thread(void)
 {
 	return !_is_in_isr() && _is_preempt(_current);
 }
+
+#ifdef CONFIG_USERSPACE
+_SYSCALL_HANDLER0_SIMPLE(k_is_preempt_thread);
+#endif

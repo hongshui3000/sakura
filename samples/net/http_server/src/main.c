@@ -17,15 +17,9 @@
 #include <zephyr.h>
 #include <stdio.h>
 
-/* For Basic auth, we need base64 decoder which can be found
- * in mbedtls library.
- */
-#include <mbedtls/base64.h>
-
 #include <net/net_context.h>
-#include <net/http.h>
 
-#include <net/net_app.h>
+#include <net/http.h>
 
 #include "config.h"
 
@@ -54,7 +48,7 @@ static struct net_buf_pool *data_pool(void)
 #define data_pool NULL
 #endif /* CONFIG_NET_CONTEXT_NET_PKT_POOL */
 
-#define RESULT_BUF_SIZE 1024
+#define RESULT_BUF_SIZE 1500
 static u8_t http_result[RESULT_BUF_SIZE];
 
 #if defined(CONFIG_HTTPS)
@@ -68,15 +62,11 @@ static u8_t http_result[RESULT_BUF_SIZE];
 /* Note that each HTTPS context needs its own stack as there will be
  * a separate thread for each HTTPS context.
  */
-NET_STACK_DEFINE(HTTPS, https_stack, CONFIG_HTTPS_STACK_SIZE,
-		 CONFIG_HTTPS_STACK_SIZE);
+NET_STACK_DEFINE(HTTPS, https_stack, CONFIG_NET_APP_TLS_STACK_SIZE,
+		 CONFIG_NET_APP_TLS_STACK_SIZE);
 
 #define RX_FIFO_DEPTH 4
 K_MEM_POOL_DEFINE(ssl_rx_pool, 4, 64, RX_FIFO_DEPTH, 4);
-
-static struct http_server_ctx https_ctx;
-
-static u8_t https_result[RESULT_BUF_SIZE];
 
 #else /* CONFIG_HTTPS */
 #define APP_BANNER "Run HTTP server"
@@ -86,7 +76,7 @@ static u8_t https_result[RESULT_BUF_SIZE];
  * Note that the http_server_ctx and http_server_urls are quite large so be
  * careful if those are allocated from stack.
  */
-static struct http_server_ctx http_ctx;
+static struct http_ctx http_ctx;
 static struct http_server_urls http_urls;
 
 void panic(const char *msg)
@@ -102,12 +92,12 @@ void panic(const char *msg)
 
 #define HTTP_STATUS_200_OK	"HTTP/1.1 200 OK\r\n" \
 				"Content-Type: text/html\r\n" \
-				"Transfer-Encoding: chunked\r\n" \
-				"\r\n"
+				"Transfer-Encoding: chunked\r\n"
 
-#define HTTP_401_STATUS_US	"HTTP/1.1 401 Unauthorized status\r\n" \
-				"WWW-Authenticate: Basic realm=" \
-				"\""HTTP_AUTH_REALM"\"\r\n\r\n"
+#define HTTP_STATUS_200_OK_GZ	"HTTP/1.1 200 OK\r\n" \
+				"Content-Type: text/html\r\n" \
+				"Transfer-Encoding: chunked\r\n" \
+				"Content-Encoding: gzip\r\n"
 
 #define HTML_HEADER		"<html><head>" \
 				"<title>Zephyr HTTP Server</title>" \
@@ -116,8 +106,59 @@ void panic(const char *msg)
 
 #define HTML_FOOTER		"</body></html>\r\n"
 
+static int http_response(struct http_ctx *ctx, const char *header,
+			 const char *payload, size_t payload_len,
+			 char *str)
+{
+	char content_length[6];
+	int ret;
+
+	ret = http_add_header(ctx, header, str);
+	if (ret < 0) {
+		NET_ERR("Cannot add HTTP header (%d)", ret);
+		return ret;
+	}
+
+	ret = snprintk(content_length, sizeof(content_length), "%zd",
+		       payload_len);
+	if (ret <= 0 || ret >= sizeof(content_length)) {
+		ret = -ENOMEM;
+		return ret;
+	}
+
+	ret = http_add_header_field(ctx, "Content-Length", content_length, str);
+	if (ret < 0) {
+		NET_ERR("Cannot add Content-Length HTTP header (%d)", ret);
+		return ret;
+	}
+
+	ret = http_add_header(ctx, HTTP_CRLF, str);
+	if (ret < 0) {
+		return ret;
+	}
+
+	ret = http_send_chunk(ctx, payload, payload_len, str);
+	if (ret < 0) {
+		NET_ERR("Cannot send data to peer (%d)", ret);
+		return ret;
+	}
+
+	return http_send_flush(ctx, str);
+}
+
+static int http_response_soft_404(struct http_ctx *ctx)
+{
+	static const char *not_found =
+		HTML_HEADER
+		"<h2><center>404 Not Found</center></h2>"
+		HTML_FOOTER;
+
+	return http_response(ctx, HTTP_STATUS_200_OK, not_found,
+			     strlen(not_found), "Error");
+}
+
 /* Prints the received HTTP header fields as an HTML list */
-static void print_http_headers(struct http_server_ctx *ctx,
+static void print_http_headers(struct http_ctx *ctx,
 			       char *str, int size)
 {
 	int offset;
@@ -132,8 +173,8 @@ static void print_http_headers(struct http_server_ctx *ctx,
 
 	offset = ret;
 
-	for (u8_t i = 0; i < ctx->req.field_values_ctr; i++) {
-		struct http_field_value *kv = &ctx->req.field_values[i];
+	for (u8_t i = 0; i < ctx->http.field_values_ctr; i++) {
+		struct http_field_value *kv = &ctx->http.field_values[i];
 
 		ret = snprintf(str + offset, size - offset,
 			       "<li>%.*s: %.*s</li>\r\n",
@@ -155,7 +196,7 @@ static void print_http_headers(struct http_server_ctx *ctx,
 
 	ret = snprintf(str + offset, size - offset,
 		       "<h2>HTTP Method: %s</h2>\r\n",
-		       http_method_str(ctx->req.parser.method));
+		       http_method_str(ctx->http.parser.method));
 	if (ret < 0 || ret >= size) {
 		return;
 	}
@@ -164,7 +205,7 @@ static void print_http_headers(struct http_server_ctx *ctx,
 
 	ret = snprintf(str + offset, size - offset,
 		       "<h2>URL: %.*s</h2>\r\n",
-		       ctx->req.url_len, ctx->req.url);
+		       ctx->http.url_len, ctx->http.url);
 	if (ret < 0 || ret >= size) {
 		return;
 	}
@@ -175,112 +216,162 @@ static void print_http_headers(struct http_server_ctx *ctx,
 		 "<h2>Server: %s</h2>"HTML_FOOTER, CONFIG_ARCH);
 }
 
-int http_response_header_fields(struct http_server_ctx *ctx)
+int http_serve_headers(struct http_ctx *ctx)
 {
 #define HTTP_MAX_BODY_STR_SIZE		1024
 	static char html_body[HTTP_MAX_BODY_STR_SIZE];
 
 	print_http_headers(ctx, html_body, HTTP_MAX_BODY_STR_SIZE);
 
-	return http_response(ctx, HTTP_STATUS_200_OK, html_body);
+	return http_response(ctx, HTTP_STATUS_200_OK, html_body,
+			     strlen(html_body), "Headers");
 }
 
-static int http_response_it_works(struct http_server_ctx *ctx)
+static int http_serve_index_html(struct http_ctx *ctx)
 {
-	/* Let the peer close the connection but if it does not do it
-	 * close it ourselves after 1 sec.
-	 */
-	return http_response_wait(ctx, HTTP_STATUS_200_OK, HTML_HEADER
-				  "<body><h2><center>It Works!</center></h2>"
-				  HTML_FOOTER, K_SECONDS(1));
+	static const char index_html[] = {
+#include "index.html.inc"
+	};
+
+	NET_DBG("Sending index.html (%zd bytes) to client",
+		sizeof(index_html));
+
+	return http_response(ctx, HTTP_STATUS_200_OK, index_html,
+			     sizeof(index_html), "Index");
 }
 
-static int http_response_soft_404(struct http_server_ctx *ctx)
+static void http_connected(struct http_ctx *ctx,
+			   enum http_connection_type type,
+			   void *user_data)
 {
-	return http_response(ctx, HTTP_STATUS_200_OK, HTML_HEADER
-			     "<h2><center>404 Not Found</center></h2>"
-			     HTML_FOOTER);
-}
+	char url[32];
+	int len = min(sizeof(url), ctx->http.url_len);
 
-static int http_response_auth(struct http_server_ctx *ctx)
-{
-	return http_response(ctx, HTTP_STATUS_200_OK, HTML_HEADER
-			     "<h2><center>user: "HTTP_AUTH_USERNAME
-			     ", password: "HTTP_AUTH_PASSWORD
-			     "</center></h2>" HTML_FOOTER);
-}
+	memcpy(url, ctx->http.url, len);
+	url[len] = '\0';
 
-int http_response_401(struct http_server_ctx *ctx, s32_t timeout)
-{
-	return http_response_wait(ctx, HTTP_401_STATUS_US, NULL, timeout);
-}
+	NET_DBG("%s connect attempt URL %s",
+		type == HTTP_CONNECTION ? "HTTP" : "WS", url);
 
-static int http_basic_auth(struct http_server_ctx *ctx)
-{
-	const char auth_str[] = HTTP_CRLF "Authorization: Basic ";
-	char *ptr;
-
-	ptr = strstr(ctx->req.field_values[0].key, auth_str);
-	if (ptr) {
-		char output[sizeof(HTTP_AUTH_USERNAME) +
-			    sizeof(":") +
-			    sizeof(HTTP_AUTH_PASSWORD)];
-		size_t olen, ilen, alen;
-		char *end, *colon;
-		int ret;
-
-		memset(output, 0, sizeof(output));
-
-		end = strstr(ptr + 2, HTTP_CRLF);
-		if (!end) {
-			return http_response_401(ctx, K_NO_WAIT);
+	if (type == HTTP_CONNECTION) {
+		if (strncmp(ctx->http.url, "/",
+			    ctx->http.url_len) == 0) {
+			http_serve_index_html(ctx);
+			http_close(ctx);
+			return;
 		}
 
-		alen = sizeof(auth_str) - 1;
-		ilen = end - (ptr + alen);
-
-		ret = mbedtls_base64_decode(output, sizeof(output) - 1,
-					    &olen, ptr + alen, ilen);
-		if (ret) {
-			return http_response_401(ctx, K_NO_WAIT);
+		if (strncmp(ctx->http.url, "/index.html",
+			    ctx->http.url_len) == 0) {
+			http_serve_index_html(ctx);
+			http_close(ctx);
+			return;
 		}
 
-		colon = memchr(output, ':', olen);
-
-		if (colon && colon > output && colon < (output + olen) &&
-		    memcmp(output, HTTP_AUTH_USERNAME, colon - output) == 0 &&
-		    memcmp(colon + 1, HTTP_AUTH_PASSWORD,
-			   output + olen - colon) == 0) {
-			return http_response_auth(ctx);
+		if (strncmp(ctx->http.url, "/headers",
+			    ctx->http.url_len) == 0) {
+			http_serve_headers(ctx);
+			http_close(ctx);
+			return;
 		}
-
-		return http_response_401(ctx, K_NO_WAIT);
 	}
 
-	/* Wait 2 secs for the reply with proper credentials */
-	return http_response_401(ctx, K_SECONDS(2));
+	/* Give 404 error for all the other URLs we do not want to handle
+	 * right now.
+	 */
+	http_response_soft_404(ctx);
+	http_close(ctx);
 }
+
+static void http_received(struct http_ctx *ctx,
+			  struct net_pkt *pkt,
+			  int status,
+			  u32_t flags,
+			  void *user_data)
+{
+	if (!status) {
+		NET_DBG("Received %d bytes data", net_pkt_appdatalen(pkt));
+
+		if (pkt) {
+			net_pkt_unref(pkt);
+		}
+	} else {
+		NET_ERR("Receive error (%d)", status);
+
+		if (pkt) {
+			net_pkt_unref(pkt);
+		}
+	}
+}
+
+static void http_sent(struct http_ctx *ctx,
+		      int status,
+		      void *user_data_send,
+		      void *user_data)
+{
+	NET_DBG("%s sent", (char *)user_data_send);
+}
+
+static void http_closed(struct http_ctx *ctx,
+			int status,
+			void *user_data)
+{
+	NET_DBG("Connection %p closed", ctx);
+}
+
+static const char *get_string(int str_len, const char *str)
+{
+	static char buf[64];
+	int len = min(str_len, sizeof(buf) - 1);
+
+	memcpy(buf, str, len);
+	buf[len] = '\0';
+
+	return buf;
+}
+
+static enum http_verdict default_handler(struct http_ctx *ctx,
+					 enum http_connection_type type)
+{
+	NET_DBG("No handler for %s URL %s",
+		type == HTTP_CONNECTION ? "HTTP" : "WS",
+		get_string(ctx->http.url_len, ctx->http.url));
+
+	if (type == HTTP_CONNECTION) {
+		http_response_soft_404(ctx);
+	}
+
+	return HTTP_VERDICT_DROP;
+}
+
 
 #if defined(CONFIG_HTTPS)
 /* Load the certificates and private RSA key. */
 
-#include "test_certs.h"
+static const char echo_apps_cert_der[] = {
+#include "echo-apps-cert.der.inc"
+};
 
-static int setup_cert(struct http_server_ctx *ctx,
+static const char echo_apps_key_der[] = {
+#include "echo-apps-key.der.inc"
+};
+
+static int setup_cert(struct net_app_ctx *app_ctx,
 		      mbedtls_x509_crt *cert,
 		      mbedtls_pk_context *pkey)
 {
 	int ret;
 
-	ret = mbedtls_x509_crt_parse(cert, rsa_example_cert_der,
-				     rsa_example_cert_der_len);
+	ret = mbedtls_x509_crt_parse(cert, echo_apps_cert_der,
+				     sizeof(echo_apps_cert_der));
 	if (ret != 0) {
 		NET_ERR("mbedtls_x509_crt_parse returned %d", ret);
 		return ret;
 	}
 
-	ret = mbedtls_pk_parse_key(pkey, rsa_example_keypair_der,
-				   rsa_example_keypair_der_len, NULL, 0);
+	ret = mbedtls_pk_parse_key(pkey, echo_apps_key_der,
+				   sizeof(echo_apps_key_der),
+				   NULL, 0);
 	if (ret != 0) {
 		NET_ERR("mbedtls_pk_parse_key returned %d", ret);
 		return ret;
@@ -346,40 +437,40 @@ void main(void)
 	ARG_UNUSED(addr);
 #endif
 
-	http_server_add_default(&http_urls, http_response_soft_404);
-	http_server_add_url(&http_urls, HTTP_AUTH_URL, HTTP_URL_STANDARD,
-			    http_basic_auth);
-	http_server_add_url(&http_urls, "/headers", HTTP_URL_STANDARD,
-			    http_response_header_fields);
-	http_server_add_url(&http_urls, "/index.html", HTTP_URL_STANDARD,
-			    http_response_it_works);
-
-#if defined(CONFIG_HTTPS)
-	http_server_set_net_pkt_pool(&https_ctx, tx_slab, data_pool);
-
-	ret = https_server_init(&https_ctx, &http_urls, server_addr,
-				https_result, sizeof(https_result),
-				"Zephyr HTTPS Server",
-				INSTANCE_INFO, strlen(INSTANCE_INFO),
-				setup_cert, NULL, &ssl_rx_pool,
-				https_stack,
-				K_THREAD_STACK_SIZEOF(https_stack));
-	if (ret < 0) {
-		NET_ERR("Cannot initialize HTTPS server (%d)", ret);
-		panic(NULL);
-	}
-
-	http_server_enable(&https_ctx);
-#endif
-
-	http_server_set_net_pkt_pool(&http_ctx, tx_slab, data_pool);
+	http_server_add_default(&http_urls, default_handler);
+	http_server_add_url(&http_urls, "/headers", HTTP_URL_STANDARD);
+	http_server_add_url(&http_urls, "/index.html", HTTP_URL_STANDARD);
+	http_server_add_url(&http_urls, "/", HTTP_URL_STANDARD);
 
 	ret = http_server_init(&http_ctx, &http_urls, server_addr, http_result,
-			       sizeof(http_result), "Zephyr HTTP Server");
+			       sizeof(http_result), "Zephyr HTTP Server",
+			       NULL);
 	if (ret < 0) {
 		NET_ERR("Cannot initialize HTTP server (%d)", ret);
 		panic(NULL);
 	}
+
+#if defined(CONFIG_NET_CONTEXT_NET_PKT_POOL)
+	net_app_set_net_pkt_pool(&http_ctx.app_ctx, tx_slab, data_pool);
+#endif
+
+	http_set_cb(&http_ctx, http_connected, http_received,
+		    http_sent, http_closed);
+
+#if defined(CONFIG_HTTPS)
+	ret = http_server_set_tls(&http_ctx,
+				  APP_BANNER,
+				  INSTANCE_INFO,
+				  strlen(INSTANCE_INFO),
+				  setup_cert,
+				  NULL,
+				  &ssl_rx_pool,
+				  https_stack,
+				  K_THREAD_STACK_SIZEOF(https_stack));
+	if (ret < 0) {
+		NET_ERR("Cannot enable TLS support (%d)", ret);
+	}
+#endif
 
 	/*
 	 * If needed, the HTTP parser callbacks can be set according to

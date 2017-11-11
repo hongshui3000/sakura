@@ -23,6 +23,7 @@
 #ifndef _ASMLANGUAGE
 #include <arch/x86/asm_inline.h>
 #include <arch/x86/addr_types.h>
+#include <arch/x86/segmentation.h>
 #endif
 
 #ifdef __cplusplus
@@ -33,6 +34,14 @@ extern "C" {
 
 #define OCTET_TO_SIZEOFUNIT(X) (X)
 #define SIZEOFUNIT_TO_OCTET(X) (X)
+
+/* GDT layout */
+#define CODE_SEG	0x08
+#define DATA_SEG	0x10
+#define MAIN_TSS	0x18
+#define DF_TSS		0x20
+#define USER_CODE_SEG	0x2b /* at dpl=3 */
+#define USER_DATA_SEG	0x33 /* at dpl=3 */
 
 /**
  * Macro used internally by NANO_CPU_INT_REGISTER and NANO_CPU_INT_REGISTER_ASM.
@@ -314,6 +323,17 @@ typedef struct nanoEsf {
 	unsigned int eflags;
 } NANO_ESF;
 
+
+struct _x86_syscall_stack_frame {
+	u32_t eip;
+	u32_t cs;
+	u32_t eflags;
+
+	/* These are only present if cs = USER_CODE_SEG */
+	u32_t esp;
+	u32_t ss;
+};
+
 /**
  * @brief "interrupt stack frame" (ISF)
  *
@@ -358,8 +378,6 @@ typedef struct nanoIsf {
 #define _NANO_ERR_PAGE_FAULT		 (1)
 /** General protection fault */
 #define _NANO_ERR_GEN_PROT_FAULT	 (2)
-/** Invalid task exit */
-#define _NANO_ERR_INVALID_TASK_EXIT  (3)
 /** Stack corruption detected */
 #define _NANO_ERR_STACK_CHK_FAIL	 (4)
 /** Kernel Allocation Failure */
@@ -376,8 +394,8 @@ typedef struct nanoIsf {
 /**
  * @brief Disable all interrupts on the CPU (inline)
  *
- * This routine disables interrupts.  It can be called from either interrupt,
- * task or fiber level.  This routine returns an architecture-dependent
+ * This routine disables interrupts.  It can be called from either interrupt
+ * or thread level.  This routine returns an architecture-dependent
  * lock-out key representing the "interrupt disable state" prior to the call;
  * this key can be passed to irq_unlock() to re-enable interrupts.
  *
@@ -395,7 +413,7 @@ typedef struct nanoIsf {
  * thread executes, or while the system is idle.
  *
  * The "interrupt disable state" is an attribute of a thread.  Thus, if a
- * fiber or task disables interrupts and subsequently invokes a kernel
+ * thread disables interrupts and subsequently invokes a kernel
  * routine that causes the calling thread to block, the interrupt
  * disable state will be restored when the thread is later rescheduled
  * for execution.
@@ -423,7 +441,7 @@ static ALWAYS_INLINE unsigned int _arch_irq_lock(void)
  * is an architecture-dependent lock-out key that is returned by a previous
  * invocation of irq_lock().
  *
- * This routine can be called from either interrupt, task or fiber level.
+ * This routine can be called from either interrupt or thread level.
  *
  * @return N/A
  *
@@ -463,6 +481,9 @@ extern void	_arch_irq_disable(unsigned int irq);
  * @ingroup kernel_apis
  * @{
  */
+
+struct k_thread;
+typedef struct k_thread *k_tid_t;
 
 /**
  * @brief Enable preservation of floating point context information.
@@ -531,28 +552,190 @@ extern FUNC_NORETURN void _SysFatalErrorHandler(unsigned int reason,
 						const NANO_ESF * pEsf);
 
 
-#ifdef CONFIG_X86_STACK_PROTECTION
+#ifdef CONFIG_X86_ENABLE_TSS
+extern struct task_state_segment _main_tss;
+#endif
+
+#ifdef CONFIG_USERSPACE
+/* Syscall invocation macros. x86-specific machine constraints used to ensure
+ * args land in the proper registers, see implementation of
+ * _x86_syscall_entry_stub in userspace.S
+ *
+ * the entry stub clobbers EDX and ECX on IAMCU systems
+ */
+
+static inline u32_t _arch_syscall_invoke6(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t arg4, u32_t arg5, u32_t arg6,
+					  u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("push %%ebp\n\t"
+			 "mov %[arg6], %%ebp\n\t"
+			 "int $0x80\n\t"
+			 "pop %%ebp\n\t"
+			 : "=a" (ret)
+#ifdef CONFIG_X86_IAMCU
+			   , "=d" (arg2), "=c" (arg3)
+#endif
+			 : "S" (call_id), "a" (arg1), "d" (arg2),
+			   "c" (arg3), "b" (arg4), "D" (arg5),
+			   [arg6] "m" (arg6)
+			 : "memory", "esp");
+	return ret;
+}
+
+static inline u32_t _arch_syscall_invoke5(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t arg4, u32_t arg5, u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("int $0x80"
+			 : "=a" (ret)
+#ifdef CONFIG_X86_IAMCU
+			   , "=d" (arg2), "=c" (arg3)
+#endif
+			 : "S" (call_id), "a" (arg1), "d" (arg2),
+			   "c" (arg3), "b" (arg4), "D" (arg5)
+			 : "memory");
+	return ret;
+}
+
+static inline u32_t _arch_syscall_invoke4(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t arg4, u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("int $0x80"
+			 : "=a" (ret)
+#ifdef CONFIG_X86_IAMCU
+			   , "=d" (arg2), "=c" (arg3)
+#endif
+			 : "S" (call_id), "a" (arg1), "d" (arg2), "c" (arg3),
+			   "b" (arg4)
+			 : "memory");
+	return ret;
+}
+
+static inline u32_t _arch_syscall_invoke3(u32_t arg1, u32_t arg2, u32_t arg3,
+					  u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("int $0x80"
+			 : "=a" (ret)
+#ifdef CONFIG_X86_IAMCU
+			   , "=d" (arg2), "=c" (arg3)
+#endif
+			 : "S" (call_id), "a" (arg1), "d" (arg2), "c" (arg3)
+			 : "memory");
+	return ret;
+}
+
+static inline u32_t _arch_syscall_invoke2(u32_t arg1, u32_t arg2, u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("int $0x80"
+			 : "=a" (ret)
+#ifdef CONFIG_X86_IAMCU
+			   , "=d" (arg2)
+#endif
+			 : "S" (call_id), "a" (arg1), "d" (arg2)
+			 : "memory"
+#ifdef CONFIG_X86_IAMCU
+			 , "ecx"
+#endif
+			 );
+	return ret;
+}
+
+static inline u32_t _arch_syscall_invoke1(u32_t arg1, u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("int $0x80"
+			 : "=a" (ret)
+			 : "S" (call_id), "a" (arg1)
+			 : "memory"
+#ifdef CONFIG_X86_IAMCU
+			 , "edx", "ecx"
+#endif
+			 );
+	return ret;
+}
+
+static inline u32_t _arch_syscall_invoke0(u32_t call_id)
+{
+	u32_t ret;
+
+	__asm__ volatile("int $0x80"
+			 : "=a" (ret)
+			 : "S" (call_id)
+			 : "memory"
+#ifdef CONFIG_X86_IAMCU
+			 , "edx", "ecx"
+#endif
+			 );
+	return ret;
+}
+
+static inline int _arch_is_user_context(void)
+{
+	int cs;
+
+	/* On x86, read the CS register (which cannot be manually set) */
+	__asm__ volatile ("mov %%cs, %[cs_val]" : [cs_val] "=r" (cs));
+
+	return cs == USER_CODE_SEG;
+}
+#endif /* CONFIG_USERSPACE */
+
+
+#if defined(CONFIG_HW_STACK_PROTECTION) && defined(CONFIG_USERSPACE)
+/* With both hardware stack protection and userspace enabled, stacks are
+ * arranged as follows:
+ *
+ * High memory addresses
+ * +---------------+
+ * | Thread stack  |
+ * +---------------+
+ * | Kernel stack  |
+ * +---------------+
+ * | Guard page    |
+ * +---------------+
+ * Low Memory addresses
+ *
+ * Kernel stacks are fixed at 4K. All the pages containing the thread stack
+ * are marked as user-accessible.
+ * All threads start in supervisor mode, and the kernel stack/guard page
+ * are both marked non-present in the MMU.
+ * If a thread drops down to user mode, the kernel stack page will be marked
+ * as present, supervior-only, and the _main_tss.esp0 field updated to point
+ * to the top of it.
+ * All context switches will save/restore the esp0 field in the TSS.
+ */
+#define _STACK_GUARD_SIZE	(MMU_PAGE_SIZE * 2)
+#define _STACK_BASE_ALIGN	MMU_PAGE_SIZE
+#elif defined(CONFIG_HW_STACK_PROTECTION) || defined(CONFIG_USERSPACE)
+/* If only one of HW stack protection or userspace is enabled, then the
+ * stack will be preceded by one page which is a guard page or a kernel mode
+ * stack, respectively.
+ */
 #define _STACK_GUARD_SIZE	MMU_PAGE_SIZE
 #define _STACK_BASE_ALIGN	MMU_PAGE_SIZE
-#else
+#else /* Neither feature */
 #define _STACK_GUARD_SIZE	0
 #define _STACK_BASE_ALIGN	STACK_ALIGN
 #endif
 
-
-
-/* All thread stacks, regardless of whether owned by application or kernel,
- * go in the .stacks input section, which will end up in the kernel's
- * noinit.
- */
-
 #define _ARCH_THREAD_STACK_DEFINE(sym, size) \
-	struct _k_thread_stack_element _GENERIC_SECTION(.stacks) \
+	struct _k_thread_stack_element __kernel_noinit \
 		__aligned(_STACK_BASE_ALIGN) \
 		sym[(size) + _STACK_GUARD_SIZE]
 
 #define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
-	struct _k_thread_stack_element _GENERIC_SECTION(.stacks) \
+	struct _k_thread_stack_element __kernel_noinit \
 		__aligned(_STACK_BASE_ALIGN) \
 		sym[nmemb][ROUND_UP(size, _STACK_BASE_ALIGN) + \
 			   _STACK_GUARD_SIZE]
@@ -583,11 +766,18 @@ extern FUNC_NORETURN void _SysFatalErrorHandler(unsigned int reason,
 extern const NANO_ESF _default_esf;
 
 #ifdef CONFIG_X86_MMU
-/* Linker variable. It needed to access the start of the Page directory */
-extern u32_t __mmu_tables_start;
+/* Linker variable. It is needed to access the start of the Page directory */
 
+
+#ifdef CONFIG_X86_PAE_MODE
+extern u64_t __mmu_tables_start;
+#define X86_MMU_PDPT ((struct x86_mmu_page_directory_pointer *)\
+		      (u32_t *)(void *)&__mmu_tables_start)
+#else
+extern u32_t __mmu_tables_start;
 #define X86_MMU_PD ((struct x86_mmu_page_directory *)\
 		    (void *)&__mmu_tables_start)
+#endif
 
 
 /**
@@ -600,7 +790,9 @@ extern u32_t __mmu_tables_start;
  * @param pde_flags Output parameter for page directory entry flags
  * @param pte_flags Output parameter for page table entry flags
  */
-void _x86_mmu_get_flags(void *addr, u32_t *pde_flags, u32_t *pte_flags);
+void _x86_mmu_get_flags(void *addr,
+			x86_page_entry_data_t *pde_flags,
+			x86_page_entry_data_t *pte_flags);
 
 
 /**
@@ -615,23 +807,24 @@ void _x86_mmu_get_flags(void *addr, u32_t *pde_flags, u32_t *pte_flags);
  * @mask Mask indicating which particular bits in the page table entries to
  *	 modify
  */
-void _x86_mmu_set_flags(void *ptr, size_t size, u32_t flags, u32_t mask);
 
+void _x86_mmu_set_flags(void *ptr,
+			size_t size,
+			x86_page_entry_data_t flags,
+			x86_page_entry_data_t mask);
+
+#ifdef CONFIG_USERSPACE
 /**
- * @brief check page table entry flags
+ * @brief Load the memory domain for the thread.
  *
- * This routine checks if the buffer is available to whoever calls
- * this API.
- * @param addr start address of the buffer
- * @param size the size of the buffer
- * @param flags permissions to check.
- *    Consists of 2 bits the bit0 represents the RW permissions
- *    The bit1 represents the user/supervisor permissions
- *    Use macro BUFF_READABLE/BUFF_WRITEABLE or BUFF_USER to build the flags
+ * If the memory domain is used this API will configure the page tables
+ * according to the memory domain partition attributes.
  *
- * @return true-if the permissions of the pde matches the request
+ * @param thread k_thread structure for the thread which is to configured.
  */
-int _x86_mmu_buffer_validate(void *addr, size_t size, int flags);
+void _x86_mmu_mem_domain_load(struct k_thread *thread);
+#endif
+
 #endif /* CONFIG_X86_MMU */
 
 #endif /* !_ASMLANGUAGE */

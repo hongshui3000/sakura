@@ -10,7 +10,7 @@
  *
  * Based on reference manual:
  *   RM0368 Reference manual STM32F401xB/C and STM32F401xD/E
- *   advanced ARM ® -based 32-bit MCUs
+ *   advanced ARM(r)-based 32-bit MCUs
  *
  * Chapter 2.3: Memory Map
  */
@@ -26,29 +26,9 @@
 
 #include <device.h>
 #include <misc/util.h>
-#include <drivers/rand32.h>
+#include <random/rand32.h>
 
 #include <stm32f4xx.h>
-
-/* IO pin functions */
-enum stm32f4x_pin_config_mode {
-	STM32F4X_PIN_CONFIG_DRIVE_PUSH_PULL,
-	STM32F4X_PIN_CONFIG_DRIVE_PUSH_UP,
-	STM32F4X_PIN_CONFIG_DRIVE_PUSH_DOWN,
-	STM32F4X_PIN_CONFIG_DRIVE_OPEN_DRAIN,
-	STM32F4X_PIN_CONFIG_DRIVE_OPEN_UP,
-	STM32F4X_PIN_CONFIG_DRIVE_OPEN_DOWN,
-	STM32F4X_PIN_CONFIG_AF_PUSH_PULL,
-	STM32F4X_PIN_CONFIG_AF_PUSH_UP,
-	STM32F4X_PIN_CONFIG_AF_PUSH_DOWN,
-	STM32F4X_PIN_CONFIG_AF_OPEN_DRAIN,
-	STM32F4X_PIN_CONFIG_AF_OPEN_UP,
-	STM32F4X_PIN_CONFIG_AF_OPEN_DOWN,
-	STM32F4X_PIN_CONFIG_BIAS_HIGH_IMPEDANCE,
-	STM32F4X_PIN_CONFIG_BIAS_PULL_UP,
-	STM32F4X_PIN_CONFIG_BIAS_PULL_DOWN,
-	STM32F4X_PIN_CONFIG_ANALOG,
-};
 
 #include "soc_irq.h"
 
@@ -60,12 +40,25 @@ enum stm32f4x_pin_config_mode {
 #include <stm32f4xx_ll_spi.h>
 #endif /* CONFIG_CLOCK_CONTROL_STM32_CUBE */
 
+#ifdef CONFIG_SERIAL_HAS_DRIVER
+#include <stm32f4xx_ll_usart.h>
+#endif
+
 #ifdef CONFIG_I2C
 #include <stm32f4xx_ll_i2c.h>
 #endif
 
-#ifdef CONFIG_RANDOM_STM32_RNG
+#ifdef CONFIG_ENTROPY_STM32_RNG
 #include <stm32f4xx_ll_rng.h>
+#endif
+
+#ifdef CONFIG_IWDG_STM32
+#include <stm32f4xx_ll_iwdg.h>
+#endif
+
+/* For IMG_MANAGER */
+#if defined(CONFIG_SOC_FLASH_STM32)
+#define FLASH_DRIVER_NAME	CONFIG_SOC_FLASH_STM32_DEV_NAME
 #endif
 
 #endif /* !_ASMLANGUAGE */

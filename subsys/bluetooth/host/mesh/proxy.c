@@ -239,11 +239,14 @@ static void proxy_cfg(struct bt_mesh_proxy_client *client)
 	int err;
 
 	err = bt_mesh_net_decode(&client->buf, BT_MESH_NET_IF_PROXY_CFG,
-				 &rx, buf, NULL);
+				 &rx, buf);
 	if (err) {
 		BT_ERR("Failed to decode Proxy Configuration (err %d)", err);
 		return;
 	}
+
+	/* Remove network headers */
+	net_buf_simple_pull(buf, BT_MESH_NET_HDR_LEN);
 
 	BT_DBG("%u bytes: %s", buf->len, bt_hex(buf->data, buf->len));
 
@@ -615,7 +618,7 @@ int bt_mesh_proxy_prov_disable(void)
 	for (i = 0; i < ARRAY_SIZE(clients); i++) {
 		struct bt_mesh_proxy_client *client = &clients[i];
 
-		if (clients->conn && client->filter_type == PROV) {
+		if (client->conn && client->filter_type == PROV) {
 			bt_mesh_pb_gatt_close(client->conn);
 			client->filter_type = NONE;
 		}
@@ -711,8 +714,8 @@ int bt_mesh_proxy_gatt_disable(void)
 	for (i = 0; i < ARRAY_SIZE(clients); i++) {
 		struct bt_mesh_proxy_client *client = &clients[i];
 
-		if (clients->conn && (client->filter_type == WHITELIST ||
-				      client->filter_type == BLACKLIST)) {
+		if (client->conn && (client->filter_type == WHITELIST ||
+				     client->filter_type == BLACKLIST)) {
 			client->filter_type = NONE;
 		}
 	}

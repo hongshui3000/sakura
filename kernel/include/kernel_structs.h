@@ -110,12 +110,12 @@ struct _kernel {
 	 * for a thread to only "own" the XMM registers.
 	 */
 
-	/* thread (fiber or task) that owns the FP regs */
+	/* thread that owns the FP regs */
 	struct k_thread *current_fp;
 #endif
 
 #if defined(CONFIG_THREAD_MONITOR)
-	struct k_thread *threads; /* singly linked list of ALL fiber+tasks */
+	struct k_thread *threads; /* singly linked list of ALL threads */
 #endif
 
 	/* arch-specific part of _kernel */
@@ -176,6 +176,10 @@ static ALWAYS_INLINE void _new_thread_init(struct k_thread *thread,
 	/* Initialize custom data field (value is opaque to kernel) */
 	thread->custom_data = NULL;
 #endif
+
+#if defined(CONFIG_USERSPACE)
+	thread->mem_domain_info.mem_domain = NULL;
+#endif /* CONFIG_USERSPACE */
 
 #if defined(CONFIG_THREAD_STACK_INFO)
 	thread->stack_info.start = (u32_t)pStack;

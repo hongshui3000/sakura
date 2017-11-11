@@ -42,7 +42,7 @@ static int shell_cmd_ack(int argc, char *argv[])
 	}
 
 	if (!strcmp(argv[1], "unset") || !strcmp(argv[1], "0")) {
-		net_mgmt(NET_REQUEST_IEEE802154_SET_ACK, iface, NULL, 0);
+		net_mgmt(NET_REQUEST_IEEE802154_UNSET_ACK, iface, NULL, 0);
 		printk("ACK flag unset on outgoing packets\n");
 
 		return 0;
@@ -306,7 +306,7 @@ static int shell_cmd_get_pan_id(int argc, char *argv[])
 		     &pan_id, sizeof(u16_t))) {
 		printk("Could not get PAN ID\n");
 	} else {
-		printk("PAN ID %u\n", pan_id);
+		printk("PAN ID %u (0x%x)\n", pan_id, pan_id);
 	}
 
 	return 0;

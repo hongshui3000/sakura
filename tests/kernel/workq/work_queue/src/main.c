@@ -9,7 +9,6 @@
 #include <zephyr.h>
 #include <tc_util.h>
 #include <misc/util.h>
-#include <misc/nano_work.h>
 
 #define NUM_TEST_ITEMS          6
 /* Each work item takes 100ms */
@@ -315,7 +314,7 @@ static void coop_delayed_work_resubmit(int arg1, int arg2)
 	}
 }
 
-static int test_delayed_resubmit_fiber(void)
+static int test_delayed_resubmit_thread(void)
 {
 	TC_PRINT("Starting delayed resubmit from coop thread test\n");
 
@@ -381,7 +380,7 @@ void main(void)
 
 	reset_results();
 
-	if (test_delayed_resubmit_fiber() != TC_PASS) {
+	if (test_delayed_resubmit_thread() != TC_PASS) {
 		goto end;
 	}
 

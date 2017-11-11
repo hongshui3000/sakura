@@ -42,7 +42,12 @@ struct net_pkt *net_ipv4_create_raw(struct net_pkt *pkt,
 	NET_IPV4_HDR(pkt)->tos = 0x00;
 	NET_IPV4_HDR(pkt)->proto = 0;
 
-	NET_IPV4_HDR(pkt)->ttl = net_if_ipv4_get_ttl(iface);
+	/* User can tweak the default TTL if needed */
+	NET_IPV4_HDR(pkt)->ttl = net_pkt_ipv4_ttl(pkt);
+	if (NET_IPV4_HDR(pkt)->ttl == 0) {
+		NET_IPV4_HDR(pkt)->ttl = net_if_ipv4_get_ttl(iface);
+	}
+
 	NET_IPV4_HDR(pkt)->offset[0] = NET_IPV4_HDR(pkt)->offset[1] = 0;
 	NET_IPV4_HDR(pkt)->id[0] = NET_IPV4_HDR(pkt)->id[1] = 0;
 
@@ -169,7 +174,8 @@ enum net_verdict net_ipv4_process_pkt(struct net_pkt *pkt)
 
 	net_pkt_set_ip_hdr_len(pkt, sizeof(struct net_ipv4_hdr));
 
-	if (!net_is_my_ipv4_addr(&hdr->dst)) {
+	if (!net_is_my_ipv4_addr(&hdr->dst) &&
+	    !net_is_ipv4_addr_mcast(&hdr->dst)) {
 #if defined(CONFIG_NET_DHCPV4)
 		if (hdr->proto == IPPROTO_UDP &&
 		    net_ipv4_addr_cmp(&hdr->dst,

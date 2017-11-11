@@ -73,13 +73,14 @@ content: scripts/extract_content.py
 	$(Q)$<
 
 kconfig: scripts/genrest/genrest.py
-	$(Q)srctree=../ SRCARCH=x86 python $< ../Kconfig reference/kconfig/
+	$(Q)srctree=../ KERNELVERSION=1.9.99 SRCARCH=x86 python $< ../Kconfig reference/kconfig/
 
 
 prep: doxy content kconfig
 
 html: content kconfig
-	$(Q)$(SPHINXBUILD) -t $(DOC_TAG) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html
+	$(Q)$(SPHINXBUILD) -t $(DOC_TAG) -b html $(ALLSPHINXOPTS) $(BUILDDIR)/html 2>&1 | tee doc.log;
+	$(Q)./scripts/filter-doc-log.sh doc.log > doc.warnings 2>&1;
 	@rm -rf samples
 	@rm -rf boards
 

@@ -22,6 +22,13 @@ config ADC_MCUX_ADC16
 
 endif # ADC
 
+if CLOCK_CONTROL
+
+config CLOCK_CONTROL_MCUX_SIM
+	def_bool y
+
+endif # CLOCK_CONTROL
+
 if PINMUX
 
 config PINMUX_MCUX
@@ -50,12 +57,12 @@ config I2C_MCUX
 
 endif # I2C
 
-if RANDOM_GENERATOR
+if ENTROPY_GENERATOR
 
-config RANDOM_MCUX_TRNG
+config ENTROPY_MCUX_TRNG
 	def_bool y
 
-endif # RANDOM_GENERATOR
+endif # ENTROPY_GENERATOR
 
 if FLASH
 
@@ -63,5 +70,18 @@ config SOC_FLASH_MCUX
 	def_bool y
 
 endif # FLASH
+
+if NETWORKING
+
+config NET_L2_IEEE802154
+        def_bool y
+
+config IEEE802154_KW41Z
+        def_bool y
+
+config NET_APP_IEEE802154_DEV_NAME
+        default IEEE802154_KW41Z_DRV_NAME
+
+endif # NETWORKING
 
 endif # SOC_MKW41Z4

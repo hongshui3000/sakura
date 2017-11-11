@@ -125,17 +125,19 @@ static inline void spi_context_complete(struct spi_context *ctx, int status)
 
 static inline void spi_context_cs_configure(struct spi_context *ctx)
 {
-	if (ctx->config->cs) {
+	if (ctx->config->cs && ctx->config->cs->gpio_dev) {
 		gpio_pin_configure(ctx->config->cs->gpio_dev,
 				   ctx->config->cs->gpio_pin, GPIO_DIR_OUT);
 		gpio_pin_write(ctx->config->cs->gpio_dev,
 			       ctx->config->cs->gpio_pin, 1);
+	} else {
+		SYS_LOG_INF("CS control inhibited (no GPIO device)");
 	}
 }
 
 static inline void spi_context_cs_control(struct spi_context *ctx, bool on)
 {
-	if (ctx->config->cs) {
+	if (ctx->config->cs && ctx->config->cs->gpio_dev) {
 		if (on) {
 			gpio_pin_write(ctx->config->cs->gpio_dev,
 				       ctx->config->cs->gpio_pin, 0);
@@ -193,13 +195,18 @@ static inline void spi_context_buffers_setup(struct spi_context *ctx,
 }
 
 static ALWAYS_INLINE
-void spi_context_update_tx(struct spi_context *ctx, u8_t dfs)
+void spi_context_update_tx(struct spi_context *ctx, u8_t dfs, u32_t len)
 {
 	if (!ctx->tx_len) {
 		return;
 	}
 
-	ctx->tx_len--;
+	if (len > ctx->tx_len) {
+		SYS_LOG_ERR("Update exceeds current buffer");
+		return;
+	}
+
+	ctx->tx_len -= len;
 	if (!ctx->tx_len) {
 		ctx->current_tx++;
 		ctx->tx_count--;
@@ -211,7 +218,7 @@ void spi_context_update_tx(struct spi_context *ctx, u8_t dfs)
 			ctx->tx_buf = NULL;
 		}
 	} else if (ctx->tx_buf) {
-		ctx->tx_buf += dfs;
+		ctx->tx_buf += dfs * len;
 	}
 
 	SYS_LOG_DBG("tx buf/len %p/%zu", ctx->tx_buf, ctx->tx_len);
@@ -224,13 +231,18 @@ bool spi_context_tx_on(struct spi_context *ctx)
 }
 
 static ALWAYS_INLINE
-void spi_context_update_rx(struct spi_context *ctx, u8_t dfs)
+void spi_context_update_rx(struct spi_context *ctx, u8_t dfs, u32_t len)
 {
 	if (!ctx->rx_len) {
 		return;
 	}
 
-	ctx->rx_len--;
+	if (len > ctx->rx_len) {
+		SYS_LOG_ERR("Update exceeds current buffer");
+		return;
+	}
+
+	ctx->rx_len -= len;
 	if (!ctx->rx_len) {
 		ctx->current_rx++;
 		ctx->rx_count--;
@@ -242,7 +254,7 @@ void spi_context_update_rx(struct spi_context *ctx, u8_t dfs)
 			ctx->rx_buf = NULL;
 		}
 	} else if (ctx->rx_buf) {
-		ctx->rx_buf += dfs;
+		ctx->rx_buf += dfs * len;
 	}
 
 	SYS_LOG_DBG("rx buf/len %p/%zu", ctx->rx_buf, ctx->rx_len);

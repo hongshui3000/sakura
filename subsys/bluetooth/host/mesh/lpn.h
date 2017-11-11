@@ -18,16 +18,35 @@ int bt_mesh_lpn_friend_sub_cfm(struct bt_mesh_net_rx *rx,
 static inline bool bt_mesh_lpn_established(void)
 {
 #if defined(CONFIG_BT_MESH_LOW_POWER)
-	return (bt_mesh.lpn.state >= BT_MESH_LPN_ESTABLISHED);
+	return bt_mesh.lpn.established;
 #else
 	return false;
 #endif
+}
+
+static inline bool bt_mesh_lpn_match(u16_t addr)
+{
+#if defined(CONFIG_BT_MESH_LOW_POWER)
+	if (bt_mesh_lpn_established()) {
+		return (addr == bt_mesh.lpn.frnd);
+	}
+#endif
+	return false;
 }
 
 static inline bool bt_mesh_lpn_waiting_update(void)
 {
 #if defined(CONFIG_BT_MESH_LOW_POWER)
 	return (bt_mesh.lpn.state == BT_MESH_LPN_WAIT_UPDATE);
+#else
+	return false;
+#endif
+}
+
+static inline bool bt_mesh_lpn_timer(void)
+{
+#if defined(CONFIG_BT_MESH_LPN_AUTO)
+	return (bt_mesh.lpn.state == BT_MESH_LPN_TIMER);
 #else
 	return false;
 #endif

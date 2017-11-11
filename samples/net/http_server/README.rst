@@ -10,11 +10,6 @@ The HTTP Server sample application for Zephyr implements a basic TCP server
 on top of the HTTP Server Library that is able to receive HTTP 1.1 requests,
 parse them and write back the responses.
 
-This sample code generates HTTP 1.1 responses dynamically and does not serve
-content from a file system. The source code includes examples on how to write
-HTTP 1.1 responses: 200 OK, 400 Bad Request, 403 Forbidden, 404 Not Found and
-soft HTTP errors like 200 OK with a 404 Not Found HTML message.
-
 The source code for this sample application can be found at:
 :file:`samples/net/http_server`.
 
@@ -54,52 +49,23 @@ following lines:
 
 .. code-block:: c
 
-	http_server_add_default(&http_urls, http_response_soft_404);
-	http_server_add_url(&http_urls, "/headers", HTTP_URL_STANDARD,
-			    http_response_header_fields);
-	http_server_add_url(&http_urls, "/index.html", HTTP_URL_STANDARD,
-			    http_response_it_works);
+	http_server_add_default(&http_urls, default_handler);
+	http_server_add_url(&http_urls, "/headers", HTTP_URL_STANDARD);
+	http_server_add_url(&http_urls, "/index.html", HTTP_URL_STANDARD);
 
 The first line defines how Zephyr will deal with unknown URLs. In this case,
 it will respond with a soft HTTP 404 status code, i.e. an HTTP 200 OK status
 code with a 404 Not Found HTML body.
 
-The second line must be interpreted as follows: requests to /headers,
-/headers/index.html and in general to /headers/xxx, will trigger the
-http_write_header_fields routine that prints the received HTTP
-Header Fields. In this case, "xxx" must be understood as any resource
-under the /headers/ URL.
-
-The third line will trigger a routine that prints an HTML It Works!
-message when the /index.html or /index.html/xxx URLs are found.
-
 To build this sample on your Linux host computer, open a terminal window,
 locate the source code of this sample application and type:
 
-.. code-block:: console
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/http_server
+   :board: qemu_x86
+   :goals: run
+   :compact:
 
-	make BOARD=frdm_k64f
-
-The FRDM K64F board is detected as a USB storage device. The board
-must be mounted (i.e. to /mnt) to 'flash' the binary:
-
-.. code-block:: console
-
-    $ cp outdir/frdm_k64f/zephyr.bin /mnt
-
-On Linux, use the 'dmesg' program to find the right USB device for the
-FRDM serial console. Assuming that this device is ttyACM0, open a
-terminal window and type:
-
-.. code-block:: console
-
-    $ screen /dev/ttyACM0 115200
-
-Once the binary is loaded into the FRDM board, press the RESET button.
-
-Refer to the board documentation in Zephyr, :ref:`frdm_k64f`,
-for more information about this board and how to access the FRDM
-serial console under other operating systems.
 
 Sample Output
 =============
@@ -137,25 +103,9 @@ The screen application will display the following information:
 
 .. code-block:: console
 
-	[dev/eth_mcux] [DBG] eth_0_init: MAC 00:04:9f:52:44:02
-	[sample/net] [INF] net_sample_app_init: Run HTTPS server
-	[sample/net] [INF] setup_dhcpv4: Running
-	[dev/eth_mcux] [DBG] eth_0_init: MAC 00:04:9f:f1:80:9e
-	[sample/net] [INF] net_sample_app_init: Run HTTPS server
-	[sample/net] [INF] setup_dhcpv4: Running dhcpv4 client...
-	[sample/net] [INF] ipv6_event_handler: IPv6 address: 2001:db8::1
-	[dev/eth_mcux] [INF] eth_mcux_phy_event: Enabled 10M half-duplex mode.
-	[sample/net] [INF] ipv4_addr_add_handler: IPv4 address: 192.168.1.120
-	[sample/net] [INF] ipv4_addr_add_handler: Lease time: 86400 seconds
-	[sample/net] [INF] ipv4_addr_add_handler: Subnet: 255.255.255.0
-	[sample/net] [INF] ipv4_addr_add_handler: Router: 192.168.1.1
-	[https/server] [INF] new_server: Zephyr HTTPS Server (0x20002370)
-	[https/server] [DBG] https_handler: (0x2000b5b4): HTTPS handler starting
-	[https/server] [INF] new_server: Zephyr HTTP Server (0x20001840)
-	[https/server] [INF] new_client: HTTP connection from 192.168.1.107:44410 (0x20006af4)
-	[https/server] [DBG] http_recv: (0x2000d6b4): Received 336 bytes data
-	[https/server] [DBG] http_process_recv: (0x2000d6b4): Calling handler 0x00000d89 context 0x20001840
-
+	[http-server] [DBG] http_connected: (0x00403fa0): HTTP connect attempt URL /index.html
+	[http-server] [DBG] http_serve_index_html: (0x00403fa0): Sending index.html (170 bytes) to client
+	[http-server] [DBG] http_closed: (0x00403fa0): Connection 0x004004c0 closed
 
 To obtain the HTTP Header Fields web page, use the following command:
 
@@ -221,27 +171,6 @@ and this is the HTML message that wget will save:
 	<body><h1><center>404 Not Found</center></h1></body>
 	</html>
 
-To test the HTTP Basic Authentication functionality, use the
-following command:
-
-.. code-block:: console
-
-	wget 192.168.1.120/auth -O index.html --user=zephyr --password=0123456789
-
-the :file:`index.html` file will contain the following information:
-
-.. code-block:: html
-
-	<html>
-	<head>
-	<title>Zephyr HTTP Server</title>
-	</head>
-	<body>
-	<h1><center>Zephyr HTTP server</center></h1>
-	<h2><center>user: zephyr, password: 0123456789</center></h2>
-	</body>
-	</html>
-
 HTTPS Server
 ============
 
@@ -249,47 +178,13 @@ The sample code also includes a HTTPS (HTTP over TLS) server example
 running side by side with the HTTP server, this server runs on QEMU.
 In order to compile and run the code execute:
 
-.. code-block:: console
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/http_server
+   :board: qemu_x86
+   :conf: prj_tls.conf
+   :goals: run
+   :compact:
 
-        make BOARD=qemu_x86 run
-
-Sample Output
-=============
-
-The app will show the following on the screen:
-
-.. code-block:: console
-
-	[https/server] [INF] new_client: HTTPS connection from 192.168.1.107:35982 (0x20006b4c)
-	[https/server] [DBG] https_handler: (0x2000b5b4): Read HTTPS request
-	[https/server] [DBG] https_handler: (0x2000b5b4): Write HTTPS response
-	[https/server] [DBG] http_process_recv: (0x2000b5b4): Calling handler 0x00000ce9 context 0x20002370
-
-Now execute the following command on a different terminal window
-
-.. code-block:: console
-
-	wget https://192.168.1.120 --no-check-certificate
-
-This will be shown on the screen
-
-.. code-block:: console
-
-	Connecting to 192.168.1.120:443... connected.
-	WARNING: cannot verify 192.168.1.120's certificate
-	Unable to locally verify the issuer's authority.
-	HTTP request sent, awaiting response... 200 OK
-	Length: unspecified [text/html]
-	Saving to: 'index.html'
-
-	index.html                                            [ <=> ]
-
-The inspection of the file index.html will show
-
-.. code-block:: console
-
-	<h2>Zephyr TLS Test Server</h2>
-	<p>Successful connection</p>
 
 Known Issues and Limitations
 ============================

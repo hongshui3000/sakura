@@ -74,6 +74,8 @@ const char *net_ipv6_nbr_state2str(enum net_ipv6_nbr_state state)
 		return "delay";
 	case NET_IPV6_NBR_STATE_PROBE:
 		return "probe";
+	case NET_IPV6_NBR_STATE_STATIC:
+		return "static";
 	}
 
 	return "<invalid state>";
@@ -82,7 +84,8 @@ const char *net_ipv6_nbr_state2str(enum net_ipv6_nbr_state state)
 static void ipv6_nbr_set_state(struct net_nbr *nbr,
 			       enum net_ipv6_nbr_state new_state)
 {
-	if (new_state == net_ipv6_nbr_data(nbr)->state) {
+	if (new_state == net_ipv6_nbr_data(nbr)->state ||
+	    net_ipv6_nbr_data(nbr)->state == NET_IPV6_NBR_STATE_STATIC) {
 		return;
 	}
 
@@ -143,19 +146,38 @@ static inline struct net_nbr *get_nbr_from_data(struct net_ipv6_nbr_data *data)
 	return NULL;
 }
 
-void net_ipv6_nbr_foreach(net_nbr_cb_t cb, void *user_data)
+struct iface_cb_data {
+	net_nbr_cb_t cb;
+	void *user_data;
+};
+
+static void iface_cb(struct net_if *iface, void *user_data)
 {
+	struct iface_cb_data *data = user_data;
 	int i;
 
 	for (i = 0; i < CONFIG_NET_IPV6_MAX_NEIGHBORS; i++) {
 		struct net_nbr *nbr = get_nbr(i);
 
-		if (!nbr->ref) {
+		if (!nbr->ref || nbr->iface != iface) {
 			continue;
 		}
 
-		cb(nbr, user_data);
+		data->cb(nbr, data->user_data);
 	}
+}
+
+void net_ipv6_nbr_foreach(net_nbr_cb_t cb, void *user_data)
+{
+	struct iface_cb_data cb_data = {
+		.cb = cb,
+		.user_data = user_data,
+	};
+
+	/* Return the neighbors according to network interface. This makes it
+	 * easier in the callback to use the neighbor information.
+	 */
+	net_if_foreach(iface_cb, &cb_data);
 }
 
 #if NET_DEBUG_NBR
@@ -427,7 +449,8 @@ struct net_nbr *net_ipv6_nbr_add(struct net_if *iface,
 		}
 	}
 
-	if (net_nbr_link(nbr, iface, lladdr) == -EALREADY) {
+	if (net_nbr_link(nbr, iface, lladdr) == -EALREADY &&
+	    net_ipv6_nbr_data(nbr)->state != NET_IPV6_NBR_STATE_STATIC) {
 		/* Update the lladdr if the node was already known */
 		struct net_linkaddr_storage *cached_lladdr;
 
@@ -453,10 +476,11 @@ struct net_nbr *net_ipv6_nbr_add(struct net_if *iface,
 		net_ipv6_send_ns(iface, NULL, NULL, NULL, addr, false);
 	}
 
-	NET_DBG("[%d] nbr %p state %d router %d IPv6 %s ll %s",
+	NET_DBG("[%d] nbr %p state %d router %d IPv6 %s ll %s iface %p",
 		nbr->idx, nbr, state, is_router,
 		net_sprint_ipv6_addr(addr),
-		net_sprint_ll_addr(lladdr->addr, lladdr->len));
+		net_sprint_ll_addr(lladdr->addr, lladdr->len),
+		nbr->iface);
 
 	return nbr;
 }
@@ -1143,8 +1167,8 @@ static inline void handle_ns_neighbor(struct net_pkt *pkt, u8_t ll_len,
 	nbr_add(pkt, &nbr_lladdr, false, NET_IPV6_NBR_STATE_INCOMPLETE);
 }
 
-int net_ipv6_send_na(struct net_if *iface, struct in6_addr *src,
-		     struct in6_addr *dst, struct in6_addr *tgt,
+int net_ipv6_send_na(struct net_if *iface, const struct in6_addr *src,
+		     const struct in6_addr *dst, const struct in6_addr *tgt,
 		     u8_t flags)
 {
 	struct net_icmpv6_na_hdr hdr, *na_hdr;
@@ -1263,7 +1287,6 @@ static enum net_verdict handle_ns_input(struct net_pkt *pkt)
 	net_pkt_set_ipv6_ext_opt_len(pkt, sizeof(struct net_icmpv6_ns_hdr));
 
 	nd_opt_hdr = net_icmpv6_get_nd_opt_hdr(pkt, &ndopthdr);
-	NET_ASSERT(nd_opt_hdr);
 
 	left_len = net_pkt_get_len(pkt) - (sizeof(struct net_ipv6_hdr) +
 					   sizeof(struct net_icmp_hdr));
@@ -1417,6 +1440,9 @@ static void nd_reachable_timeout(struct k_work *work)
 	}
 
 	switch (data->state) {
+	case NET_IPV6_NBR_STATE_STATIC:
+		NET_ASSERT_INFO(false, "Static entry shall never timeout");
+		break;
 
 	case NET_IPV6_NBR_STATE_INCOMPLETE:
 		if (data->ns_count >= MAX_MULTICAST_SOLICIT) {
@@ -2628,6 +2654,8 @@ int net_ipv6_mld_join(struct net_if *iface, const struct in6_addr *addr)
 
 	net_if_ipv6_maddr_join(maddr);
 
+	net_if_mcast_monitor(iface, addr, true);
+
 	net_mgmt_event_notify(NET_EVENT_IPV6_MCAST_JOIN, iface);
 
 	return ret;
@@ -2645,6 +2673,8 @@ int net_ipv6_mld_leave(struct net_if *iface, const struct in6_addr *addr)
 	if (ret < 0) {
 		return ret;
 	}
+
+	net_if_mcast_monitor(iface, addr, false);
 
 	net_mgmt_event_notify(NET_EVENT_IPV6_MCAST_LEAVE, iface);
 

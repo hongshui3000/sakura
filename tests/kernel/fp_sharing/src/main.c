@@ -1,5 +1,3 @@
-/* main.c - load/store portion of FPU sharing test */
-
 /*
  * Copyright (c) 2011-2014 Wind River Systems, Inc.
  *
@@ -7,7 +5,9 @@
  */
 
 /*
- * DESCRIPTION
+ * @file
+ * load/store portion of FPU sharing test
+ *
  * This module implements the load/store portion of the FPU sharing test. This
  * version of this test utilizes a pair of tasks.
  *
@@ -24,8 +24,8 @@
  * this test should be enhanced to ensure that the architectures' _Swap()
  * routine doesn't context switch more registers that it needs to (which would
  * represent a performance issue).  For example, on the IA-32, the test should
- * issue a fiber_fp_disable() from main(), and then indicate that only x87 FPU
- * registers will be utilized (fiber_fp_enable()).  The fiber should continue
+ * issue a k_fp_disable() from main(), and then indicate that only x87 FPU
+ * registers will be utilized (k_fp_enable()).  The thread should continue
  * to load ALL non-integer registers, but main() should validate that only the
  * x87 FPU registers are being saved/restored.
  */
@@ -47,20 +47,19 @@
 #include <zephyr.h>
 
 #if defined(CONFIG_ISA_IA32)
-  #if defined(__GNUC__)
-    #include <float_regs_x86_gcc.h>
-  #else
-    #include <float_regs_x86_other.h>
-  #endif /* __GNUC__ */
+#if defined(__GNUC__)
+#include "float_regs_x86_gcc.h"
+#else
+#include "float_regs_x86_other.h"
+#endif /* __GNUC__ */
 #elif defined(CONFIG_CPU_CORTEX_M4)
-  #if defined(__GNUC__)
-    #include <float_regs_arm_gcc.h>
-  #else
-    #include <float_regs_arm_other.h>
-  #endif /* __GNUC__ */
+#if defined(__GNUC__)
+#include "float_regs_arm_gcc.h"
+#else
+#include "float_regs_arm_other.h"
+#endif /* __GNUC__ */
 #endif
 
-#include <arch/cpu.h>
 #include <tc_util.h>
 #include "float_context.h"
 #include <stddef.h>

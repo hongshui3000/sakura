@@ -1,0 +1,12 @@
+# Kconfig.soc - Texas Instruments TM4C123
+#
+
+choice
+prompt "TI tivaware TM4C123 MCU Selection"
+depends on SOC_SERIES_TM4C123
+
+config SOC_TM4C123GH6PM
+	bool "TM4C123GH6PM"
+	select HAS_TIVAWARE_SDK
+
+endchoice

@@ -28,9 +28,6 @@ described in :ref:`networking_with_qemu`.
 There are configuration files for different boards and setups in the
 echo-client directory:
 
-- :file:`prj_arduino_101_cc2520.conf`
-  Use this for Arduino 101 with external IEEE 802.15.4 cc2520 board.
-
 - :file:`prj_arduino_101.conf`
   Use this for Arduino 101 with external enc28j60 ethernet board.
 
@@ -64,13 +61,14 @@ echo-client directory:
 
 Build echo-client sample application like this:
 
-.. code-block:: console
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/echo_client
+   :board: <board to use>
+   :conf: <config file to use>
+   :goals: build
+   :compact:
 
-    $ cd $ZEPHYR_BASE/samples/net/echo_client
-    $ make pristine && make CONF_FILE=<your desired conf file> \
-      BOARD=<board to use>
-
-Make can select the default configuration file based on the BOARD you've
+Cmake can select the default configuration file based on the BOARD you've
 specified automatically so you might not always need to mention it.
 
 Running echo-server in Linux Host
@@ -89,7 +87,8 @@ In a terminal window:
 
 Run echo-client application in QEMU:
 
-.. code-block:: console
-
-    $ cd $ZEPHYR_BASE/samples/net/echo_client
-    $ make pristine && make run
+.. zephyr-app-commands::
+   :zephyr-app: samples/net/echo_client
+   :board: qemu_x86
+   :goals: run
+   :compact:

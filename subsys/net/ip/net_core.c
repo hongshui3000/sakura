@@ -241,6 +241,7 @@ static inline int check_ip_addr(struct net_pkt *pkt)
 	if (net_pkt_family(pkt) == AF_INET) {
 		if (net_ipv4_addr_cmp(&NET_IPV4_HDR(pkt)->dst,
 				      net_ipv4_unspecified_address())) {
+			NET_DBG("IPv4 dst address missing");
 			return -EADDRNOTAVAIL;
 		}
 
@@ -379,6 +380,8 @@ static inline void l2_init(void)
 static int net_init(struct device *unused)
 {
 	int status = 0;
+
+	net_hostname_init();
 
 	NET_DBG("Priority %d", CONFIG_NET_INIT_PRIO);
 

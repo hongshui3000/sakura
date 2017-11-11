@@ -95,8 +95,15 @@ struct net_pkt {
 	u8_t family     : 4;	/* IPv4 vs IPv6 */
 	u8_t _unused    : 3;
 
+	union {
+		/* IPv6 hop limit or IPv4 ttl for this network packet.
+		 * The value is shared between IPv6 and IPv4.
+		 */
+		u8_t ipv6_hop_limit;
+		u8_t ipv4_ttl;
+	};
+
 #if defined(CONFIG_NET_IPV6)
-	u8_t ipv6_hop_limit;	/* IPv6 hop limit for this network packet. */
 	u8_t ipv6_ext_len;	/* length of extension headers */
 	u8_t ipv6_ext_opt_len; /* IPv6 ND option length */
 
@@ -115,7 +122,8 @@ struct net_pkt {
 #endif /* CONFIG_NET_IPV6 */
 
 #if defined(CONFIG_NET_L2_IEEE802154)
-	u8_t ieee802154_rssi;
+	u8_t ieee802154_rssi; /* Received Signal Strength Indication */
+	u8_t ieee802154_lqi;  /* Link Quality Indicator */
 #endif
 	/* @endcond */
 
@@ -246,6 +254,19 @@ static inline void net_pkt_set_forwarding(struct net_pkt *pkt, bool forward)
 static inline bool net_pkt_forwarding(struct net_pkt *pkt)
 {
 	return false;
+}
+#endif
+
+#if defined(CONFIG_NET_IPV4)
+static inline u8_t net_pkt_ipv4_ttl(struct net_pkt *pkt)
+{
+	return pkt->ipv4_ttl;
+}
+
+static inline void net_pkt_set_ipv4_ttl(struct net_pkt *pkt,
+					u8_t ttl)
+{
+	pkt->ipv4_ttl = ttl;
 }
 #endif
 
@@ -413,6 +434,17 @@ static inline void net_pkt_set_ieee802154_rssi(struct net_pkt *pkt,
 {
 	pkt->ieee802154_rssi = rssi;
 }
+
+static inline u8_t net_pkt_ieee802154_lqi(struct net_pkt *pkt)
+{
+	return pkt->ieee802154_lqi;
+}
+
+static inline void net_pkt_set_ieee802154_lqi(struct net_pkt *pkt,
+					      u8_t lqi)
+{
+	pkt->ieee802154_lqi = lqi;
+}
 #endif
 
 #define NET_IPV6_HDR(pkt) ((struct net_ipv6_hdr *)net_pkt_ip_data(pkt))
@@ -428,18 +460,33 @@ static inline void net_pkt_set_src_ipv6_addr(struct net_pkt *pkt)
 /* @endcond */
 
 /**
- * @brief Create a TX net_pkt slab that is used when sending user
- * specified data to network.
+ * @brief Create a net_pkt slab
  *
- * @param name Name of the pool.
+ * A net_pkt slab is used to store meta-information about
+ * network packets. It must be coupled with a data fragment pool
+ * (:c:macro:`NET_PKT_DATA_POOL_DEFINE`) used to store the actual
+ * packet data. The macro can be used by an application to define
+ * additional custom per-context TX packet slabs (see
+ * :c:func:`net_context_setup_pools`).
+ *
+ * @param name Name of the slab.
  * @param count Number of net_pkt in this slab.
  */
-#define NET_PKT_TX_SLAB_DEFINE(name, count)				\
+#define NET_PKT_SLAB_DEFINE(name, count)				\
 	K_MEM_SLAB_DEFINE(name, sizeof(struct net_pkt), count, 4)
 
+/* Backward compatibility macro */
+#define NET_PKT_TX_SLAB_DEFINE(name, count) NET_PKT_SLAB_DEFINE(name, count)
+
 /**
- * @brief Create a DATA net_buf pool that is used when sending user
- * specified data to network.
+ * @brief Create a data fragment net_buf pool
+ *
+ * A net_buf pool is used to store actual data for
+ * network packets. It must be coupled with a net_pkt slab
+ * (:c:macro:`NET_PKT_SLAB_DEFINE`) used to store the packet
+ * meta-information. The macro can be used by an application to
+ * define additional custom per-context TX packet pools (see
+ * :c:func:`net_context_setup_pools`).
  *
  * @param name Name of the pool.
  * @param count Number of net_buf in this pool.
@@ -1222,6 +1269,8 @@ static inline struct net_buf *net_pkt_write_be32(struct net_pkt *pkt,
  * is based on fragment length (only user written data length, any tailroom
  * in fragments does not come to consideration unlike net_pkt_write()) and
  * calculates from input fragment starting position.
+ * If the data pointer is NULL, insert a sequence of zeros with the given
+ * length.
  *
  * Offset examples can be considered from net_pkt_write() api.
  * If the offset is more than already allocated fragments length then it is an
@@ -1231,7 +1280,7 @@ static inline struct net_buf *net_pkt_write_be32(struct net_pkt *pkt,
  * @param frag   Network buffer fragment.
  * @param offset Offset of fragment where insertion will start.
  * @param len    Length of the data to be inserted.
- * @param data   Data to be inserted
+ * @param data   Data to be inserted, can be NULL.
  * @param timeout Affects the action taken should the net buf pool be empty.
  *        If K_NO_WAIT, then return immediately. If K_FOREVER, then
  *        wait as long as necessary. Otherwise, wait up to the specified
@@ -1358,6 +1407,32 @@ void net_pkt_get_info(struct k_mem_slab **rx,
 		      struct k_mem_slab **tx,
 		      struct net_buf_pool **rx_data,
 		      struct net_buf_pool **tx_data);
+
+/**
+ * @brief Get source socket address.
+ *
+ * @param pkt Network packet
+ * @param addr Source socket address
+ * @param addrlen The length of source socket address
+ * @return 0 on success, <0 otherwise.
+ */
+
+int net_pkt_get_src_addr(struct net_pkt *pkt,
+			 struct sockaddr *addr,
+			 socklen_t addrlen);
+
+/**
+ * @brief Get destination socket address.
+ *
+ * @param pkt Network packet
+ * @param addr Destination socket address
+ * @param addrlen The length of destination socket address
+ * @return 0 on success, <0 otherwise.
+ */
+
+int net_pkt_get_dst_addr(struct net_pkt *pkt,
+			 struct sockaddr *addr,
+			 socklen_t addrlen);
 
 #if defined(CONFIG_NET_DEBUG_NET_PKT)
 /**

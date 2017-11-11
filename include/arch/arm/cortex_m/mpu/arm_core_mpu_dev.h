@@ -6,6 +6,8 @@
 #ifndef _ARM_CORE_MPU_DEV_H_
 #define _ARM_CORE_MPU_DEV_H_
 
+#include <zephyr/types.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,8 +32,12 @@ extern "C" {
 /* Thread Stack Region Intent Type */
 #define THREAD_STACK_REGION 0x1
 #define THREAD_STACK_GUARD_REGION 0x2
+#define THREAD_DOMAIN_PARTITION_REGION 0x3
 
 #if defined(CONFIG_ARM_CORE_MPU)
+struct k_mem_domain;
+struct k_mem_partition;
+
 /* ARM Core MPU Driver API */
 
 /*
@@ -57,6 +63,35 @@ void arm_core_mpu_disable(void);
  * @param   size    size of the region
  */
 void arm_core_mpu_configure(u8_t type, u32_t base, u32_t size);
+
+/**
+ * @brief configure MPU regions for the memory partitions of the memory domain
+ *
+ * @param   mem_domain    memory domain that thread belongs to
+ */
+void arm_core_mpu_configure_mem_domain(struct k_mem_domain *mem_domain);
+
+/**
+ * @brief configure MPU region for a single memory partition
+ *
+ * @param   part_index  memory partition index
+ * @param   part        memory partition info
+ */
+void arm_core_mpu_configure_mem_partition(u32_t part_index,
+					  struct k_mem_partition *part);
+
+/**
+ * @brief Reset MPU region for a single memory partition
+ *
+ * @param   part_index  memory partition index
+ */
+void arm_core_mpu_mem_partition_remove(u32_t part_index);
+
+/**
+ * @brief get the maximum number of free regions for memory domain partitions
+ */
+int arm_core_mpu_get_max_domain_partition_regions(void);
+
 #endif /* CONFIG_ARM_CORE_MPU */
 
 #ifdef __cplusplus

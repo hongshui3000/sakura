@@ -4,6 +4,6 @@ menuconfig UART_TM4C123
 	default n
 	select SERIAL_HAS_DRIVER
 	select SERIAL_SUPPORT_INTERRUPT
-	depends on SOC_FAMILY_TM4C12X
+	depends on SOC_FAMILY_TIVAWARE
 	help
-	  This option enables the TM4C12X UART driver, for UART_0.
+	  This option enables the TM4C123 UART driver, for UART_0.
