@@ -3,6 +3,9 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-
-#include <inc/hw_nvic.h>
-#include <inc/hw_types.h>
+#include <hw_ints.h>
+#include <pin_map.h>
+#include <rom.h>
+#include <rom_map.h>
+#include <sysctl.h>
+#include <system_TM4C123.h>
