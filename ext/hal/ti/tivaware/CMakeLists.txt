@@ -5,12 +5,6 @@ if(CONFIG_HAS_TIVAWARE_SDK)
     source
     source/driverlib
     source/inc
-    )
+		)
 
-	if(CONFIG_SOC_TM4C123GH6PM)
-	  zephyr_compile_definitions(
-	    TARGET_IS_TM4C123_RB1
-	    PART_TM4C123GH6PM
-	    )
-	endif()
 endif()

@@ -104,7 +104,7 @@
 // system clock.  You must set this to 1 if PWRDN (above) is set to 1.  Set
 // this to 0 if you are using the PLL.
 //
-#define CFG_RCC_BYPASS 0
+#define CFG_RCC_BYPASS 16
 
 //      <o> XTAL: Crystal Value
 //              < 0=>  0: 1.0000 MHz  (can not be used with PLL)
@@ -136,7 +136,7 @@
 // to the table in the comments above.  If an external crystal is used, then
 // this value must be set to match the value of the crystal.
 //
-#define CFG_RCC_XTAL 21
+#define CFG_RCC_XTAL 0
 
 //      <o> OSCSRC: Oscillator Source
 //              <0=> 0: MOSC Main oscillator
@@ -157,7 +157,7 @@
 // Set the following value to 1 to turn off the internal oscillator.  This
 // value can be set to 1 if you are not using the internal oscillator.
 //
-#define CFG_RCC_IOSCDIS 1
+#define CFG_RCC_IOSCDIS 0
 
 //      <q> MOSCDIS: Main Oscillator Disable
 //          <i> Check this box to turn off the main oscillator
