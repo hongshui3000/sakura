@@ -1,0 +1,9 @@
+menuconfig UART_TM4C123
+	depends on SOC_SERIES_TM4C123
+	bool "TM4C123 UART driver"
+	default n
+	select SERIAL_HAS_DRIVER
+	select SERIAL_SUPPORT_INTERRUPT
+	depends on SOC_FAMILY_TIVAWARE
+	help
+	  This option enables the TM4C123 UART driver, for UART_0.

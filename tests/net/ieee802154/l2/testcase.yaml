@@ -1,0 +1,5 @@
+tests:
+  - test:
+      min_ram: 16
+      platform_exclude: qemu_xtensa
+      tags: net

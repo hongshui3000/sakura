@@ -1,0 +1,93 @@
+#
+# Copyright (c) 2016 Intel Corporation
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menu "File Systems"
+
+config FILE_SYSTEM
+	bool "File system support"
+	select DISK_ACCESS
+	default n
+	help
+	Enables support for file system.
+
+if FILE_SYSTEM
+
+choice
+	prompt "Supported file systems"
+	default NO_FILE_SYSTEM
+
+config NO_FS
+	bool "No File System"
+	help
+	  No file system chosen.
+
+config FAT_FILESYSTEM_ELM
+	bool "ELM FAT File System"
+	help
+	Use the ELM FAT File system implementation.
+
+config FILE_SYSTEM_NFFS
+	bool "NFFS file system support"
+	select FLASH_PAGE_LAYOUT
+	help
+	Enables NFFS file system support.
+	Note: NFFS requires 1-byte unaligned access to flash thus it
+	will not work on devices that support only aligned flash access.
+
+endchoice
+
+config FILE_SYSTEM_SHELL
+	bool "Enable file system shell"
+	depends on CONSOLE_SHELL
+	help
+	This shell provides basic browsing of the contents of the
+	file system.
+
+
+menu "NFFS Settings"
+	visible if FILE_SYSTEM_NFFS
+
+config FS_NFFS_FLASH_DEV_NAME
+	string
+	prompt "Flash device name to be used"
+
+config FS_NFFS_NUM_INODES
+	int "Maximum number of inodes"
+	range 1 32768
+	default 100
+
+config FS_NFFS_NUM_BLOCKS
+	int "Maximum number of blocks"
+	range 1 32768
+	default 100
+
+config FS_NFFS_NUM_FILES
+	int "Maximum number of opened files"
+	range 1 256
+	default 4
+
+config FS_NFFS_NUM_DIRS
+	int "Maximum number of opened directories"
+	range 1 256
+	default 4
+
+config FS_NFFS_NUM_CACHE_INODES
+	int "Number of cached files' inodes"
+	range 1 512
+	default 4
+
+config FS_NFFS_NUM_CACHE_BLOCKS
+	int "Number of cached blocks"
+	range 1 512
+	default 64
+
+source "ext/fs/nffs/Kconfig"
+
+endmenu
+
+endif # FILE_SYSTEM
+
+endmenu

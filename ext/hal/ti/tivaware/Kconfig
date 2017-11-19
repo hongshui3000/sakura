@@ -1,0 +1,11 @@
+# Kconfig - TIVAWARE SDK HAL configuration
+
+config HAS_TIVAWARE_SDK
+	bool
+
+menuconfig HAS_TIVAWARE_SDK
+	bool "TI TIVAWARE SDK support"
+	default n
+	depends on HAS_CMSIS
+	help
+	Build required peripheral driverlib files from the TIVAWARE SDK

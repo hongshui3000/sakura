@@ -1,0 +1,35 @@
+#include <arm/armv7-m.dtsi>
+#include <ti/mem.h>
+
+/ {
+	cpus {
+		cpu@0 {
+			compatible = "arm,cortex-m4f";
+		};
+	};
+
+	sram0: memory {
+		compatible = "sram";
+		reg = <DT_SRAM_START DT_SRAM_SIZE>;
+	};
+
+	flash0: flash {
+		compatible = "flash";
+		reg = <0x0 DT_FLASH_SIZE>;
+	};
+
+	soc {
+		uart0: uart@4000C000 {
+			compatible = "ti,tm4c123-uart";
+			reg = <0x4000C000 0x1000>;
+			interrupts = <21 0>;
+			interrupt-names = "status";
+			status = "disabled";
+			label = "UART_0";
+		};
+	};
+};
+
+&nvic {
+	arm,num-irq-priority-bits = <3>;
+};
