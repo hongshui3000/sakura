@@ -1,0 +1,93 @@
+# Kconfig.tm4c123- TM4C123 GPIO configuration options
+#
+
+menuconfig GPIO_TM4C123
+	bool "TI TM4C123 GPIO driver"
+	depends on GPIO && SOC_FAMILY_TIVAWARE
+	default n
+	help
+	  Enable the GPIO driver on TI TivaWare TM4C123 boards
+
+if GPIO_TM4C123
+
+config GPIO_TM4C123_A0
+	bool "GPIO block A0"
+	depends on GPIO_TM4C123
+	default n
+	help
+	  Include support for the GPIO port A0.
+
+config GPIO_TM4C123_A0_NAME
+	string "Driver name"
+	depends on GPIO_TM4C123_A0
+	default "GPIO_A0"
+
+config GPIO_TM4C123_A0_IRQ_PRI
+	int "GPIO A0 interrupt priority"
+	depends on GPIO_TM4C123_A0
+	range 0 5
+	default 1
+	help
+	  TM4C123 GPIO A0 IRQ priority.
+
+config GPIO_TM4C123_A1
+	bool "GPIO block A1"
+	depends on GPIO_TM4C123
+	default n
+	help
+	  Include support for the GPIO port A1.
+
+config GPIO_TM4C123_A1_NAME
+	string "Driver name"
+	depends on GPIO_TM4C123_A1
+	default "GPIO_A1"
+
+config GPIO_TM4C123_A1_IRQ_PRI
+	int "GPIO A1 interrupt priority"
+	depends on GPIO_TM4C123_A1
+	range 0 5
+	default 1
+	help
+	  TM4C123 GPIO A1 IRQ priority.
+
+config GPIO_TM4C123_A2
+	bool "GPIO block A2"
+	depends on GPIO_TM4C123
+	default n
+	help
+	  Include support for the GPIO port A2.
+
+config GPIO_TM4C123_A2_NAME
+	string "Driver name"
+	depends on GPIO_TM4C123_A2
+	default "GPIO_A2"
+
+config GPIO_TM4C123_A2_IRQ_PRI
+	int "GPIO A2 interrupt priority"
+	depends on GPIO_TM4C123_A2
+	range 0 5
+	default 1
+	help
+	  TM4C123 GPIO A2 IRQ priority.
+
+config GPIO_TM4C123_A3
+	bool "GPIO block A3"
+	depends on GPIO_TM4C123
+	default n
+	help
+	  Include support for the GPIO port A3.
+
+config GPIO_TM4C123_A3_NAME
+	string "Driver name"
+	depends on GPIO_TM4C123_A3
+	default "GPIO_A3"
+
+config GPIO_TM4C123_A3_IRQ_PRI
+	int "GPIO A3 interrupt priority"
+	depends on GPIO_TM4C123_A3
+	range 0 5
+	default 1
+	help
+	  TM4C123 GPIO A3 IRQ priority.
+
+endif # GPIO_TM4C123
