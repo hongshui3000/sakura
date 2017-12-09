@@ -19,7 +19,7 @@ Requirements
 - LED strip using LPD8806 or compatible, such as `these strips from AdaFruit`_.
 
 - Zephyr board with SPI master driver. SPI communications must use 5V
-  signalling, which may require a level translator, such as the
+  signaling, which may require a level translator, such as the
   `74AHCT125`_.
 
 - 5V power supply.
@@ -62,12 +62,11 @@ Before running the application, configure it as follows.
 
 Then build and flash the application:
 
-.. code-block:: bash
-
-   $ cd ~/zephyr
-   $ source zephyr-env.sh
-   $ cd samples/drivers/led_lpd8806
-   $ BOARD=your_board make flash
+.. zephyr-app-commands::
+   :zephyr-app: samples/drivers/led_lpd8806
+   :board: <board>
+   :goals: flash
+   :compact:
 
 Refer to your :ref:`board's documentation <boards>` for alternative
 flash instructions if your board doesn't support the ``flash`` target.

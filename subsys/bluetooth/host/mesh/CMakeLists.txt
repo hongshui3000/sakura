@@ -9,8 +9,8 @@ zephyr_library_sources_ifdef(CONFIG_BT_MESH
     transport.c
     crypto.c
     access.c
-    cfg.c
-    health.c
+    cfg_srv.c
+    health_srv.c
 )
 
 zephyr_library_sources_ifdef(CONFIG_BT_MESH_LOW_POWER lpn.c)
@@ -21,4 +21,10 @@ zephyr_library_sources_ifdef(CONFIG_BT_MESH_PROV prov.c)
 
 zephyr_library_sources_ifdef(CONFIG_BT_MESH_PROXY proxy.c)
 
+zephyr_library_sources_ifdef(CONFIG_BT_MESH_CFG_CLI cfg_cli.c)
+
+zephyr_library_sources_ifdef(CONFIG_BT_MESH_HEALTH_CLI health_cli.c)
+
 zephyr_library_sources_ifdef(CONFIG_BT_MESH_SELF_TEST test.c)
+
+zephyr_library_sources_ifdef(CONFIG_BT_MESH_SHELL shell.c)

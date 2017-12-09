@@ -26,7 +26,14 @@ enum fs_dir_entry_type {
 };
 
 /**
- * @brief File System Functions
+ * @brief File System
+ * @defgroup file_system File System
+ * @{
+ * @}
+ */
+
+/**
+ * @brief File System Data Structures
  * @defgroup data_structures File System Data Structures
  * @ingroup file_system
  * @{

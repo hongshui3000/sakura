@@ -188,15 +188,18 @@ static const struct bt_mesh_prov *prov;
 static void close_link(u8_t err, u8_t reason);
 
 #if defined(CONFIG_BT_MESH_PB_ADV)
-static void buf_sent(struct net_buf *buf, u16_t duration, int err)
+static void buf_sent(int err, void *user_data)
 {
 	if (!link.tx.buf[0]) {
 		return;
 	}
 
-	k_delayed_work_submit(&link.tx.retransmit,
-			      duration + RETRANSMIT_TIMEOUT);
+	k_delayed_work_submit(&link.tx.retransmit, RETRANSMIT_TIMEOUT);
 }
+
+static struct bt_mesh_send_cb buf_sent_cb = {
+	.end = buf_sent,
+};
 
 static void free_segments(void)
 {
@@ -228,6 +231,10 @@ static void prov_clear_tx(void)
 static void reset_link(void)
 {
 	prov_clear_tx();
+
+	if (prov->link_close) {
+		prov->link_close(BT_MESH_PROV_ADV);
+	}
 
 	/* Clear everything except the retransmit delayed work config */
 	memset(&link, 0, offsetof(struct prov_link, tx.retransmit));
@@ -267,7 +274,7 @@ static struct net_buf *adv_buf_create(void)
 
 static u8_t pending_ack = XACT_NVAL;
 
-static void ack_complete(struct net_buf *buf, u16_t duration, int err)
+static void ack_complete(u16_t duration, int err, void *user_data)
 {
 	BT_DBG("xact %u complete", (u8_t)pending_ack);
 	pending_ack = XACT_NVAL;
@@ -275,7 +282,10 @@ static void ack_complete(struct net_buf *buf, u16_t duration, int err)
 
 static void gen_prov_ack_send(u8_t xact_id)
 {
-	bt_mesh_adv_func_t complete;
+	static const struct bt_mesh_send_cb cb = {
+		.start = ack_complete,
+	};
+	const struct bt_mesh_send_cb *complete;
 	struct net_buf *buf;
 
 	BT_DBG("xact_id %u", xact_id);
@@ -292,7 +302,7 @@ static void gen_prov_ack_send(u8_t xact_id)
 
 	if (pending_ack == XACT_NVAL) {
 		pending_ack = xact_id;
-		complete = ack_complete;
+		complete = &cb;
 	} else {
 		complete = NULL;
 	}
@@ -301,7 +311,7 @@ static void gen_prov_ack_send(u8_t xact_id)
 	net_buf_add_u8(buf, xact_id);
 	net_buf_add_u8(buf, GPC_ACK);
 
-	bt_mesh_adv_send(buf, complete);
+	bt_mesh_adv_send(buf, complete, NULL);
 	net_buf_unref(buf);
 }
 
@@ -319,9 +329,9 @@ static void send_reliable(void)
 		}
 
 		if (i + 1 < ARRAY_SIZE(link.tx.buf) && link.tx.buf[i + 1]) {
-			bt_mesh_adv_send(buf, NULL);
+			bt_mesh_adv_send(buf, NULL, NULL);
 		} else {
-			bt_mesh_adv_send(buf, buf_sent);
+			bt_mesh_adv_send(buf, &buf_sent_cb, NULL);
 		}
 	}
 }
@@ -548,7 +558,7 @@ static void prov_capabilities(const u8_t *data)
 	BT_DBG("Input OOB Action:  0x%04x", input_action);
 }
 
-static bt_mesh_output_action output_action(u8_t action)
+static bt_mesh_output_action_t output_action(u8_t action)
 {
 	switch (action) {
 	case OUTPUT_OOB_BLINK:
@@ -566,7 +576,7 @@ static bt_mesh_output_action output_action(u8_t action)
 	}
 }
 
-static bt_mesh_input_action input_action(u8_t action)
+static bt_mesh_input_action_t input_action(u8_t action)
 {
 	switch (action) {
 	case INPUT_OOB_PUSH:
@@ -584,8 +594,8 @@ static bt_mesh_input_action input_action(u8_t action)
 
 static int prov_auth(u8_t method, u8_t action, u8_t size)
 {
-	bt_mesh_output_action output;
-	bt_mesh_input_action input;
+	bt_mesh_output_action_t output;
+	bt_mesh_input_action_t input;
 
 	switch (method) {
 	case AUTH_METHOD_NO_OOB:
@@ -600,7 +610,9 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			return -EINVAL;
 		}
 
-		memcpy(link.auth, prov->static_val, prov->static_val_len);
+		memcpy(link.auth + 16 - prov->static_val_len,
+		       prov->static_val, prov->static_val_len);
+		memset(link.auth, 0, sizeof(link.auth) - prov->static_val_len);
 		return 0;
 
 	case AUTH_METHOD_OUTPUT:
@@ -618,7 +630,7 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 		}
 
 		if (output == BT_MESH_DISPLAY_STRING) {
-			char str[9];
+			unsigned char str[9];
 			u8_t i;
 
 			bt_rand(str, size);
@@ -627,7 +639,7 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			for (i = 0; i < size; i++) {
 				str[i] %= 36;
 				if (str[i] < 10) {
-					str[i] += '\0';
+					str[i] += '0';
 				} else {
 					str[i] += 'A' - 10;
 				}
@@ -635,8 +647,9 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			str[size] = '\0';
 
 			memcpy(link.auth, str, size);
+			memset(link.auth + size, 0, sizeof(link.auth) - size);
 
-			return prov->output_string(str);
+			return prov->output_string((char *)str);
 		} else {
 			u32_t div[8] = { 10, 100, 1000, 10000, 100000,
 					    1000000, 10000000, 100000000 };
@@ -646,6 +659,7 @@ static int prov_auth(u8_t method, u8_t action, u8_t size)
 			num %= div[size - 1];
 
 			sys_put_be32(num, &link.auth[12]);
+			memset(link.auth, 0, 12);
 
 			return prov->output_number(output, num);
 		}
@@ -703,7 +717,8 @@ static void prov_start(const u8_t *data)
 
 	if (prov_auth(data[2], data[3], data[4]) < 0) {
 		BT_ERR("Invalid authentication method: 0x%02x; "
-			"action: 0x%02x; size: 0x%02x", data[2], data[3], data[4]);
+			"action: 0x%02x; size: 0x%02x", data[2], data[3],
+			data[4]);
 		prov_send_fail_msg(PROV_ERR_NVAL_FMT);
 	}
 }
@@ -758,17 +773,29 @@ static void send_confirm(void)
 	link.expect = PROV_RANDOM;
 }
 
+static void send_input_complete(void)
+{
+	struct net_buf_simple *buf = PROV_BUF(1);
+
+	prov_buf_init(buf, PROV_INPUT_COMPLETE);
+	prov_send(buf);
+}
+
 int bt_mesh_input_number(u32_t num)
 {
+	BT_DBG("%u", num);
+
 	if (!atomic_test_and_clear_bit(link.flags, WAIT_NUMBER)) {
 		return -EINVAL;
 	}
 
+	sys_put_be32(num, &link.auth[12]);
+
+	send_input_complete();
+
 	if (!atomic_test_bit(link.flags, HAVE_DHKEY)) {
 		return 0;
 	}
-
-	sys_put_be32(num, &link.auth[12]);
 
 	if (atomic_test_and_clear_bit(link.flags, SEND_CONFIRM)) {
 		send_confirm();
@@ -779,15 +806,19 @@ int bt_mesh_input_number(u32_t num)
 
 int bt_mesh_input_string(const char *str)
 {
+	BT_DBG("%s", str);
+
 	if (!atomic_test_and_clear_bit(link.flags, WAIT_STRING)) {
 		return -EINVAL;
 	}
 
+	strncpy(link.auth, str, prov->input_size);
+
+	send_input_complete();
+
 	if (!atomic_test_bit(link.flags, HAVE_DHKEY)) {
 		return 0;
 	}
-
-	strncpy(link.auth, str, prov->input_size);
 
 	if (atomic_test_and_clear_bit(link.flags, SEND_CONFIRM)) {
 		send_confirm();
@@ -1024,10 +1055,6 @@ static void prov_data(const u8_t *data)
 	link.expect = 0;
 
 	bt_mesh_provision(pdu, net_idx, flags, iv_index, 0, addr, dev_key);
-
-	if (prov->complete) {
-		prov->complete();
-	}
 }
 
 static void prov_complete(const u8_t *data)
@@ -1114,9 +1141,9 @@ static void prov_retransmit(struct k_work *work)
 		BT_DBG("%u bytes: %s", buf->len, bt_hex(buf->data, buf->len));
 
 		if (i + 1 < ARRAY_SIZE(link.tx.buf) && link.tx.buf[i + 1]) {
-			bt_mesh_adv_send(buf, NULL);
+			bt_mesh_adv_send(buf, NULL, NULL);
 		} else {
-			bt_mesh_adv_send(buf, buf_sent);
+			bt_mesh_adv_send(buf, &buf_sent_cb, NULL);
 		}
 
 	}
@@ -1139,6 +1166,10 @@ static void link_open(struct prov_rx *rx, struct net_buf_simple *buf)
 	if (memcmp(buf->data, prov->uuid, 16)) {
 		BT_DBG("Bearer open message not for us");
 		return;
+	}
+
+	if (prov->link_open) {
+		prov->link_open(BT_MESH_PROV_ADV);
 	}
 
 	link.id = rx->link_id;
@@ -1442,6 +1473,10 @@ int bt_mesh_pb_gatt_open(struct bt_conn *conn)
 	link.conn = bt_conn_ref(conn);
 	link.expect = PROV_INVITE;
 
+	if (prov->link_open) {
+		prov->link_open(BT_MESH_PROV_GATT);
+	}
+
 	return 0;
 }
 
@@ -1459,6 +1494,10 @@ int bt_mesh_pb_gatt_close(struct bt_conn *conn)
 	/* Disable Attention Timer if it was set */
 	if (link.conf_inputs[0]) {
 		bt_mesh_attention(NULL, 0);
+	}
+
+	if (prov->link_close) {
+		prov->link_close(BT_MESH_PROV_GATT);
 	}
 
 	bt_conn_unref(link.conn);
@@ -1486,11 +1525,15 @@ bool bt_prov_active(void)
 
 int bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
 {
-	int err;
-
 	static struct bt_pub_key_cb pub_key_cb = {
 		.func = pub_key_ready,
 	};
+	int err;
+
+	if (!prov_info) {
+		BT_ERR("No provisioning context provided");
+		return -EINVAL;
+	}
 
 	err = bt_pub_key_gen(&pub_key_cb);
 	if (err) {
@@ -1520,4 +1563,18 @@ int bt_mesh_prov_init(const struct bt_mesh_prov *prov_info)
 	}
 
 	return 0;
+}
+
+void bt_mesh_prov_complete(u16_t net_idx, u16_t addr)
+{
+	if (prov->complete) {
+		prov->complete(net_idx, addr);
+	}
+}
+
+void bt_mesh_prov_reset(void)
+{
+	if (prov->reset) {
+		prov->reset();
+	}
 }

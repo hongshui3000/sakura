@@ -12,8 +12,7 @@ list(APPEND ENV_VARS_FORMATTED
   KERNEL_ELF_NAME=${KERNEL_ELF_NAME}
   KERNEL_HEX_NAME=${KERNEL_HEX_NAME}
   KERNEL_BIN_NAME=${KERNEL_BIN_NAME}
-             ARCH=${ARCH}
-       BOARD_NAME=${BOARD}
+        BOARD_DIR=${BOARD_DIR}
               GDB=${CMAKE_GDB}
           OPENOCD_DEFAULT_PATH=${OPENOCD_DEFAULT_PATH}
           OPENOCD=${OPENOCD}
@@ -43,7 +42,7 @@ foreach(target flash debug debugserver)
       ${PYTHON_EXECUTABLE}
       $ENV{ZEPHYR_BASE}/scripts/support/zephyr_flash_debug.py
       ${target}
-      $ENV{ZEPHYR_BASE}/scripts/support/${script}
+      ${script}
       DEPENDS ${logical_target_for_zephyr_elf}
       WORKING_DIRECTORY ${APPLICATION_BINARY_DIR}
       )

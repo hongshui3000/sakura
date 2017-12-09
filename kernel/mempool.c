@@ -9,6 +9,7 @@
 #include <wait_q.h>
 #include <init.h>
 #include <string.h>
+#include <misc/__assert.h>
 
 /* Linker-defined symbols bound the static pool structs */
 extern struct k_mem_pool _k_mem_pool_list_start[];
@@ -404,5 +405,23 @@ void k_free(void *ptr)
 		/* return block to the heap memory pool */
 		k_mem_pool_free(ptr);
 	}
+}
+
+void *k_calloc(size_t nmemb, size_t size)
+{
+	void *ret;
+	size_t bounds;
+
+#ifdef CONFIG_ASSERT
+	__ASSERT(!__builtin_mul_overflow(nmemb, size, &bounds),
+		 "requested size overflow");
+#else
+	bounds = nmemb * size;
+#endif
+	ret = k_malloc(bounds);
+	if (ret) {
+		memset(ret, 0, bounds);
+	}
+	return ret;
 }
 #endif

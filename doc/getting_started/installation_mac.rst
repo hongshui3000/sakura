@@ -61,6 +61,7 @@ Install tools to build Zephyr binaries:
    $ curl -O 'https://bootstrap.pypa.io/get-pip.py'
    $ ./get-pip.py
    $ rm get-pip.py
+   $ cd ~/zephyr   # or to the folder where you cloned the zephyr repo
    $ pip3 install --user -r scripts/requirements.txt
 
 Source :file:`zephyr-env.sh` wherever you have cloned the Zephyr Git repository:
@@ -163,10 +164,11 @@ When mounted, the file system of the image will be available under
 Setting the Toolchain Options
 =============================
 
-In the Zephyr kernel source tree we provide two configurations for
-both ARM and X86 that can be used to preselect the options needed
-for building the toolchain.
-The configuration files can be found in :file:`${ZEPHYR_BASE}/scripts/cross_compiler/`.
+In the Zephyr kernel source tree we provide configurations for NIOS-II and
+X86 that can be used to preselect the options needed for building the toolchain.
+
+The configuration files can be found in
+:file:`${ZEPHYR_BASE}/scripts/cross_compiler/`.
 
 Currently the following configurations are provided:
 
