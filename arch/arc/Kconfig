@@ -24,21 +24,6 @@ config ARCH_DEFCONFIG
 	string
 	default "arch/arc/defconfig"
 
-config CPU_HAS_MPU
-	bool
-	# Omit prompt to signify "hidden" option
-	default n
-	help
-	  This option is enabled when the CPU has a Memory Protection Unit (MPU).
-
-config CPU_HAS_FPU
-	# Hidden config selected by CPU family
-	bool
-	default n
-	help
-	This option is enabled when the CPU has hardware floating point
-	unit.
-
 menu "ARC EM4 processor options"
 
 config	CPU_ARCEM4
@@ -128,14 +113,6 @@ config	FAULT_DUMP
 
 	0: Off.
 
-config IRQ_OFFLOAD
-	bool "Enable IRQ offload"
-	default n
-	help
-	Enable irq_offload() API which allows functions to be synchronously
-	run in interrupt context. Uses one entry in the	IDT.  Mainly useful
-	for test cases.
-
 config	XIP
 	default n if NSIM
 	default y
@@ -161,31 +138,6 @@ config CODE_DENSITY
 	help
 	Enable code density option to get better code density
 
-menu "Floating Point Options"
-depends on CPU_HAS_FPU
-
-config FLOAT
-	bool
-	prompt "Floating point registers"
-	default n
-	help
-	This option allows threads to use the floating point registers.
-	By default, only a single thread may use the registers.
-
-	Disabling this option means that any thread that uses a
-	floating point register will get a fatal exception.
-
-config FP_SHARING
-	bool
-	prompt "Floating point register sharing"
-	depends on FLOAT
-	default n
-	help
-	This option allows multiple threads to use the floating point
-	registers.
-
-endmenu
-
 menu "ARC MPU Options"
 depends on CPU_HAS_MPU
 
@@ -201,6 +153,7 @@ source "arch/arc/core/mpu/Kconfig"
 
 endmenu
 
+if !HAS_DTS
 config ICCM_SIZE
 	int "ICCM Size in kB"
 	help
@@ -256,6 +209,7 @@ config FLASH_BASE_ADDRESS
 	This option specifies the base address of the flash on the board.  It is
 	normally set by the board's defconfig file and the user should generally
 	avoid modifying it via the menu configuration.
+endif
 
 config CACHE_LINE_SIZE_DETECT
 	bool

@@ -2891,6 +2891,8 @@ static int start_le_scan(u8_t scan_type, u16_t interval, u16_t window)
 	struct net_buf *buf;
 	int err;
 
+	memset(&set_param, 0, sizeof(set_param));
+
 	set_param.scan_type = scan_type;
 
 	/* for the rest parameters apply default values according to
@@ -3530,7 +3532,8 @@ static int le_set_event_mask(void)
 	mask |= BT_EVT_MASK_LE_ADVERTISING_REPORT;
 
 	if (IS_ENABLED(CONFIG_BT_CONN)) {
-		if (BT_FEAT_LE_PRIVACY(bt_dev.le.features)) {
+		if (IS_ENABLED(CONFIG_BT_PRIVACY) &&
+		    BT_FEAT_LE_PRIVACY(bt_dev.le.features)) {
 			mask |= BT_EVT_MASK_LE_ENH_CONN_COMPLETE;
 		} else {
 			mask |= BT_EVT_MASK_LE_CONN_COMPLETE;
@@ -3671,7 +3674,8 @@ static int le_init(void)
 	}
 
 #if defined(CONFIG_BT_SMP)
-	if (BT_FEAT_LE_PRIVACY(bt_dev.le.features)) {
+	if (IS_ENABLED(CONFIG_BT_PRIVACY) &&
+	    BT_FEAT_LE_PRIVACY(bt_dev.le.features)) {
 		struct bt_hci_rp_le_read_rl_size *rp;
 		struct net_buf *rsp;
 
@@ -4036,9 +4040,9 @@ static int set_static_addr(void)
 	} else {
 		BT_WARN("Read Static Addresses command not available");
 	}
-#endif
 
 generate:
+#endif
 	BT_DBG("Generating new static random address");
 
 	err = bt_addr_le_create_static(&bt_dev.id_addr);
@@ -4645,6 +4649,8 @@ int bt_le_adv_start(const struct bt_le_adv_param *param,
 			return err;
 		}
 	}
+
+	memset(&set_param, 0, sizeof(set_param));
 
 	set_param.min_interval = sys_cpu_to_le16(param->interval_min);
 	set_param.max_interval = sys_cpu_to_le16(param->interval_max);

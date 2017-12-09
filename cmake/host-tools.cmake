@@ -1,8 +1,4 @@
-include($ENV{ZEPHYR_BASE}/cmake/host-tools-${ZEPHYR_GCC_VARIANT}.cmake OPTIONAL)
-
-if(PREBUILT_HOST_TOOLS)
-  list(APPEND CMAKE_PROGRAM_PATH ${PREBUILT_HOST_TOOLS}/kconfig)
-endif()
+include($ENV{ZEPHYR_BASE}/cmake/host-tools-zephyr.cmake)
 
 # Search for the must-have program dtc on PATH and in
 # TOOLCHAIN_HOME. Usually DTC will be provided by an SDK, but for

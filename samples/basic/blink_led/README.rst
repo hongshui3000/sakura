@@ -22,8 +22,8 @@ Arduino 101 and Quark D2000 CRB
 You will need to connect the LED to ground and PWM0 via the shield.
 You may need a current limiting resistor. See your LED datasheet.
 
-Nucleo_F401RE and Nucleo_L476RG
-===============================
+Nucleo_F401RE, Nucleo_L476RG, and STM32F4_DISCOVERY
+===================================================
 Connect PWM2(PA0) to LED
 
 Nucleo_F103RB
@@ -41,11 +41,11 @@ Building and Running
 This sample can be built for multiple boards, in this example we will build it
 for the arduino_101 board:
 
-.. code-block:: console
-
-   $ cd samples/basic/blink_led
-   $ make BOARD=arduino_101
-   $ make BOARD=arduino_101 flash
+.. zephyr-app-commands::
+   :zephyr-app: samples/basic/blink_led
+   :board: arduino_101
+   :goals: build flash
+   :compact:
 
 After flashing the image to the board, the user LED on the board should start to
 blinking as discussed in overview

@@ -39,6 +39,7 @@ extern "C" {
 /**
  * @brief HTTP client and server library
  * @defgroup http HTTP Library
+ * @ingroup networking
  * @{
  */
 
@@ -541,7 +542,7 @@ int http_server_set_tls(struct http_ctx *ctx,
 /**
  * @brief Enable HTTP server that is related to this context.
  *
- * @detail The HTTP server will start to serve request after this.
+ * @details The HTTP server will start to serve request after this.
  *
  * @param ctx Http context.
  *
@@ -552,7 +553,7 @@ int http_server_enable(struct http_ctx *ctx);
 /**
  * @brief Disable HTTP server that is related to this context.
  *
- * @detail The HTTP server will stop to serve request after this.
+ * @details The HTTP server will stop to serve request after this.
  *
  * @param ctx Http context.
  *
@@ -589,7 +590,7 @@ int http_server_del_url(struct http_server_urls *urls, const char *url);
 /**
  * @brief Add default URL handler.
  *
- * @detail If no URL handler is found, then call this handler. There can
+ * @details If no URL handler is found, then call this handler. There can
  * be only one default handler in the URL struct. The callback can decide
  * if the connection request is dropped or passed.
  *
@@ -606,7 +607,7 @@ struct http_root_url *http_server_add_default(struct http_server_urls *urls,
 /**
  * @brief Delete the default URL handler.
  *
- * @detail Unregister the previously registered default URL handler.
+ * @details Unregister the previously registered default URL handler.
  *
  * @param urls URL struct that will contain all the URLs the user has
  * registered.
@@ -767,7 +768,7 @@ static inline int http_client_send_get_req(struct http_ctx *http_ctx,
 		.method = HTTP_GET,
 		.url = url,
 		.host = host,
-		.protocol = " " HTTP_PROTOCOL HTTP_CRLF,
+		.protocol = " " HTTP_PROTOCOL,
 		.header_fields = extra_header_fields,
 	};
 
@@ -778,7 +779,7 @@ static inline int http_client_send_get_req(struct http_ctx *http_ctx,
 /**
  * @brief Initialize user-supplied HTTP context.
  *
- * @detail Caller can set the various fields in http_ctx after this call
+ * @details Caller can set the various fields in http_ctx after this call
  * if needed.
  *
  * @param http_ctx HTTP context.
@@ -805,7 +806,7 @@ int http_client_init(struct http_ctx *http_ctx,
 /**
  * @brief Initialize user-supplied HTTP context when using HTTPS.
  *
- * @detail Caller can set the various fields in http_ctx after this call
+ * @details Caller can set the various fields in http_ctx after this call
  * if needed.
  *
  * @param ctx HTTPS context.
@@ -944,13 +945,14 @@ int http_send_flush(struct http_ctx *ctx, void *user_send_data);
  *
  * @param ctx Http context.
  * @param code HTTP error code
+ * @param description HTTP error description
  * @param html_payload Extra payload, can be null
  * @param html_len Payload length
  *
  * @return 0 if ok, <0 if error.
  */
-int http_send_error(struct http_ctx *ctx, int code, u8_t *html_payload,
-		    size_t html_len);
+int http_send_error(struct http_ctx *ctx, int code, const char *description,
+		    u8_t *html_payload, size_t html_len);
 
 /**
  * @brief Add HTTP header field to the message.

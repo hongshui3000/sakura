@@ -26,8 +26,14 @@
 #include "net_stats.h"
 
 #define REACHABLE_TIME (30 * MSEC_PER_SEC) /* in ms */
-#define MIN_RANDOM_FACTOR (1/2)
-#define MAX_RANDOM_FACTOR (3/2)
+/*
+ * split the min/max random reachable factors into numerator/denominator
+ * so that integer-based math works better
+ */
+#define MIN_RANDOM_NUMER (1)
+#define MIN_RANDOM_DENOM (2)
+#define MAX_RANDOM_NUMER (3)
+#define MAX_RANDOM_DENOM (2)
 
 /* net_if dedicated section limiters */
 extern struct net_if __net_if_start[];
@@ -278,6 +284,15 @@ enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
 		net_pkt_ll_src(pkt)->len = net_pkt_ll_if(pkt)->len;
 	}
 
+#if defined(CONFIG_NET_LOOPBACK)
+	/* If the packet is destined back to us, then there is no need to do
+	 * additional checks, so let the packet through.
+	 */
+	if (iface->l2 == &NET_L2_GET_NAME(DUMMY)) {
+		goto send;
+	}
+#endif
+
 #if defined(CONFIG_NET_IPV6)
 	/* If the ll dst address is not set check if it is present in the nbr
 	 * cache.
@@ -291,6 +306,9 @@ enum net_verdict net_if_send_data(struct net_if *iface, struct net_pkt *pkt)
 	}
 #endif
 
+#if defined(CONFIG_NET_LOOPBACK)
+send:
+#endif
 	verdict = iface->l2->send(iface, pkt);
 
 done:
@@ -1406,10 +1424,18 @@ const struct in6_addr *net_if_ipv6_select_src_addr(struct net_if *dst_iface,
 
 u32_t net_if_ipv6_calc_reachable_time(struct net_if *iface)
 {
-	return MIN_RANDOM_FACTOR * iface->ipv6.base_reachable_time +
-		sys_rand32_get() %
-		(MAX_RANDOM_FACTOR * iface->ipv6.base_reachable_time -
-		 MIN_RANDOM_FACTOR * iface->ipv6.base_reachable_time);
+	u32_t min_reachable, max_reachable;
+
+	min_reachable = (MIN_RANDOM_NUMER * iface->ipv6.base_reachable_time)
+			/ MIN_RANDOM_DENOM;
+	max_reachable = (MAX_RANDOM_NUMER * iface->ipv6.base_reachable_time)
+			/ MAX_RANDOM_DENOM;
+
+	NET_DBG("min_reachable:%u max_reachable:%u", min_reachable,
+		max_reachable);
+
+	return min_reachable +
+	       sys_rand32_get() % (max_reachable - min_reachable);
 }
 
 #else /* CONFIG_NET_IPV6 */

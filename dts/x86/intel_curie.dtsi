@@ -1,5 +1,6 @@
 #include "skeleton.dtsi"
-#include "mem.h"
+
+#define __SIZE_K(x) (x * 1024)
 
 / {
 	cpus {
@@ -27,12 +28,11 @@
 		reg = <0x40030000 DT_FLASH_SIZE>;
 	};
 
-	sram0: memory@a8006400 {
+	sram0: memory@a8007000 {
 		device_type = "memory";
 		compatible = "mmio-sram";
-		reg = <0xa8006400 DT_SRAM_SIZE>;
+		reg = <0xa8007000 DT_SRAM_SIZE>;
 	};
-
 
 	soc {
 		#address-cells = <1>;

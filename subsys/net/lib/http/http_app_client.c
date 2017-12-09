@@ -38,6 +38,9 @@
 #define HTTP_CONTENT_LEN   "Content-Length"
 #define HTTP_CONT_LEN_SIZE 6
 
+/* Default network activity timeout in seconds */
+#define HTTP_NETWORK_TIMEOUT	K_SECONDS(CONFIG_HTTP_CLIENT_NETWORK_TIMEOUT)
+
 int client_reset(struct http_ctx *ctx)
 {
 	http_parser_init(&ctx->http.parser, HTTP_RESPONSE);
@@ -120,7 +123,6 @@ int http_request(struct http_ctx *ctx, struct http_request *req, s32_t timeout,
 
 	if (req->payload && req->payload_size) {
 		char content_len_str[HTTP_CONT_LEN_SIZE];
-		int i;
 
 		ret = snprintk(content_len_str, HTTP_CONT_LEN_SIZE,
 			       "%u", req->payload_size);
@@ -140,17 +142,10 @@ int http_request(struct http_ctx *ctx, struct http_request *req, s32_t timeout,
 			goto out;
 		}
 
-		for (i = 0; i < req->payload_size;) {
-			ret = http_send_chunk(ctx,
-					      req->payload + i,
-					      req->payload_size - i,
-					      user_data);
-			if (ret < 0) {
-				NET_ERR("Cannot send data to peer (%d)", ret);
-				return ret;
-			}
-
-			i += ret;
+		ret = http_prepare_and_send(ctx, req->payload,
+					    req->payload_size, user_data);
+		if (ret < 0) {
+			goto out;
 		}
 	} else {
 		ret = http_add_header(ctx, HTTP_EOF, user_data);
@@ -235,7 +230,7 @@ int http_client_send_req(struct http_ctx *ctx,
 
 	ctx->http.rsp.cb = cb;
 
-	ret = net_app_connect(&ctx->app_ctx, timeout);
+	ret = net_app_connect(&ctx->app_ctx, HTTP_NETWORK_TIMEOUT);
 	if (ret < 0) {
 		NET_DBG("Cannot connect to server (%d)", ret);
 		return ret;
@@ -244,7 +239,7 @@ int http_client_send_req(struct http_ctx *ctx,
 	/* We might wait longer than timeout if the first connection
 	 * establishment takes long time (like with HTTPS)
 	 */
-	if (k_sem_take(&ctx->http.connect_wait, timeout)) {
+	if (k_sem_take(&ctx->http.connect_wait, HTTP_NETWORK_TIMEOUT)) {
 		NET_DBG("Connection timed out");
 		ret = -ETIMEDOUT;
 		goto out;

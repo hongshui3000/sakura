@@ -16,6 +16,7 @@
 /**
  * @brief IPv4/IPv6 primitives and helpers
  * @defgroup ip_4_6 IPv4/IPv6 primitives and helpers
+ * @ingroup networking
  * @{
  */
 
@@ -126,7 +127,7 @@ struct sockaddr_in_ptr {
 #define NET_SOCKADDR_MAX_SIZE (sizeof(struct sockaddr_in))
 #define NET_SOCKADDR_PTR_MAX_SIZE (sizeof(struct sockaddr_in_ptr))
 #else
-#if !defined(CONFIG_NET_L2_RAW_CHANNEL)
+#if !defined(CONFIG_NET_RAW_MODE)
 #error "Either IPv6 or IPv4 needs to be selected."
 #else
 #define NET_SOCKADDR_MAX_SIZE (sizeof(struct sockaddr_in6))
@@ -167,6 +168,9 @@ struct net_addr {
 #define IN6ADDR_LOOPBACK_INIT { { { 0, 0, 0, 0, 0, 0, 0, \
 				0, 0, 0, 0, 0, 0, 0, 0, 1 } } }
 
+extern const struct in6_addr in6addr_any;
+extern const struct in6_addr in6addr_loopback;
+
 #define INET6_ADDRSTRLEN 46
 #define NET_IPV6_ADDR_LEN sizeof("xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx:xxxx")
 #define NET_IPV4_ADDR_LEN sizeof("xxx.xxx.xxx.xxx")
@@ -175,6 +179,7 @@ struct net_addr {
 #define INADDR_ANY_INIT { { { INADDR_ANY } } }
 
 #define NET_IPV6_MTU 1280
+#define NET_IPV4_MTU  576
 
 /** IPv6 extension headers types */
 #define NET_IPV6_NEXTHDR_HBHO        0
