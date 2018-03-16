@@ -10,6 +10,7 @@ else()
   zephyr_sources_ifdef(CONFIG_SPI_DW		spi_dw.c)
   zephyr_sources_ifdef(CONFIG_SPI_STM32		spi_ll_stm32.c)
   zephyr_sources_ifdef(CONFIG_SPI_SAM0		spi_sam0.c)
+  zephyr_sources_ifdef(CONFIG_SPI_TM4C123		spi_tm4c123.c)
 endif()
 
 zephyr_sources_ifdef(CONFIG_USERSPACE		spi_handlers.c)
