@@ -6,37 +6,58 @@
 
 
 #include <ztest.h>
+#include <kernel_version.h>
+#include "version.h"
+
+extern void test_byteorder_memcpy_swap(void);
+extern void test_byteorder_mem_swap(void);
+extern void test_atomic(void);
+extern void test_bitfield(void);
+extern void test_intmath(void);
+extern void test_printk(void);
+extern void test_slist(void);
+extern void test_dlist(void);
+extern void test_rand32(void);
+extern void test_timeout_order(void);
+extern void test_clock_cycle(void);
+extern void test_clock_uptime(void);
+extern void test_multilib(void);
 
 
-extern void byteorder_test_memcpy_swap(void);
-extern void byteorder_test_mem_swap(void);
-extern void atomic_test(void);
-extern void bitfield_test(void);
-extern void intmath_test(void);
-extern void printk_test(void);
-extern void ring_buffer_test(void);
-extern void slist_test(void);
-extern void dlist_test(void);
-extern void rand32_test(void);
-extern void timeout_order_test(void);
-extern void clock_test(void);
+static void test_version(void)
+{
+	u32_t version = sys_kernel_version_get();
+
+	zassert_true(SYS_KERNEL_VER_MAJOR(version) == KERNEL_VERSION_MAJOR,
+		     "major version mismatch");
+	zassert_true(SYS_KERNEL_VER_MINOR(version) == KERNEL_VERSION_MINOR,
+		     "minor version mismatch");
+	zassert_true(SYS_KERNEL_VER_PATCHLEVEL(version) == KERNEL_PATCHLEVEL,
+		     "patchlevel version match");
+
+}
 
 void test_main(void)
 {
 	ztest_test_suite(common_test,
-			 ztest_unit_test(byteorder_test_memcpy_swap),
-			 ztest_unit_test(byteorder_test_mem_swap),
-			 ztest_unit_test(atomic_test),
-#ifdef CONFIG_PRINTK
-			 ztest_unit_test(printk_test),
+			 ztest_unit_test(test_byteorder_memcpy_swap),
+			 ztest_unit_test(test_byteorder_mem_swap),
+			 ztest_unit_test(test_atomic),
+#ifndef CONFIG_ARM
+			 ztest_unit_test(test_bitfield),
 #endif
-			 ztest_unit_test(ring_buffer_test),
-			 ztest_unit_test(slist_test),
-			 ztest_unit_test(dlist_test),
-			 ztest_unit_test(rand32_test),
-			 ztest_unit_test(intmath_test),
-			 ztest_unit_test(timeout_order_test),
-			 ztest_unit_test(clock_test)
+#ifdef CONFIG_PRINTK
+			 ztest_unit_test(test_printk),
+#endif
+			 ztest_unit_test(test_slist),
+			 ztest_unit_test(test_dlist),
+			 ztest_unit_test(test_rand32),
+			 ztest_unit_test(test_intmath),
+			 ztest_unit_test(test_timeout_order),
+			 ztest_unit_test(test_clock_uptime),
+			 ztest_unit_test(test_clock_cycle),
+			 ztest_unit_test(test_version),
+			 ztest_unit_test(test_multilib)
 			 );
 
 	ztest_run_test_suite(common_test);

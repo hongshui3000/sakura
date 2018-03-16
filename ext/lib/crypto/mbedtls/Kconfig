@@ -24,77 +24,109 @@ menuconfig MBEDTLS
 	help
 	  This option enables the mbedTLS cryptography library.
 
+if MBEDTLS
+
+choice
+	prompt "Select implementation"
+	default MBEDTLS_BUILTIN
+
 config MBEDTLS_BUILTIN
 	bool "Enable mbedTLS integrated sources"
-	depends on MBEDTLS
-	default n
 	help
-	Link with local mbedTLS sources instead of external library.
+	  Link with local mbedTLS sources instead of external library.
+
+config MBEDTLS_LIBRARY
+	bool "Enable mbedTLS external library"
+	help
+	  This option enables mbedTLS library.
+
+endchoice
 
 config MBEDTLS_CFG_FILE
 	string "mbed TLS configuration file"
 	depends on MBEDTLS_BUILTIN
-	default "config-threadnet.h"
+	default "config-mini-tls1_2.h"
 	help
-	Enable custom mbed TLS configuration
+	  Use a specific mbed TLS configuration file. The default is suitable to
+	  communicate with majority of HTTPS servers on the Internet, but has
+	  relatively many features enabled. To optimize resources for special
+	  TLS usage, an alternative config may be selected.
 
 config MBEDTLS_DEBUG
 	bool "mbed TLS debug activation"
 	depends on MBEDTLS_BUILTIN
 	default n
 	help
-	Enable debugging activation for mbed TLS configuration. Note that this
-	does not directly cause any debug print output. For that you need to
-	call
-	mbedtls_debug_set_threshold(level);
-	and
-	mbedtls_ssl_conf_dbg(&mbedtls.conf, my_debug, NULL);
-	functions in your application, and create the my_debug() function to
-	actually print something useful.
+	  Enable debugging activation for mbed TLS configuration. If you use
+	  mbedTLS/Zephyr integration (e.g. net_app), this will activate debug
+	  logging (of the level configured by MBEDTLS_DEBUG_LEVEL).
+	  If you use mbedTLS directly instead, you will need to perform
+	  additional configuration yourself: call
+	  mbedtls_ssl_conf_dbg(&mbedtls.conf, my_debug, NULL);
+	  mbedtls_debug_set_threshold(level);
+	  functions in your application, and create the my_debug() function to
+	  actually print something useful.
+
+config MBEDTLS_DEBUG_LEVEL
+	int "mbed TLS default debug level"
+	depends on MBEDTLS_DEBUG
+	default 0
+	range 0 4
+	help
+	  Default mbed TLS debug logging level for Zephyr integration code
+	  (from ext/lib/crypto/mbedtls/include/mbedtls/debug.h):
+	  0 No debug
+	  1 Error
+	  2 State change
+	  3 Information
+	  4 Verbose
 
 config MBEDTLS_TEST
 	bool "Compile internal self test functions"
 	depends on MBEDTLS_BUILTIN
 	default n
 	help
-	Enable self test function for the crypto algorithms
-
-config MBEDTLS_LIBRARY
-	bool "Enable mbedTLS external library"
-	depends on MBEDTLS
-	default n
-	help
-	This option enables mbedTLS library.
+	  Enable self test function for the crypto algorithms
 
 config MBEDTLS_INSTALL_PATH
 	string "mbedTLS install path"
 	depends on MBEDTLS_LIBRARY
 	help
-	This option holds the path where the mbedTLS libraries and headers are
-	installed. Make sure this option is properly set when MBEDTLS_LIBRARY
-	is enabled otherwise the build will fail.
+	  This option holds the path where the mbedTLS libraries and headers are
+	  installed. Make sure this option is properly set when MBEDTLS_LIBRARY
+	  is enabled otherwise the build will fail.
 
 config MBEDTLS_ENABLE_HEAP
 	bool "Enable global heap for mbed TLS"
 	default n
-	depends on MBEDTLS
 	help
-	This option enables the mbedtls to use the heap. This setting must
-	be global so that various applications and libraries in Zephyr do not
-	try to do this themselves as there can be only one heap defined
-	in mbedtls. If this is enabled, then the Zephyr will, during the device
-	startup, initialize the heap automatically.
+	  This option enables the mbedtls to use the heap. This setting must
+	  be global so that various applications and libraries in Zephyr do not
+	  try to do this themselves as there can be only one heap defined
+	  in mbedtls. If this is enabled, then the Zephyr will, during the device
+	  startup, initialize the heap automatically.
 
 config MBEDTLS_HEAP_SIZE
 	int "Heap size for mbed TLS"
 	default 512
 	depends on MBEDTLS_ENABLE_HEAP
 	help
-	The mbedtls routines will use this heap if enabled.
-	See ext/lib/crypto/mbedtls/include/mbedtls/config.h and
-	MBEDTLS_MEMORY_BUFFER_ALLOC_C option for details. That option is not
-	enabled by default.
-	Default value for the heap size is not set as it depends on the
-	application. For server application 15000 bytes should be enough.
-	For some dedicated and specific usage of mbedtls API, the 1000 bytes
-	might be ok.
+	  The mbedtls routines will use this heap if enabled.
+	  See ext/lib/crypto/mbedtls/include/mbedtls/config.h and
+	  MBEDTLS_MEMORY_BUFFER_ALLOC_C option for details. That option is not
+	  enabled by default.
+	  Default value for the heap size is not set as it depends on the
+	  application. For server application 15000 bytes should be enough.
+	  For some dedicated and specific usage of mbedtls API, the 1000 bytes
+	  might be ok.
+
+config APP_LINK_WITH_MBEDTLS
+	bool "Link 'app' with MBEDTLS"
+	default y
+	depends on MBEDTLS
+	help
+	  Add MBEDTLS header files to the 'app' include path. It may be
+	  disabled if the include paths for MBEDTLS are causing aliasing
+	  issues for 'app'.
+
+endif

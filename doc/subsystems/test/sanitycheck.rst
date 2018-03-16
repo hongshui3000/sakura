@@ -44,12 +44,6 @@ The sanitycheck script accepts the following optional arguments:
                         the platforms specified. If this option is not used,
                         then platforms marked as default in the platform
                         metadata file will be chosen to build and test.
-  -L N, --platform-limit N
-                        Controls what platforms are tested if --platform or
-                        --all are not used. For each architecture specified by
-                        --arch (defaults to all of them), choose the first N
-                        platforms to test in the arch-specific .yaml file
-                        'platforms' list. Defaults to 1.
   -a ARCH, --arch ARCH  Arch filter for testing. Takes precedence over
                         --platform. If unspecified, test all arches. Multiple
                         invocations are treated as a logical 'or' relationship
@@ -84,12 +78,12 @@ The sanitycheck script accepts the following optional arguments:
                         skipped and why
   --compare-report COMPARE_REPORT
                         Use this report file for size comparison
-  --ccache              Enable the use of ccache when building
   -B SUBSET, --subset SUBSET
                         Only run a subset of the tests, 1/4 for running the
                         first 25%, 3/5 means run the 3rd fifth of the total.
                         This option is useful when running a large number of
                         tests on different hosts to speed up execution time.
+  -N, --ninja           Use the Ninja generator with CMake
   -y, --dry-run         Create the filtered list of test cases, but don't
                         actually run them. Useful if you're just interested in
                         --discard-report
@@ -110,6 +104,8 @@ The sanitycheck script accepts the following optional arguments:
                         invocation
   -u, --no-update       do not update the results of the last run of the
                         sanity checks
+  -F, --load-tests      Load list of tests to be run from file
+  -E, --save_tests      Save list of tests to be run to file
   -b, --build-only      Only build the code, do not execute any of it in QEMU
   -j JOBS, --jobs JOBS  Number of cores to use when building, defaults to
                         number of CPUs * 2
@@ -129,8 +125,8 @@ The sanitycheck script accepts the following optional arguments:
                         All testcase.yaml files under here will be processed.
                         May be called multiple times. Defaults to the
                         'samples' and 'tests' directories in the Zephyr tree.
-  -A ARCH_ROOT, --arch-root ARCH_ROOT
-                        Directory to search for arch configuration files. All
+  -A BOARD_ROOT, --board-root BOARD_ROOT
+                        Directory to search for board configuration files. All
                         .yaml files in the directory will be processed.
   -z SIZE, --size SIZE  Don't run sanity checks. Instead, produce a report to
                         stdout detailing RAM/ROM sizes on the specified
@@ -139,13 +135,15 @@ The sanitycheck script accepts the following optional arguments:
                         marked as 'slow' in testcase.yaml. Normally these are
                         only built.
   -R, --enable-asserts  Build all test cases with assertions enabled.
+  --disable-asserts     Build all test cases with assertions disabled.
   -Q, --error-on-deprecations
                         Error on deprecation warnings.
   -x EXTRA_ARGS, --extra-args EXTRA_ARGS
                         Extra arguments to pass to the build when compiling
                         test cases. May be called multiple times. These will
                         be passed in after any sanitycheck-supplied options.
-  -C, --coverage        Scan for unit test coverage with gcov + lcov.
+  -C, --coverage        Generate coverage report for unit tests, and tests and
+                        samples run in native_posix.
 
 
 Board Configuration
@@ -193,7 +191,7 @@ arch:
   Architecture of the board
 toolchain:
   The list of supported toolchains that can build this board. This should match
-  one of the values used for 'ZEPHYR_GCC_VARIANT' when building on the command line
+  one of the values used for 'ZEPHYR_TOOLCHAIN_VARIANT' when building on the command line
 ram:
   Available RAM on the board (specified in KB). This is used to match testcase
   requirements.  If not specified we default to 128KB.
@@ -253,17 +251,17 @@ explained in this document.
 ::
 
         tests:
-          - test:
-              build_only: true
-              platform_whitelist: qemu_cortex_m3 qemu_x86 arduino_101
-              tags: bluetooth
-          - test_br:
-              build_only: true
-              extra_args: CONF_FILE="prj_br.conf"
-              filter: not CONFIG_DEBUG
-              platform_exclude: quark_d2000_crb
-              platform_whitelist: qemu_cortex_m3 qemu_x86
-              tags: bluetooth
+          test:
+            build_only: true
+            platform_whitelist: qemu_cortex_m3 qemu_x86 arduino_101
+            tags: bluetooth
+          test_br:
+            build_only: true
+            extra_args: CONF_FILE="prj_br.conf"
+            filter: not CONFIG_DEBUG
+            platform_exclude: quark_d2000_crb
+            platform_whitelist: qemu_cortex_m3 qemu_x86
+            tags: bluetooth
 
 
 A sample with tests will have the same structure with additional information
@@ -276,16 +274,16 @@ related to the sample and what is being demonstrated:
           description: Hello World sample, the simplest Zephyr application
           platforms: all
         tests:
-          - test:
-              build_only: true
-              tags: samples tests
-              min_ram: 16
-          - singlethread:
-              build_only: true
-              extra_args: CONF_FILE=prj_single.conf
-              filter: not CONFIG_BT and not CONFIG_GPIO_SCH
-              tags: samples tests
-              min_ram: 16
+          test:
+            build_only: true
+            tags: samples tests
+            min_ram: 16
+          singlethread:
+            build_only: true
+            extra_args: CONF_FILE=prj_single.conf
+            filter: not CONFIG_BT and not CONFIG_GPIO_SCH
+            tags: samples tests
+            min_ram: 16
 
 The full canonical name for each test case is:
 
@@ -321,13 +319,13 @@ extra_configs: <list of extra configurations>
         common:
           tags: drivers adc
         tests:
-          - test:
-              depends_on: adc
-          - test_resolution_6:
-              extra_configs:
-                - CONFIG_ADC_QMSI_SAMPLE_WIDTH=6
-              platform_whitelist: quark_se_c1000_ss_devboard
-              tags: hwtest
+          test:
+            depends_on: adc
+          test_resolution_6:
+            extra_configs:
+              - CONFIG_ADC_QMSI_SAMPLE_WIDTH=6
+            platform_whitelist: quark_se_c1000_ss_devboard
+            tags: hwtest
 
 
 build_only: <True|False> (default False)

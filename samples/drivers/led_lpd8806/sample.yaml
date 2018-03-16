@@ -3,7 +3,6 @@ sample:
   name: LPD880x sample
   platforms: all
 tests:
-  - test:
-      platform_whitelist: 96b_carbon
-      build_only: true
-      tags: samples
+  test:
+    platform_whitelist: 96b_carbon
+    tags: samples

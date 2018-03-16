@@ -7,7 +7,9 @@ include(CheckCXXCompilerFlag)
 # 1. Zephyr-aware extensions
 # 1.1. zephyr_*
 # 1.2. zephyr_library_*
+# 1.2.1 zephyr_interface_library_*
 # 1.3. generate_inc_*
+# 1.4. board_*
 # 2. Kconfig-aware extensions
 # 2.1 *_if_kconfig
 # 2.2 Misc
@@ -117,7 +119,7 @@ endfunction()
 # includes, options).
 #
 # The naming convention follows:
-# zephyr_get_${build_information}_for_lang${format}(lang x)
+# zephyr_get_${build_information}_for_lang${format}(lang x [SKIP_PREFIX])
 # Where
 #  the argument 'x' is written with the result
 # and
@@ -136,12 +138,19 @@ endfunction()
 #   - CXX
 #   - ASM
 #
+# SKIP_PREFIX
+#
+# By default the result will be returned ready to be passed directly
+# to a compiler, e.g. prefixed with -D, or -I, but it is possible to
+# omit this prefix by specifying 'SKIP_PREFIX' . This option has no
+# effect for 'compile_options'.
+#
 # e.g.
 # zephyr_get_include_directories_for_lang(ASM x)
 # writes "-Isome_dir;-Isome/other/dir" to x
 
 function(zephyr_get_include_directories_for_lang_as_string lang i)
-  zephyr_get_include_directories_for_lang(${lang} list_of_flags)
+  zephyr_get_include_directories_for_lang(${lang} list_of_flags ${ARGN})
 
   convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
 
@@ -149,7 +158,7 @@ function(zephyr_get_include_directories_for_lang_as_string lang i)
 endfunction()
 
 function(zephyr_get_system_include_directories_for_lang_as_string lang i)
-  zephyr_get_system_include_directories_for_lang(${lang} list_of_flags)
+  zephyr_get_system_include_directories_for_lang(${lang} list_of_flags ${ARGN})
 
   convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
 
@@ -157,7 +166,7 @@ function(zephyr_get_system_include_directories_for_lang_as_string lang i)
 endfunction()
 
 function(zephyr_get_compile_definitions_for_lang_as_string lang i)
-  zephyr_get_compile_definitions_for_lang(${lang} list_of_flags)
+  zephyr_get_compile_definitions_for_lang(${lang} list_of_flags ${ARGN})
 
   convert_list_of_flags_to_string_of_flags(list_of_flags str_of_flags)
 
@@ -173,7 +182,10 @@ function(zephyr_get_compile_options_for_lang_as_string lang i)
 endfunction()
 
 function(zephyr_get_include_directories_for_lang lang i)
-  get_property_and_add_prefix(flags zephyr_interface INTERFACE_INCLUDE_DIRECTORIES -I)
+  get_property_and_add_prefix(flags zephyr_interface INTERFACE_INCLUDE_DIRECTORIES
+    "-I"
+    ${ARGN}
+    )
 
   process_flags(${lang} flags output_list)
 
@@ -181,7 +193,10 @@ function(zephyr_get_include_directories_for_lang lang i)
 endfunction()
 
 function(zephyr_get_system_include_directories_for_lang lang i)
-  get_property_and_add_prefix(flags zephyr_interface INTERFACE_SYSTEM_INCLUDE_DIRECTORIES -isystem)
+  get_property_and_add_prefix(flags zephyr_interface INTERFACE_SYSTEM_INCLUDE_DIRECTORIES
+    "-isystem"
+    ${ARGN}
+    )
 
   process_flags(${lang} flags output_list)
 
@@ -189,7 +204,10 @@ function(zephyr_get_system_include_directories_for_lang lang i)
 endfunction()
 
 function(zephyr_get_compile_definitions_for_lang lang i)
-  get_property_and_add_prefix(flags zephyr_interface INTERFACE_COMPILE_DEFINITIONS -D)
+  get_property_and_add_prefix(flags zephyr_interface INTERFACE_COMPILE_DEFINITIONS
+    "-D"
+    ${ARGN}
+    )
 
   process_flags(${lang} flags output_list)
 
@@ -202,6 +220,20 @@ function(zephyr_get_compile_options_for_lang lang i)
   process_flags(${lang} flags output_list)
 
   set(${i} ${output_list} PARENT_SCOPE)
+endfunction()
+
+# This function writes a dict to it's output parameter
+# 'return_dict'. The dict has information about the parsed arguments,
+#
+# Usage:
+#   zephyr_get_parse_args(foo ${ARGN})
+#   print(foo_STRIP_PREFIX) # foo_STRIP_PREFIX might be set to 1
+function(zephyr_get_parse_args return_dict)
+  foreach(x ${ARGN})
+    if(x STREQUAL STRIP_PREFIX)
+      set(${return_dict}_STRIP_PREFIX 1 PARENT_SCOPE)
+    endif()
+  endforeach()
 endfunction()
 
 function(process_flags lang input output)
@@ -256,9 +288,17 @@ function(convert_list_of_flags_to_string_of_flags ptr_list_of_flags string_of_fl
 endfunction()
 
 macro(get_property_and_add_prefix result target property prefix)
+  zephyr_get_parse_args(args ${ARGN})
+
+  if(args_STRIP_PREFIX)
+    set(maybe_prefix "")
+  else()
+    set(maybe_prefix ${prefix})
+  endif()
+
   get_property(target_property TARGET ${target} PROPERTY ${property})
   foreach(x ${target_property})
-    list(APPEND ${result} ${prefix}${x})
+    list(APPEND ${result} ${maybe_prefix}${x})
   endforeach()
 endmacro()
 
@@ -278,7 +318,7 @@ function(generate_inc_file
     OUTPUT ${generated_file}
     COMMAND
     ${PYTHON_EXECUTABLE}
-    $ENV{ZEPHYR_BASE}/scripts/file2hex.py
+    ${ZEPHYR_BASE}/scripts/file2hex.py
     ${ARGN} # Extra arguments are passed to file2hex.py
     --file ${source_file}
     > ${generated_file} # Does pipe redirection work on Windows?
@@ -300,11 +340,17 @@ function(generate_inc_file_for_target
   # targets
 
   # But first create a unique name for the custom target
-  # Replace / with _ (driver/serial => driver_serial) and . with _
-  set(generated_target_name ${generated_file})
+  string(
+    RANDOM
+    LENGTH 8
+    random_chars
+    )
 
-  string(REPLACE "/" "_" generated_target_name ${generated_target_name})
-  string(REPLACE "." "_" generated_target_name ${generated_target_name})
+  get_filename_component(basename ${generated_file} NAME)
+  string(REPLACE "." "_" basename ${basename})
+  string(REPLACE "@" "_" basename ${basename})
+
+  set(generated_target_name "gen_${basename}_${random_chars}")
 
   add_custom_target(${generated_target_name} DEPENDS ${generated_file})
   add_dependencies(${target} ${generated_target_name})
@@ -347,7 +393,7 @@ endmacro()
 # it to the argument "lib_name"
 macro(zephyr_library_get_current_dir_lib_name lib_name)
   # Remove the prefix (/home/sebo/zephyr/driver/serial/CMakeLists.txt => driver/serial/CMakeLists.txt)
-  file(RELATIVE_PATH name $ENV{ZEPHYR_BASE} ${CMAKE_CURRENT_LIST_FILE})
+  file(RELATIVE_PATH name ${ZEPHYR_BASE} ${CMAKE_CURRENT_LIST_FILE})
 
   # Remove the filename (driver/serial/CMakeLists.txt => driver/serial)
   get_filename_component(name ${name} DIRECTORY)
@@ -372,7 +418,7 @@ endmacro()
 
 
 function(zephyr_link_interface interface)
-  target_link_libraries(interface INTERFACE zephyr_interface)
+  target_link_libraries(${interface} INTERFACE zephyr_interface)
 endfunction()
 
 #
@@ -433,6 +479,110 @@ endfunction()
 # need to be included in the build.
 function(zephyr_append_cmake_library library)
   set_property(GLOBAL APPEND PROPERTY ZEPHYR_LIBS ${library})
+endfunction()
+
+# 1.2.1 zephyr_interface_library_*
+#
+# A Zephyr interface library is a thin wrapper over a CMake INTERFACE
+# library. The most important responsibility of this abstraction is to
+# ensure that when a user KConfig-enables a library then the header
+# files of this library will be accessible to the 'app' library.
+#
+# This is done because when a user uses Kconfig to enable a library he
+# expects to be able to include it's header files and call it's
+# functions out-of-the box.
+#
+# A Zephyr interface library should be used when there exists some
+# build information (include directories, defines, compiler flags,
+# etc.) that should be applied to a set of Zephyr libraries and 'app'
+# might be one of these libraries.
+#
+# Zephyr libraries must explicitly call
+# zephyr_library_link_libraries(<interface_library>) to use this build
+# information. 'app' is treated as a special case for usability
+# reasons; a Kconfig option (CONFIG_APP_LINK_WITH_<interface_library>)
+# should exist for each interface_library and will determine if 'app'
+# links with the interface_library.
+#
+# This API has a constructor like the zephyr_library API has, but it
+# does not have wrappers over the other cmake target functions.
+macro(zephyr_interface_library_named name)
+  add_library(${name} INTERFACE)
+  set_property(GLOBAL APPEND PROPERTY ZEPHYR_INTERFACE_LIBS ${name})
+endmacro()
+
+# 1.4. board_*
+#
+# This section is for extensions which control Zephyr's board runners
+# from the build system. The Zephyr build system has targets for
+# flashing and debugging supported boards. These are wrappers around a
+# "runner" Python package that is part of Zephyr. This section
+# provides glue between CMake and the runner invocation script,
+# zephyr_flash_debug.py.
+
+# This function is intended for board.cmake files and application
+# CMakeLists.txt files.
+#
+# Usage from board.cmake files:
+#   board_runner_args(runner "--some-arg=val1" "--another-arg=val2")
+#
+# The build system will then ensure the command line to
+# zephyr_flash_debug.py contains:
+#   --some-arg=val1 --another-arg=val2
+#
+# Within application CMakeLists.txt files, ensure that all calls to
+# board_runner_args() are part of a macro named app_set_runner_args(),
+# like this, which is defined before including the boilerplate file:
+#   macro(app_set_runner_args)
+#     board_runner_args(runner "--some-app-setting=value")
+#   endmacro()
+#
+# The build system tests for the existence of the macro and will
+# invoke it at the appropriate time if it is defined.
+#
+# Any explicitly provided settings given by this function override
+# defaults provided by the build system.
+function(board_runner_args runner)
+  string(MAKE_C_IDENTIFIER ${runner} runner_id)
+  # Note the "_EXPLICIT_" here, and see below.
+  set_property(GLOBAL APPEND PROPERTY BOARD_RUNNER_ARGS_EXPLICIT_${runner_id} ${ARGN})
+endfunction()
+
+# This function is intended for internal use by
+# boards/common/runner.board.cmake files.
+#
+# Basic usage:
+#   board_finalize_runner_args(runner)
+#
+# This ensures the build system captures all arguments added in any
+# board_runner_args() calls.
+#
+# Extended usage:
+#   board_runner_args(runner "--some-arg=default-value")
+#
+# This provides common or default values for arguments. These are
+# placed before board_runner_args() calls, so they generally take
+# precedence, except for arguments which can be given multiple times
+# (use these with caution).
+function(board_finalize_runner_args runner)
+  # If the application provided a macro to add additional runner
+  # arguments, handle them.
+  if(COMMAND app_set_runner_args)
+    app_set_runner_args()
+  endif()
+
+  # Retrieve the list of explicitly set arguments.
+  string(MAKE_C_IDENTIFIER ${runner} runner_id)
+  get_property(explicit GLOBAL PROPERTY "BOARD_RUNNER_ARGS_EXPLICIT_${runner_id}")
+
+  # Note no _EXPLICIT_ here. This property contains the final list.
+  set_property(GLOBAL APPEND PROPERTY BOARD_RUNNER_ARGS_${runner_id}
+    # Default arguments from the common runner file come first.
+    ${ARGN}
+    # Arguments explicitly given with board_runner_args() come
+    # last, so they take precedence.
+    ${explicit}
+    )
 endfunction()
 
 ########################################################
@@ -622,6 +772,12 @@ function(zephyr_cc_option_ifdef feature_toggle)
   endif()
 endfunction()
 
+function(zephyr_ld_option_ifdef feature_toggle)
+  if(${${feature_toggle}})
+    zephyr_ld_options(${ARGN})
+  endif()
+endfunction()
+
 function(zephyr_link_libraries_ifdef feature_toggle)
   if(${${feature_toggle}})
     zephyr_link_libraries(${ARGN})
@@ -680,7 +836,7 @@ endmacro()
 # See 3.1 *_ifdef
 function(set_ifndef variable value)
   if(NOT ${variable})
-    set(${variable} ${value} PARENT_SCOPE)
+    set(${variable} ${value} ${ARGN} PARENT_SCOPE)
   endif()
 endfunction()
 
@@ -775,7 +931,12 @@ endfunction()
 function(target_ld_options target scope)
   foreach(option ${ARGN})
     string(MAKE_C_IDENTIFIER check${option} check)
-    check_c_compiler_flag(${option} ${check})
+
+    set(SAVED_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+    set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} ${option}")
+    check_c_compiler_flag("" ${check})
+    set(CMAKE_REQUIRED_FLAGS ${SAVED_CMAKE_REQUIRED_FLAGS})
+
     target_link_libraries_ifdef(${check} ${target} ${scope} ${option})
   endforeach()
 endfunction()
@@ -791,12 +952,23 @@ function(print arg)
 endfunction()
 
 # Usage:
-#   assert(ZEPHYR_GCC_VARIANT "ZEPHYR_GCC_VARIANT not set.")
+#   assert(ZEPHYR_TOOLCHAIN_VARIANT "ZEPHYR_TOOLCHAIN_VARIANT not set.")
 #
 # will cause a FATAL_ERROR and print an error message if the first
 # expression is false
 macro(assert test comment)
   if(NOT ${test})
+    message(FATAL_ERROR "Assertion failed: ${comment}")
+  endif()
+endmacro()
+
+# Usage:
+#   assert_not(FLASH_SCRIPT "FLASH_SCRIPT has been removed; use BOARD_FLASH_RUNNER")
+#
+# will cause a FATAL_ERROR and print an errorm essage if the first
+# espression is true
+macro(assert_not test comment)
+  if(${test})
     message(FATAL_ERROR "Assertion failed: ${comment}")
   endif()
 endmacro()
@@ -811,3 +983,21 @@ macro(assert_exists var)
     message(FATAL_ERROR "No such file or directory: ${var}: '${${var}}'")
   endif()
 endmacro()
+
+# Usage:
+#   assert_with_usage(BOARD_DIR "No board named '${BOARD}' found")
+#
+# will print an error message, show usage, and then end executioon
+# with a FATAL_ERROR if the test fails.
+macro(assert_with_usage test comment)
+  if(NOT ${test})
+    message(${comment})
+    message("see usage:")
+    execute_process(
+      COMMAND
+      ${CMAKE_COMMAND} -P ${ZEPHYR_BASE}/cmake/usage/usage.cmake
+      )
+    message(FATAL_ERROR "Invalid usage")
+  endif()
+endmacro()
+

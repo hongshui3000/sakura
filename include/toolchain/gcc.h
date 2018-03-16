@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#ifndef TOOLCHAIN_GCC_H
+#define TOOLCHAIN_GCC_H
 /**
  * @file
  * @brief GCC toolchain abstraction
@@ -27,7 +29,17 @@
 #define FUNC_ALIAS(real_func, new_alias, return_type) \
 	return_type new_alias() ALIAS_OF(real_func)
 
+#if defined(CONFIG_ARCH_POSIX)
+/*let's not segfault if this were to happen for some reason*/
+#define CODE_UNREACHABLE \
+{\
+	posix_print_error_and_exit("CODE_UNREACHABLE reached from %s:%d\n",\
+		__FILE__, __LINE__);\
+	__builtin_unreachable(); \
+}
+#else
 #define CODE_UNREACHABLE __builtin_unreachable()
+#endif
 #define FUNC_NORETURN    __attribute__((__noreturn__))
 
 /* The GNU assembler for Cortex-M3 uses # for immediate values, not
@@ -309,6 +321,11 @@ A##a:
 		",%0"                              \
 		"\n\t.type\t" #name ",%%object" :  : "n"(value))
 
+#elif defined(CONFIG_ARCH_POSIX)
+#define GEN_ABSOLUTE_SYM(name, value)               \
+	__asm__(".globl\t" #name "\n\t.equ\t" #name \
+		",%c0"                              \
+		"\n\t.type\t" #name ",@object" :  : "n"(value))
 #else
 #error processor architecture not supported
 #endif
@@ -316,3 +333,5 @@ A##a:
 #define compiler_barrier() do { \
 	__asm__ __volatile__ ("" ::: "memory"); \
 } while ((0))
+
+#endif /* TOOLCHAIN_GCC_H */

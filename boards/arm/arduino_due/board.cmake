@@ -1,1 +1,1 @@
-set(FLASH_SCRIPT bossa-flash.sh)
+include(${ZEPHYR_BASE}/boards/common/bossac.board.cmake)

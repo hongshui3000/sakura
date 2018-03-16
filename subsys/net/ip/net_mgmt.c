@@ -22,7 +22,7 @@ struct mgmt_event_entry {
 	struct net_if *iface;
 
 #ifdef CONFIG_NET_MGMT_EVENT_INFO
-	u8_t info[CONFIG_NET_MGMT_EVENT_INFO_SIZE];
+	u8_t info[NET_EVENT_INFO_MAX_SIZE];
 	size_t info_length;
 #endif /* CONFIG_NET_MGMT_EVENT_INFO */
 };
@@ -33,6 +33,7 @@ struct mgmt_event_wait {
 };
 
 static K_SEM_DEFINE(network_event, 0, UINT_MAX);
+static K_SEM_DEFINE(net_mgmt_lock, 1, 1);
 
 NET_STACK_DEFINE(MGMT, mgmt_stack, CONFIG_NET_MGMT_EVENT_STACK_SIZE,
 		 CONFIG_NET_MGMT_EVENT_STACK_SIZE);
@@ -46,8 +47,7 @@ static u16_t out_event;
 static inline void mgmt_push_event(u32_t mgmt_event, struct net_if *iface,
 				   void *info, size_t length)
 {
-	events[in_event].event = mgmt_event;
-	events[in_event].iface = iface;
+	k_sem_take(&net_mgmt_lock, K_FOREVER);
 
 #ifdef CONFIG_NET_MGMT_EVENT_INFO
 	/* Let's put the info length to 0 by default as it will be the most
@@ -57,12 +57,14 @@ static inline void mgmt_push_event(u32_t mgmt_event, struct net_if *iface,
 	events[in_event].info_length = 0;
 
 	if (info && length) {
-		if (length <= CONFIG_NET_MGMT_EVENT_INFO_SIZE) {
+		if (length <= NET_EVENT_INFO_MAX_SIZE) {
 			memcpy(events[in_event].info, info, length);
 			events[in_event].info_length = length;
 		} else {
 			NET_ERR("Event info length %u > max size %u",
-				length, CONFIG_NET_MGMT_EVENT_INFO_SIZE);
+				length, NET_EVENT_INFO_MAX_SIZE);
+			k_sem_give(&net_mgmt_lock);
+			return;
 		}
 	}
 
@@ -70,6 +72,9 @@ static inline void mgmt_push_event(u32_t mgmt_event, struct net_if *iface,
 	ARG_UNUSED(info);
 	ARG_UNUSED(length);
 #endif /* CONFIG_NET_MGMT_EVENT_INFO */
+
+	events[in_event].event = mgmt_event;
+	events[in_event].iface = iface;
 
 	in_event++;
 
@@ -88,6 +93,8 @@ static inline void mgmt_push_event(u32_t mgmt_event, struct net_if *iface,
 			out_event = o_idx;
 		}
 	}
+
+	k_sem_give(&net_mgmt_lock);
 }
 
 static inline struct mgmt_event_entry *mgmt_pop_event(void)
@@ -95,6 +102,7 @@ static inline struct mgmt_event_entry *mgmt_pop_event(void)
 	u16_t o_idx;
 
 	if (!events[out_event].event) {
+		k_sem_give(&net_mgmt_lock);
 		return NULL;
 	}
 
@@ -146,9 +154,9 @@ static inline void mgmt_run_callbacks(struct mgmt_event_entry *mgmt_event)
 		NET_MGMT_GET_COMMAND(mgmt_event->event));
 
 	SYS_SLIST_FOR_EACH_CONTAINER_SAFE(&event_callbacks, cb, tmp, node) {
-		if (!(NET_MGMT_GET_LAYER(mgmt_event->event) &
+		if (!(NET_MGMT_GET_LAYER(mgmt_event->event) ==
 		      NET_MGMT_GET_LAYER(cb->event_mask)) ||
-		    !(NET_MGMT_GET_LAYER_CODE(mgmt_event->event) &
+		    !(NET_MGMT_GET_LAYER_CODE(mgmt_event->event) ==
 		      NET_MGMT_GET_LAYER_CODE(cb->event_mask)) ||
 		    (NET_MGMT_GET_COMMAND(mgmt_event->event) &&
 		     NET_MGMT_GET_COMMAND(cb->event_mask) &&
@@ -156,7 +164,6 @@ static inline void mgmt_run_callbacks(struct mgmt_event_entry *mgmt_event)
 		       NET_MGMT_GET_COMMAND(cb->event_mask)))) {
 			continue;
 		}
-
 
 #ifdef CONFIG_NET_MGMT_EVENT_INFO
 		if (mgmt_event->info_length) {
@@ -206,6 +213,7 @@ static void mgmt_thread(void)
 
 	while (1) {
 		k_sem_take(&network_event, K_FOREVER);
+		k_sem_take(&net_mgmt_lock, K_FOREVER);
 
 		NET_DBG("Handling events, forwarding it relevantly");
 
@@ -219,6 +227,7 @@ static void mgmt_thread(void)
 				k_sem_count_get(&network_event));
 
 			k_sem_init(&network_event, 0, UINT_MAX);
+			k_sem_give(&net_mgmt_lock);
 
 			continue;
 		}
@@ -226,6 +235,8 @@ static void mgmt_thread(void)
 		mgmt_run_callbacks(mgmt_event);
 
 		mgmt_clean_event(mgmt_event);
+
+		k_sem_give(&net_mgmt_lock);
 
 		k_yield();
 	}
@@ -283,18 +294,26 @@ void net_mgmt_add_event_callback(struct net_mgmt_event_callback *cb)
 {
 	NET_DBG("Adding event callback %p", cb);
 
+	k_sem_take(&net_mgmt_lock, K_FOREVER);
+
 	sys_slist_prepend(&event_callbacks, &cb->node);
 
 	mgmt_add_event_mask(cb->event_mask);
+
+	k_sem_give(&net_mgmt_lock);
 }
 
 void net_mgmt_del_event_callback(struct net_mgmt_event_callback *cb)
 {
 	NET_DBG("Deleting event callback %p", cb);
 
+	k_sem_take(&net_mgmt_lock, K_FOREVER);
+
 	sys_slist_find_and_remove(&event_callbacks, &cb->node);
 
 	mgmt_rebuild_global_event_mask();
+
+	k_sem_give(&net_mgmt_lock);
 }
 
 void net_mgmt_event_notify_with_info(u32_t mgmt_event, struct net_if *iface,

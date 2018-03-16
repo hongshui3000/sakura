@@ -81,6 +81,10 @@ The Zephyr nucleo_f091rc board configuration supports the following hardware fea
 +-----------+------------+-------------------------------------+
 | IWDG      | on-chip    | independent watchdog                |
 +-----------+------------+-------------------------------------+
+| I2C       | on-chip    | i2c controller                      |
++-----------+------------+-------------------------------------+
+| SPI       | on-chip    | SPI controller                      |
++-----------+------------+-------------------------------------+
 
 Other hardware features are not yet supported in this Zephyr port.
 
@@ -109,6 +113,16 @@ Default Zephyr Peripheral Mapping:
 - UART_1_RX : PB7
 - UART_2_TX : PA2
 - UART_2_RX : PA3
+- I2C1_SCL : PB8
+- I2C1_SDA : PB9
+- I2C2_SCL : PA11
+- I2C2_SDA : PA12
+- SPI1_SCK : PB3
+- SPI1_MISO : PB4
+- SPI1_MOSI : PB5
+- SPI2_SCK : PB13
+- SPI2_MISO : PB14
+- SPI2_MOSI : PB15
 
 For mode details please refer to `STM32 Nucleo-64 board User Manual`_.
 
@@ -158,7 +172,7 @@ References
    http://www.st.com/en/evaluation-tools/nucleo-f091rc.html
 
 .. _STM32F091 reference manual:
-   www.st.com/resource/en/reference_manual/dm00031936.pdf
+   http://www.st.com/resource/en/reference_manual/dm00031936.pdf
 
 .. _STM32 Nucleo-64 board User Manual:
    http://www.st.com/resource/en/user_manual/dm00105823.pdf

@@ -23,6 +23,7 @@ GTEXT(__swap)
 GTEXT(__svc)
 GTEXT(__pendsv)
 GTEXT(_do_kernel_oops)
+GTEXT(_arm_do_syscall)
 GDATA(_k_neg_eagain)
 
 GDATA(_kernel)
@@ -46,12 +47,12 @@ SECTION_FUNC(TEXT, __pendsv)
     /* Register the context switch */
     push {lr}
     bl _sys_k_event_logger_context_switch
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     pop {r0}
     mov lr, r0
 #else
     pop {lr}
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 #endif /* CONFIG_KERNEL_EVENT_LOGGER_CONTEXT_SWITCH  */
 
     /* load _kernel into r1 and current k_thread into r2 */
@@ -65,7 +66,7 @@ SECTION_FUNC(TEXT, __pendsv)
     /* save callee-saved + psp in thread */
     mrs ip, PSP
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     /* Store current r4-r7 */
     stmea r0!, {r4-r7}
     /* copy r8-r12 into r3-r7 */
@@ -76,7 +77,7 @@ SECTION_FUNC(TEXT, __pendsv)
     mov r7, ip
     /* store r8-12 */
     stmea r0!, {r3-r7}
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
     stmia r0, {v1-v8, ip}
 #ifdef CONFIG_FP_SHARING
     add r0, r2, #_thread_offset_to_preempt_float
@@ -84,7 +85,7 @@ SECTION_FUNC(TEXT, __pendsv)
 #endif /* CONFIG_FP_SHARING */
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
     /*
      * Prepare to clear PendSV with interrupts unlocked, but
@@ -97,14 +98,14 @@ SECTION_FUNC(TEXT, __pendsv)
     ldr v3, =_SCS_ICSR_UNPENDSV
 
     /* protect the kernel state while we play with the thread lists */
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     cpsid i
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
     movs.n r0, #_EXC_IRQ_DEFAULT_PRIO
     msr BASEPRI, r0
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
     /* _kernel is still in r1 */
 
@@ -130,7 +131,7 @@ SECTION_FUNC(TEXT, __pendsv)
     movs.n r3, #0
     str r3, [r2, #_thread_offset_to_basepri]
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     /* BASEPRI not available, previous interrupt disable state
      * maps to PRIMASK.
      *
@@ -158,7 +159,7 @@ _thread_irq_disabled:
     /* restore r4-r7, go back 9*4 bytes to the start of the stored block */
     subs r0, #36
     ldmia r0!, {r4-r7}
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
     /* restore BASEPRI for the incoming thread */
     msr BASEPRI, r0
 
@@ -176,19 +177,31 @@ _thread_irq_disabled:
 #endif /* CONFIG_MPU_STACK_GUARD */
 
 #ifdef CONFIG_USERSPACE
+    /* restore mode */
+    ldr r0, [r2, #_thread_offset_to_mode]
+    mrs r3, CONTROL
+    bic r3, #1
+    orr r3, r0
+    msr CONTROL, r3
+
     /* r2 contains k_thread */
     add r0, r2, #0
     push {r2, lr}
     blx configure_mpu_mem_domain
     pop {r2, lr}
-#endif /* CONFIG_USERSPACE */
+
+    add r0, r2, #0
+    push {r2, lr}
+    blx configure_mpu_user_context
+    pop {r2, lr}
+#endif
 
     /* load callee-saved + psp from thread */
     add r0, r2, #_thread_offset_to_callee_saved
     ldmia r0, {v1-v8, ip}
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
     msr PSP, ip
 
@@ -197,19 +210,19 @@ _thread_irq_disabled:
     push {lr}
     bl read_timer_end_of_swap
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     pop {r3}
     mov lr,r3
 #else
     pop {lr}
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
     ldm sp!,{r0-r3} /* Load back regs ro to r4 */
 #endif /* CONFIG_EXECUTION_BENCHMARKING */
 
     /* exc return */
     bx lr
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 SECTION_FUNC(TEXT, __svc)
     /* Use EXC_RETURN state to find out if stack frame is on the
      * MSP or PSP
@@ -256,7 +269,7 @@ _oops:
     blx _do_kernel_oops
     pop {pc}
 
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 /**
  *
  * @brief Service call handler
@@ -268,7 +281,6 @@ _oops:
  */
 
 SECTION_FUNC(TEXT, __svc)
-
     tst lr, #0x4    /* did we come from thread mode ? */
     ite eq  /* if zero (equal), came from handler mode */
         mrseq r0, MSP   /* handler mode, stack frame is on MSP */
@@ -283,10 +295,26 @@ SECTION_FUNC(TEXT, __svc)
     * 0: context switch
     * 1: irq_offload (if configured)
     * 2: kernel panic or oops (software generated fatal exception)
+    * 3: System call
     * Planned implementation of system calls for memory protection will
     * expand this case.
     */
     ands r1, #0xff
+#if CONFIG_USERSPACE
+    mrs r2, CONTROL
+
+    cmp r1, #3
+    beq _do_syscall
+
+    /*
+     * check that we are privileged before invoking other SVCs
+     * oops if we are unprivileged
+     */
+    tst r2, #0x1
+    bne _oops
+
+    cmp r1, #0
+#endif
     beq _context_switch
 
     cmp r1, #2
@@ -324,9 +352,49 @@ _oops:
     blx _do_kernel_oops
     pop {pc}
 
+#if CONFIG_USERSPACE
+    /*
+     * System call will setup a jump to the _do_arm_syscall function
+     * when the SVC returns via the bx lr.
+     *
+     * There is some trickery involved here because we have to preserve
+     * the original LR value so that we can return back to the caller of
+     * the SVC.
+     *
+     * On SVC exeption, the stack looks like the following:
+     * r0 - r1 - r2 - r3 - r12 - LR - PC - PSR
+     * r5 - r6 - call id - saved LR
+     *
+     */
+_do_syscall:
+    ldr r1, [r0, #24]   /* grab address of PC from stack frame */
+    str r1, [r0, #44]   /* store address to use for LR after syscall */
+    ldr r1, =_arm_do_syscall
+    str r1, [r0, #24]   /* overwrite the LR to point to _arm_do_syscall */
+
+    /* validate syscall limit, only set priv mode if valid */
+    ldr ip, =_SYSCALL_LIMIT
+    ldr r1, [r0, #40]
+    cmp r1, ip
+    blt valid_syscall_id
+
+    /* bad syscall id.  Set arg0 to bad id and set call_id to SYSCALL_BAD */
+    str r1, [r0, #0]
+    ldr r1, =_SYSCALL_BAD
+    str r1, [r0, #40]
+
+valid_syscall_id:
+    /* set mode to privileged, r2 still contains value from CONTROL */
+    bic r2, #1
+    msr CONTROL, r2
+
+    /* return from SVC to the modified LR - _arm_do_syscall */
+    bx lr
+#endif
+
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 /**
  *
@@ -370,16 +438,23 @@ SECTION_FUNC(TEXT, __swap)
 #ifdef CONFIG_EXECUTION_BENCHMARKING
     push {lr}
     bl read_timer_start_of_swap
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     pop {r3}
     mov lr,r3
 #else
     pop {lr}
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 #endif /* CONFIG_EXECUTION_BENCHMARKING */
     ldr r1, =_kernel
     ldr r2, [r1, #_kernel_offset_to_current]
     str r0, [r2, #_thread_offset_to_basepri]
+
+#ifdef CONFIG_USERSPACE
+    mrs r0, CONTROL
+    movs r3, #1
+    ands r0, r3
+    str r0, [r2, #_thread_offset_to_mode]
+#endif
 
     /*
      * Set __swap()'s default return code to -EAGAIN. This eliminates the need
@@ -389,7 +464,7 @@ SECTION_FUNC(TEXT, __swap)
     ldr r1, [r1]
     str r1, [r2, #_thread_offset_to_swap_return_value]
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     /* No priority-based interrupt masking on M0/M0+,
      * pending PendSV is used instead of svc
      */
@@ -403,11 +478,11 @@ SECTION_FUNC(TEXT, __swap)
      * of a higher priority pending.
      */
     cpsie i
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
     svc #0
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
     /* coming back from exception, r2 still holds the pointer to _current */
     ldr r0, [r2, #_thread_offset_to_swap_return_value]

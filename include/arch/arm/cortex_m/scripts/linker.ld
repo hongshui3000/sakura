@@ -74,6 +74,9 @@ MEMORY
 #ifdef CONFIG_TI_CCFG_PRESENT
     FLASH_CCFG            (rwx): ORIGIN = CCFG_ADDR, LENGTH = CCFG_SIZE
 #endif
+#ifdef CONFIG_CCM_BASE_ADDRESS
+    CCM                   (rw) : ORIGIN = CONFIG_CCM_BASE_ADDRESS, LENGTH = CONFIG_CCM_SIZE * 1K
+#endif
     SRAM                  (wx) : ORIGIN = RAM_ADDR, LENGTH = RAM_SIZE
 
     /* Used by and documented in include/linker/intlist.ld */
@@ -94,8 +97,16 @@ SECTIONS
 	KEEP(*(.dbghdr))
 	KEEP(*(".dbghdr.*"))
 #endif
-	_vector_start = .;
 	. = CONFIG_TEXT_SECTION_OFFSET;
+
+#if defined(CONFIG_SW_VECTOR_RELAY)
+	KEEP(*(.vector_relay_table))
+	KEEP(*(".vector_relay_table.*"))
+	KEEP(*(.vector_relay_handler))
+	KEEP(*(".vector_relay_handler.*"))
+#endif
+
+	_vector_start = .;
 	KEEP(*(.exc_vector_table))
 	KEEP(*(".exc_vector_table.*"))
 
@@ -118,6 +129,7 @@ SECTIONS
 	*(".text.*")
 	*(.gnu.linkonce.t.*)
 
+#include <linker/priv_stacks-text.ld>
 #include <linker/kobject-text.ld>
 
 	} GROUP_LINK_IN(ROMABLE_REGION)
@@ -154,6 +166,7 @@ SECTIONS
 #include <custom-rodata.ld>
 #endif
 
+#include <linker/priv_stacks-rom.ld>
 #include <linker/kobject-rom.ld>
 
 	/*
@@ -184,6 +197,7 @@ SECTIONS
 
     GROUP_START(RAMABLE_REGION)
 
+
 #if defined(CONFIG_SOC_SERIES_STM32F0X) && !defined(CONFIG_IS_BOOTLOADER)
     /* Must be first in ramable region */
 	SECTION_PROLOGUE(.st_stm32f0x_vt,(NOLOAD),)
@@ -194,9 +208,21 @@ SECTIONS
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 #endif
 
+#if defined(CONFIG_SW_VECTOR_RELAY)
+	/* Reserved 4 bytes to save vector table base address */
+	SECTION_PROLOGUE(.vt_pointer,(NOLOAD),)
+	{
+		*(.vt_pointer_section)
+		*(".vt_pointer_section.*")
+	}
+#endif
+
 #ifdef CONFIG_APPLICATION_MEMORY
 	SECTION_DATA_PROLOGUE(_APP_DATA_SECTION_NAME, (OPTIONAL),)
 	{
+
+#include <app_data_alignment.ld>
+
 		__app_ram_start = .;
 		__app_data_ram_start = .;
 		_image_ram_start = .;
@@ -224,7 +250,15 @@ SECTIONS
 		APP_INPUT_SECTION(".noinit.*")
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 
+	__app_last_address_used = .;
+
+	/* Pad out application ram area to make MPU friendly */
+	SECTION_PROLOGUE(app_pad, (NOLOAD OPTIONAL),)
+	{
+		. = ALIGN(_app_data_align);
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, RAMABLE_REGION)
 	__app_ram_end = .;
+	__app_ram_size = __app_ram_end - __app_ram_start;
 #endif /* CONFIG_APPLICATION_MEMORY */
 
     SECTION_DATA_PROLOGUE(_BSS_SECTION_NAME,(NOLOAD),)
@@ -281,6 +315,7 @@ SECTIONS
     __data_rom_start = LOADADDR(_DATA_SECTION_NAME);
 
 #include <linker/common-ram.ld>
+#include <linker/priv_stacks.ld>
 #include <linker/kobject.ld>
 
     __data_ram_end = .;
@@ -295,6 +330,45 @@ SECTIONS
     __kernel_ram_size = __kernel_ram_end - __kernel_ram_start;
 
     GROUP_END(RAMABLE_REGION)
+
+#ifdef CONFIG_CCM_BASE_ADDRESS
+
+    GROUP_START(CCM)
+
+	SECTION_PROLOGUE(_CCM_BSS_SECTION_NAME, (NOLOAD OPTIONAL),SUBALIGN(4))
+	{
+		__ccm_start = .;
+		__ccm_bss_start = .;
+		*(.ccm_bss)
+		*(".ccm_bss.*")
+	} GROUP_LINK_IN(CCM)
+
+	__ccm_bss_end = .;
+
+	SECTION_PROLOGUE(_CCM_NOINIT_SECTION_NAME, (NOLOAD OPTIONAL),SUBALIGN(4))
+	{
+		__ccm_noinit_start = .;
+		*(.ccm_noinit)
+		*(".ccm_noinit.*")
+	} GROUP_LINK_IN(CCM)
+
+	__ccm_noinit_end = .;
+
+	SECTION_PROLOGUE(_CCM_DATA_SECTION_NAME, (OPTIONAL),SUBALIGN(4))
+	{
+		__ccm_data_start = .;
+		*(.ccm_data)
+		*(".ccm_data.*")
+	} GROUP_LINK_IN(CCM AT> ROMABLE_REGION)
+
+	__ccm_data_end = .;
+	__ccm_end = .;
+
+	__ccm_data_rom_start = LOADADDR(_CCM_DATA_SECTION_NAME);
+
+    GROUP_END(CCM)
+
+#endif /* CONFIG_CCM_BASE_ADDRESS */
 
 #ifdef CONFIG_CUSTOM_SECTIONS_LD
 /* Located in project source directory */

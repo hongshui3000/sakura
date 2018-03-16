@@ -47,6 +47,14 @@
 #include <stm32f0xx_ll_iwdg.h>
 #endif
 
+#ifdef CONFIG_I2C_STM32_V2
+#include <stm32f0xx_ll_i2c.h>
+#endif
+
+#ifdef CONFIG_SPI_STM32
+#include <stm32f0xx_ll_spi.h>
+#endif
+
 #endif /* !_ASMLANGUAGE */
 
 #endif /* _STM32F0_SOC_H_ */

@@ -21,6 +21,8 @@
 #include <net/arp.h>
 #include "net_private.h"
 
+#define NET_BUF_TIMEOUT MSEC(100)
+
 static struct arp_entry arp_table[CONFIG_NET_ARP_TABLE_SIZE];
 
 static inline struct arp_entry *find_entry(struct net_if *iface,
@@ -100,12 +102,13 @@ static inline struct net_pkt *prepare_arp(struct net_if *iface,
 	struct net_eth_hdr *eth;
 	struct in_addr *my_addr;
 
-	pkt = net_pkt_get_reserve_tx(sizeof(struct net_eth_hdr), K_FOREVER);
+	pkt = net_pkt_get_reserve_tx(sizeof(struct net_eth_hdr),
+				     NET_BUF_TIMEOUT);
 	if (!pkt) {
 		return NULL;
 	}
 
-	frag = net_pkt_get_frag(pkt, K_FOREVER);
+	frag = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
 	if (!frag) {
 		net_pkt_unref(pkt);
 		return NULL;
@@ -186,11 +189,13 @@ struct net_pkt *net_arp_prepare(struct net_pkt *pkt)
 	if (net_pkt_ll_reserve(pkt) != sizeof(struct net_eth_hdr)) {
 		/* Add the ethernet header if it is missing. */
 		struct net_buf *header;
-		struct net_linkaddr *ll;
+
+		header = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
+		if (!header) {
+			return NULL;
+		}
 
 		net_pkt_set_ll_reserve(pkt, sizeof(struct net_eth_hdr));
-
-		header = net_pkt_get_frag(pkt, K_FOREVER);
 
 		hdr = (struct net_eth_hdr *)(header->data -
 					     net_pkt_ll_reserve(pkt));
@@ -359,12 +364,13 @@ static inline struct net_pkt *prepare_arp_reply(struct net_if *iface,
 	struct net_arp_hdr *hdr, *query;
 	struct net_eth_hdr *eth, *eth_query;
 
-	pkt = net_pkt_get_reserve_tx(sizeof(struct net_eth_hdr), K_FOREVER);
+	pkt = net_pkt_get_reserve_tx(sizeof(struct net_eth_hdr),
+				     NET_BUF_TIMEOUT);
 	if (!pkt) {
 		goto fail;
 	}
 
-	frag = net_pkt_get_frag(pkt, K_FOREVER);
+	frag = net_pkt_get_frag(pkt, NET_BUF_TIMEOUT);
 	if (!frag) {
 		goto fail;
 	}
@@ -456,6 +462,8 @@ enum net_verdict net_arp_input(struct net_pkt *pkt)
 		reply = prepare_arp_reply(net_pkt_iface(pkt), pkt);
 		if (reply) {
 			net_if_queue_tx(net_pkt_iface(reply), reply);
+		} else {
+			NET_DBG("Cannot send ARP reply");
 		}
 		break;
 

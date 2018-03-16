@@ -24,9 +24,6 @@
 /** CDC Specification release number in BCD format */
 #define CDC_SRN_1_20			0x0120
 
-/** CDC Class Code */
-#define COMMUNICATION_DEVICE_CLASS	0x02
-
 /** Communications Class Subclass Codes */
 #define ACM_SUBCLASS			0x02
 #define ECM_SUBCLASS			0x06
@@ -65,6 +62,8 @@
  * for ACM devices
  * @note PSTN120.pdf, 6.3, Table 13
  */
+#define CDC_SEND_ENC_CMD		0x00
+#define CDC_GET_ENC_RSP			0x01
 #define SET_LINE_CODING			0x20
 #define GET_LINE_CODING			0x21
 #define SET_CONTROL_LINE_STATE		0x22

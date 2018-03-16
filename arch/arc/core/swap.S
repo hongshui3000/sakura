@@ -71,7 +71,7 @@ SECTION_FUNC(TEXT, __swap)
 	st _CAUSE_COOP, [r2, _thread_offset_to_relinquish_cause]
 
 	/*
-         * Carve space for the return value. Setting it to a defafult of
+         * Carve space for the return value. Setting it to a default of
          * -EAGAIN eliminates the need for the timeout code to set it.
          * If another value is ever needed, it can be modified with
          * _set_thread_return_value().
@@ -89,6 +89,11 @@ SECTION_FUNC(TEXT, __swap)
 	/* disable stack checking during swap */
 	bclr r3, r3, _ARC_V2_STATUS32_SC_BIT
 	kflag r3
+#endif
+
+#ifdef CONFIG_ARC_HAS_SECURE
+	lr r3, [_ARC_V2_SEC_STAT]
+	push_s r3
 #endif
 	push_s blink
 
@@ -110,10 +115,10 @@ SECTION_FUNC(TEXT, __swap)
 
 	_load_callee_saved_regs
 
-#ifdef CONFIG_MPU_STACK_GUARD
+#if defined(CONFIG_MPU_STACK_GUARD) || defined(CONFIG_USERSPACE)
 	push_s r2
 	mov r0, r2
-	bl configure_mpu_stack_guard
+	bl configure_mpu_thread
 	pop_s r2
 #endif
 
@@ -137,6 +142,12 @@ _swap_return_from_coop:
 	bbit1 ilink, _ARC_V2_STATUS32_AE_BIT, _return_from_exc
 
 	pop_s blink /* pc into blink */
+#ifdef CONFIG_ARC_HAS_SECURE
+	pop_s r3    /* pop SEC_STAT */
+	/* sflag r3 */
+	/* sflag instruction is not supported in current ARC GNU */
+	.long 0x00ff302f
+#endif
 	pop_s r3    /* status32 into r3 */
 	kflag r3    /* write status32 */
 
@@ -152,10 +163,21 @@ _swap_return_from_firq:
 	bbit1 r3, _ARC_V2_STATUS32_AE_BIT, _return_from_exc_irq
 
 	/* pretend interrupt happened to use rtie instruction */
-	lr r3, [_ARC_V2_AUX_IRQ_ACT]
-	brne r3,0,_swap_already_in_irq
 
-	or r3,r3,(1<<(CONFIG_NUM_IRQ_PRIO_LEVELS-1)) /* use lowest */
+#ifdef CONFIG_ARC_HAS_SECURE
+	lr r3, [_ARC_V2_SEC_STAT]
+	/* set SEC_STAT.IRM = SECURE for interrupt return */
+	bset r3, r3, 3
+	/* sflag r3 */
+	/* sflag instruction is not supported in current ARC GNU */
+	.long 0x00ff302f
+#endif
+
+	lr r3, [_ARC_V2_AUX_IRQ_ACT]
+	brne r3, 0, _swap_already_in_irq
+
+	/* use lowest interrupt priority */
+	or r3, r3, (1<<(CONFIG_NUM_IRQ_PRIO_LEVELS-1))
 	sr r3, [_ARC_V2_AUX_IRQ_ACT]
 
 _swap_already_in_irq:
@@ -164,7 +186,7 @@ _swap_already_in_irq:
 .balign 4
 _return_from_exc_irq:
 	_pop_irq_stack_frame
-	sub_s sp, sp, 8
+	sub_s sp, sp, ___isf_t_status32_OFFSET - ___isf_t_pc_OFFSET + 4
 
 _return_from_exc:
 
@@ -172,8 +194,10 @@ _return_from_exc:
 	ld ilink, [sp] /* pc into ilink */
 	sr ilink, [_ARC_V2_ERET]
 
+	/* SEC_STAT is bypassed when CONFIG_ARC_HAS_SECURE */
+
 	/* put status32 into estatus */
-	ld ilink, [sp, 4] /* status32 into ilink */
+	ld ilink, [sp, ___isf_t_status32_OFFSET - ___isf_t_pc_OFFSET]
 	sr ilink, [_ARC_V2_ERSTATUS]
-	add_s sp, sp, 8
+	add_s sp, sp, ___isf_t_status32_OFFSET - ___isf_t_pc_OFFSET + 4
 	rtie

@@ -2,7 +2,7 @@ sample:
   description: TBD
   name: TBD
 tests:
-  - test:
-      build_only: true
-      platform_whitelist: arduino_101_sss
-      tags: samples
+  test:
+    harness: sensor
+    tags: samples sensor
+    depends_on: i2c gpio

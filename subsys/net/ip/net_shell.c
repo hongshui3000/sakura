@@ -74,6 +74,8 @@ static inline const char *addrtype2str(enum net_addr_type addr_type)
 		return "DHCP";
 	case NET_ADDR_MANUAL:
 		return "manual";
+	case NET_ADDR_OVERRIDABLE:
+		return "overridable";
 	}
 
 	return "<invalid type>";
@@ -667,8 +669,8 @@ static void tcp_cb(struct net_tcp *tcp, void *user_data)
 	int *count = user_data;
 	u16_t recv_mss = net_tcp_get_recv_mss(tcp);
 
-	printk("%p    %5u     %5u %10u %10u %5u   %s\n",
-	       tcp,
+	printk("%p %p   %5u    %5u %10u %10u %5u   %s\n",
+	       tcp, tcp->context,
 	       ntohs(net_sin6_ptr(&tcp->context->local)->sin6_port),
 	       ntohs(net_sin6(&tcp->context->remote)->sin6_port),
 	       tcp->send_seq, tcp->send_ack, recv_mss,
@@ -1161,7 +1163,7 @@ int net_shell_cmd_conn(int argc, char *argv[])
 #endif
 
 #if defined(CONFIG_NET_TCP)
-	printk("\nTCP        Src port  Dst port   Send-Seq   Send-Ack  MSS"
+	printk("\nTCP        Context   Src port Dst port   Send-Seq   Send-Ack  MSS"
 	       "%s\n", IS_ENABLED(CONFIG_NET_DEBUG_TCP) ? "    State" : "");
 
 	count = 0;
@@ -1396,37 +1398,6 @@ static char *http_str_output(char *output, int outlen, const char *str, int len)
 	return output;
 }
 
-#if !defined(CONFIG_HTTP_APP)
-static void http_server_cb(struct http_server_ctx *entry,
-			   void *user_data)
-{
-	int *count = user_data;
-	static char output[MAX_HTTP_OUTPUT_LEN];
-
-	/* +7 for []:port */
-	char addr_local[ADDR_LEN + 7];
-	char addr_remote[ADDR_LEN + 7] = "";
-
-	get_addresses(entry->req.net_ctx, addr_local, sizeof(addr_local),
-		      addr_remote, sizeof(addr_remote));
-
-	if (*count == 0) {
-		printk("        HTTP ctx    Local           \t"
-		       "Remote          \tURL\n");
-	}
-
-	(*count)++;
-
-	printk("[%2d] %c%c %p  %16s\t%16s\t%s\n",
-	       *count, entry->enabled ? 'E' : 'D',
-	       entry->is_https ? 'S' : ' ',
-	       entry, addr_local, addr_remote,
-	       http_str_output(output, sizeof(output) - 1,
-			       entry->req.url, entry->req.url_len));
-}
-#endif
-
-#if defined(CONFIG_HTTP_APP)
 static void http_server_cb(struct http_ctx *entry, void *user_data)
 {
 	int *count = user_data;
@@ -1463,7 +1434,6 @@ static void http_server_cb(struct http_ctx *entry, void *user_data)
 				       entry->http.url, entry->http.url_len));
 	}
 }
-#endif /* CONFIG_HTTP_APP */
 #endif /* CONFIG_NET_DEBUG_HTTP_CONN && CONFIG_HTTP_SERVER */
 
 int net_shell_cmd_http(int argc, char *argv[])
@@ -1564,9 +1534,8 @@ static void context_info(struct net_context *context, void *user_data)
 		}
 
 #if defined(CONFIG_NET_DEBUG_NET_PKT)
-		printk("%p\t%zu\t%u\t%u\tETX\n",
-		       slab, slab->num_blocks * slab->block_size,
-		       slab->num_blocks, k_mem_slab_num_free_get(slab));
+		printk("%p\t%u\t%u\tETX\n",
+		       slab, slab->num_blocks, k_mem_slab_num_free_get(slab));
 #else
 		printk("%p\t%d\tETX\n", slab, slab->num_blocks);
 #endif
@@ -1582,8 +1551,8 @@ static void context_info(struct net_context *context, void *user_data)
 		}
 
 #if defined(CONFIG_NET_DEBUG_NET_PKT)
-		printk("%p\t%d\t%d\t%d\tEDATA (%s)\n",
-		       pool, pool->pool_size, pool->buf_count,
+		printk("%p\t%d\t%d\tEDATA (%s)\n",
+		       pool, pool->buf_count,
 		       pool->avail_count, pool->name);
 #else
 		printk("%p\t%d\tEDATA\n", pool, pool->buf_count);
@@ -1611,22 +1580,20 @@ int net_shell_cmd_mem(int argc, char *argv[])
 	printk("Network buffer pools:\n");
 
 #if defined(CONFIG_NET_BUF_POOL_USAGE)
-	printk("Address\t\tSize\tTotal\tAvail\tName\n");
+	printk("Address\t\tTotal\tAvail\tName\n");
 
-	printk("%p\t%zu\t%d\t%u\tRX\n",
-	       rx, rx->num_blocks * rx->block_size,
-	       rx->num_blocks, k_mem_slab_num_free_get(rx));
+	printk("%p\t%d\t%u\tRX\n",
+	       rx, rx->num_blocks, k_mem_slab_num_free_get(rx));
 
-	printk("%p\t%zu\t%d\t%u\tTX\n",
-	       tx, tx->num_blocks * tx->block_size,
-	       tx->num_blocks, k_mem_slab_num_free_get(tx));
+	printk("%p\t%d\t%u\tTX\n",
+	       tx, tx->num_blocks, k_mem_slab_num_free_get(tx));
 
-	printk("%p\t%d\t%d\t%d\tRX DATA (%s)\n",
-	       rx_data, rx_data->pool_size, rx_data->buf_count,
+	printk("%p\t%d\t%d\tRX DATA (%s)\n",
+	       rx_data, rx_data->buf_count,
 	       rx_data->avail_count, rx_data->name);
 
-	printk("%p\t%d\t%d\t%d\tTX DATA (%s)\n",
-	       tx_data, tx_data->pool_size, tx_data->buf_count,
+	printk("%p\t%d\t%d\tTX DATA (%s)\n",
+	       tx_data, tx_data->buf_count,
 	       tx_data->avail_count, tx_data->name);
 #else
 	printk("(CONFIG_NET_BUF_POOL_USAGE to see free #s)\n");
@@ -1783,6 +1750,7 @@ static enum net_verdict _handle_ipv6_echo_reply(struct net_pkt *pkt)
 	k_sem_give(&ping_timeout);
 	_remove_ipv6_ping_handler();
 
+	net_pkt_unref(pkt);
 	return NET_OK;
 }
 
@@ -1860,6 +1828,7 @@ static enum net_verdict _handle_ipv4_echo_reply(struct net_pkt *pkt)
 	k_sem_give(&ping_timeout);
 	_remove_ipv4_ping_handler();
 
+	net_pkt_unref(pkt);
 	return NET_OK;
 }
 
@@ -2541,7 +2510,7 @@ static struct shell_cmd net_commands[] = {
 		"arp flush\n\tRemove all entries from ARP cache" },
 	{ "conn", net_shell_cmd_conn,
 		"\n\tPrint information about network connections" },
-	{ "dns", net_shell_cmd_dns, "\n\tShow how DNS is configure\n"
+	{ "dns", net_shell_cmd_dns, "\n\tShow how DNS is configured\n"
 		"dns cancel\n\tCancel all pending requests\n"
 		"dns <hostname> [A or AAAA]\n\tQuery IPv4 address (default) or "
 		"IPv6 address for a  host name" },

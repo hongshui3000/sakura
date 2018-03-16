@@ -4,6 +4,15 @@ zephyr_sources_ifdef(CONFIG_SOC_FLASH_NRF5 soc_flash_nrf5.c)
 zephyr_sources_ifdef(CONFIG_SOC_FLASH_MCUX soc_flash_mcux.c)
 zephyr_sources_ifdef(CONFIG_FLASH_PAGE_LAYOUT flash_page_layout.c)
 zephyr_sources_ifdef(CONFIG_USERSPACE flash_handlers.c)
+zephyr_sources_ifdef(CONFIG_SOC_FLASH_SAM0 flash_sam0.c)
+zephyr_sources_ifdef(CONFIG_SOC_FLASH_NIOS2_QSPI soc_flash_nios2_qspi.c)
+
+if(CONFIG_SOC_SERIES_STM32F0X)
+zephyr_sources_ifdef(CONFIG_SOC_FLASH_STM32
+	flash_stm32.c
+	flash_stm32f0x.c
+	)
+endif()
 
 if(CONFIG_SOC_SERIES_STM32F3X)
 zephyr_sources_ifdef(CONFIG_SOC_FLASH_STM32 flash_stm32f3x.c)
@@ -24,4 +33,4 @@ zephyr_sources_ifdef(CONFIG_SOC_FLASH_STM32
 	)
 endif()
 
-zephyr_include_directories_ifdef(CONFIG_SOC_FLASH_NRF5_RADIO_SYNC $ENV{ZEPHYR_BASE}/subsys/bluetooth)
+zephyr_include_directories_ifdef(CONFIG_SOC_FLASH_NRF5_RADIO_SYNC ${ZEPHYR_BASE}/subsys/bluetooth)

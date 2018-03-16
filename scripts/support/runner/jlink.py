@@ -2,12 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-'''Runner for debugging with JLink.'''
+'''Runner for debugging with J-Link.'''
 
-from os import path
 import os
-
-from .core import ZephyrBinaryRunner, get_env_or_bail
+import tempfile
+from .core import ZephyrBinaryRunner, RunnerCaps, BuildConfiguration
 
 DEFAULT_JLINK_GDB_PORT = 2331
 
@@ -16,81 +15,84 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
     '''Runner front-end for the J-Link GDB server.'''
 
     def __init__(self, device,
-                 gdbserver='JLinkGDBServer', iface='swd', elf_name=None,
-                 gdb=None, gdb_port=DEFAULT_JLINK_GDB_PORT, tui=None,
-                 debug=False):
+                 commander='JLinkExe', bin_name=None,
+                 flash_addr=0x0, erase=True,
+                 gdbserver='JLinkGDBServer', iface='swd', speed='auto',
+                 elf_name=None, gdb=None, gdb_port=DEFAULT_JLINK_GDB_PORT,
+                 tui=False, debug=False):
         super(JLinkBinaryRunner, self).__init__(debug=debug)
         self.device = device
+        self.commander = commander
+        self.bin_name = bin_name
+        self.flash_addr = flash_addr
+        self.erase = erase
         self.gdbserver_cmd = [gdbserver]
         self.iface = iface
+        self.speed = speed
         self.elf_name = elf_name
         self.gdb_cmd = [gdb] if gdb is not None else None
         self.gdb_port = gdb_port
-        self.tui_arg = [tui] if tui is not None else []
+        self.tui_arg = ['-tui'] if tui else []
 
-    def replaces_shell_script(shell_script, command):
-        return (command in {'debug', 'debugserver'} and
-                shell_script == 'jlink.sh')
+    @classmethod
+    def name(cls):
+        return 'jlink'
 
-    def create_from_env(command, debug):
-        '''Create runner from environment.
+    @classmethod
+    def capabilities(cls):
+        return RunnerCaps(flash_addr=True)
 
-        Required:
+    @classmethod
+    def do_add_parser(cls, parser):
+        # Required:
+        parser.add_argument('--device', required=True, help='device name')
 
-        - JLINK_DEVICE: device name
+        # Optional:
+        parser.add_argument('--iface', default='swd',
+                            help='interface to use, default is swd')
+        parser.add_argument('--speed', default='auto',
+                            help='interface speed, default is autodetect')
+        parser.add_argument('--tui', default=False, action='store_true',
+                            help='if given, GDB uses -tui')
+        parser.add_argument('--gdbserver', default='JLinkGDBServer',
+                            help='GDB server, default is JLinkGDBServer')
+        parser.add_argument('--gdb-port', default=DEFAULT_JLINK_GDB_PORT,
+                            help='pyocd gdb port, defaults to {}'.format(
+                                DEFAULT_JLINK_GDB_PORT))
+        parser.add_argument('--commander', default='JLinkExe',
+                            help='J-Link Commander, default is JLinkExe')
+        parser.add_argument('--erase', default=False, action='store_true',
+                            help='if given, mass erase flash before loading')
 
-        Required for 'debug':
-
-        - GDB: gdb to use
-        - O: build output directory
-        - KERNEL_ELF_NAME: zephyr kernel binary in ELF format
-
-        Optional for 'debug':
-
-        - TUI: if present, passed to gdb server used to flash
-
-        Optional for 'debug', 'debugserver':
-
-        - JLINK_GDBSERVER: default is JLinkGDBServer
-        - GDB_PORT: default is 2331
-        - JLINK_IF: default is swd
-        '''
-        device = get_env_or_bail('JLINK_DEVICE')
-
-        gdb = os.environ.get('GDB', None)
-        o = os.environ.get('O', None)
-        elf = os.environ.get('KERNEL_ELF_NAME', None)
-        elf_name = None
-        if o is not None:
-            if elf is not None:
-                elf_name = path.join(o, elf)
-        tui = os.environ.get('TUI', None)
-
-        gdbserver = os.environ.get('JLINK_GDBSERVER', 'JLinkGDBServer')
-        gdb_port = int(os.environ.get('GDB_PORT',
-                                      str(DEFAULT_JLINK_GDB_PORT)))
-        iface = os.environ.get('JLINK_IF', 'swd')
-
-        return JLinkBinaryRunner(device, gdbserver=gdbserver,
-                                 iface=iface, elf_name=elf_name,
-                                 gdb=gdb, gdb_port=gdb_port, tui=tui,
-                                 debug=debug)
+    @classmethod
+    def create_from_args(cls, args):
+        build_conf = BuildConfiguration(os.getcwd())
+        flash_addr = cls.get_flash_address(args, build_conf)
+        return JLinkBinaryRunner(args.device, gdbserver=args.gdbserver,
+                                 commander=args.commander,
+                                 bin_name=args.kernel_bin,
+                                 flash_addr=flash_addr, erase=args.erase,
+                                 iface=args.iface, speed=args.speed,
+                                 elf_name=args.kernel_elf,
+                                 gdb=args.gdb, gdb_port=args.gdb_port,
+                                 tui=args.tui, debug=args.verbose)
 
     def print_gdbserver_message(self):
-        print('JLink GDB server running on port {}'.format(self.gdb_port))
+        print('J-Link GDB server running on port {}'.format(self.gdb_port))
 
-    def run(self, command, **kwargs):
-        if command not in {'debug', 'debugserver'}:
-            raise ValueError('{} is not supported'.format(command))
-
+    def do_run(self, command, **kwargs):
         server_cmd = (self.gdbserver_cmd +
-                      ['-port', str(self.gdb_port),
+                      ['-select', 'usb', # only USB connections supported
+                       '-port', str(self.gdb_port),
                        '-if', self.iface,
+                       '-speed', self.speed,
                        '-device', self.device,
                        '-silent',
                        '-singlerun'])
 
-        if command == 'debugserver':
+        if command == 'flash':
+            self.flash(**kwargs)
+        elif command == 'debugserver':
             self.print_gdbserver_message()
             self.check_call(server_cmd)
         else:
@@ -107,3 +109,30 @@ class JLinkBinaryRunner(ZephyrBinaryRunner):
                            '-ex', 'load'])
             self.print_gdbserver_message()
             self.run_server_and_client(server_cmd, client_cmd)
+
+    def flash(self, **kwargs):
+        if self.bin_name is None:
+            raise ValueError('Cannot flash; bin_name is missing')
+
+        lines = ['r'] # Reset and halt the target
+
+        if self.erase:
+            lines.append('erase') # Erase all flash sectors
+
+        lines.append('loadfile {} 0x{:x}'.format(self.bin_name,
+                                                 self.flash_addr))
+        lines.append('g') # Start the CPU
+        lines.append('q') # Close the connection and quit
+
+        with tempfile.NamedTemporaryFile(suffix='.jlink') as f:
+            f.writelines(bytes(line + '\n', 'utf-8') for line in lines)
+            f.flush()
+
+            cmd = ([self.commander] +
+                   ['-if', self.iface,
+                    '-speed', self.speed,
+                    '-device', self.device,
+                    '-CommanderScript', f.name])
+
+            print('Flashing Target Device')
+            self.check_call(cmd)

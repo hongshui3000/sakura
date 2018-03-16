@@ -96,8 +96,8 @@ int net_ipv4_finalize_raw(struct net_pkt *pkt, u8_t next_header)
 
 	total_len = net_pkt_get_len(pkt);
 
-	NET_IPV4_HDR(pkt)->len[0] = total_len / 256;
-	NET_IPV4_HDR(pkt)->len[1] = total_len - NET_IPV4_HDR(pkt)->len[0] * 256;
+	NET_IPV4_HDR(pkt)->len[0] = total_len >> 8;
+	NET_IPV4_HDR(pkt)->len[1] = total_len & 0xff;
 
 	NET_IPV4_HDR(pkt)->chksum = 0;
 	NET_IPV4_HDR(pkt)->chksum = ~net_calc_chksum_ipv4(pkt);
@@ -142,6 +142,10 @@ static inline enum net_verdict process_icmpv4_pkt(struct net_pkt *pkt,
 	struct net_icmp_hdr hdr, *icmp_hdr;
 
 	icmp_hdr = net_icmpv4_get_hdr(pkt, &hdr);
+	if (!icmp_hdr) {
+		NET_DBG("NULL ICMPv4 header - dropping");
+		return NET_DROP;
+	}
 
 	NET_DBG("ICMPv4 packet received type %d code %d",
 		icmp_hdr->type, icmp_hdr->code);

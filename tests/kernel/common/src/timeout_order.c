@@ -36,7 +36,7 @@ static void thread(void *p1, void *p2, void *p3)
 static K_THREAD_STACK_ARRAY_DEFINE(stacks, NUM_TIMEOUTS, STACKSIZE);
 static struct k_thread threads[NUM_TIMEOUTS];
 
-void timeout_order_test(void)
+void test_timeout_order(void)
 {
 	int ii, prio = k_thread_priority_get(k_current_get()) + 1;
 
@@ -53,7 +53,11 @@ void timeout_order_test(void)
 
 	/* sync on tick */
 	while (uptime == k_uptime_get_32())
+#if defined(CONFIG_ARCH_POSIX)
+		posix_halt_cpu();
+#else
 		;
+#endif
 
 	for (ii = 0; ii < NUM_TIMEOUTS; ii++) {
 		k_timer_start(&timer[ii], 100, 0);

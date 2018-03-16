@@ -22,13 +22,31 @@ choice
 	  Select the Bluetooth Link Layer to compile.
 
 config BT_LL_SW
-	bool "Use the software-based BLE Link Layer"
+	bool "Software-based BLE Link Layer"
 	help
 	  Use Zephyr software BLE Link Layer implementation.
 
 endchoice
 
 comment "BLE Controller configuration"
+
+config BT_CTLR_RX_PRIO_STACK_SIZE
+	# Hidden option for Controller's Co-Operative high priority Rx thread
+	# stack size.
+	int
+	default 448
+
+config BT_CTLR_RX_PRIO
+	# Hidden option for Controller's Co-Operative high priority Rx thread
+	# priority.
+	int
+	default 6
+
+config BT_CTLR_FILTER
+	# Hidden option to enable controller whitelist feature
+	depends on BT_LL_SW
+	bool
+	default y
 
 config BT_CTLR_HCI_VS_BUILD_INFO
 	string "Zephyr HCI VS Build Info string"
@@ -41,6 +59,7 @@ config BT_CTLR_HCI_VS_BUILD_INFO
 	  character is required at the beginning to separate it from the
 	  already included information.
 
+if BT_LL_SW
 config BT_CTLR_DUP_FILTER_LEN
 	prompt "Number of addresses in the scan duplicate filter"
 	int
@@ -89,10 +108,15 @@ config BT_CTLR_TX_BUFFER_SIZE
 config BT_CTLR_COMPANY_ID
 	prompt "Company Id"
 	hex
-	default 0xFFFF
+	default 0x05F1
 	range 0x0000 0xFFFF
 	help
-	  Set the Company Id that will be used in VERSION_IND PDU.
+	  Set the Bluetooth Company Identifier that will be used in
+	  the VERSION_IND PDU. The Linux Foundation's Company Identifier
+	  (0x05F1) is the default value for this option although silicon vendors
+	  and hardware manufacturers can set their own. The full list of
+	  Bluetooth Company Identifiers can be found here:
+	  https://www.bluetooth.com/specifications/assigned-numbers/company-identifiers
 
 config BT_CTLR_SUBVERSION_NUMBER
 	prompt "Subversion Number"
@@ -101,16 +125,6 @@ config BT_CTLR_SUBVERSION_NUMBER
 	range 0x0000 0xFFFF
 	help
 	  Set the Subversion Number that will be used in VERSION_IND PDU.
-
-config BT_CTLR_RX_PRIO_STACK_SIZE
-	int
-	default 448
-
-config BT_CTLR_RX_PRIO
-	# Hidden option for Controller's Co-Operative high priority Rx thread
-	# priority.
-	int
-	default 6
 
 comment "BLE Controller features"
 
@@ -309,12 +323,11 @@ config BT_CTLR_XTAL_THRESHOLD
 	prompt "Crystal shutdown threshold in uS"
 	depends on BT_CTLR_XTAL_ADVANCED
 	int
-	default 5168
+	default 1500
 	help
 	  Configure the optimal delta in micro seconds between two consecutive
-	  radio events below which (active clock) crystal will be retained. This
-	  value is board dependent. The value 5168 is based on crude calculation
-	  for nRF51 current versus startup time of high frequency crystal.
+	  radio events, event done to next preparation, below which (active
+	  clock) crystal will be retained. This value is board dependent.
 
 config BT_CTLR_SCHED_ADVANCED
 	bool "Advanced scheduling"
@@ -348,6 +361,19 @@ config BT_CTLR_TIFS_HW
 	default y
 	help
 	  Enable use of hardware accelerated tIFS Trx switching.
+
+config BT_CTLR_SW_SWITCH_SINGLE_TIMER
+	bool "Single TIMER tIFS Trx SW switching"
+	depends on (!BT_CTLR_TIFS_HW) && SOC_SERIES_NRF52X
+	help
+	  Implement the tIFS Trx SW switch with the same TIMER
+	  instance, as the one used for BLE event timing. Requires
+	  SW switching be enabled. Using a single TIMER:
+	  (+) frees up one TIMER instance
+	  (+) removes jitter for HCTO implementation
+	  (-) introduces drifting to the absolute time inside BLE
+	  events, that increases linearly with the number of
+	  packets exchanged in the event.
 
 if BT_CONN
 
@@ -462,6 +488,8 @@ config BT_CTLR_PA_LNA_GPIOTE_CHAN
 	help
 	  Select the nRF5 GPIOTE channel to use for PA/LNA GPIO feature.
 
+endif # BT_LL_SW
+
 comment "BLE Controller debug configuration"
 
 config BT_CTLR_ASSERT_HANDLER
@@ -488,7 +516,6 @@ config BT_CTLR_DEBUG_PINS
 	help
 	  Turn on debug GPIO toggling for the BLE Controller. This is useful
 	  when debugging with a logic analyzer or profiling certain sections of
-	  the code. When enabled, pins P0.16 to P0.25 are taken over exclusively
-	  by the controller and cannot be used outside of it.
+	  the code.
 
 endif # BT_CTLR

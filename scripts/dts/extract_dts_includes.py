@@ -135,11 +135,13 @@ class Loader(yaml.Loader):
     def extractFile(self, filename):
         filepath = os.path.join(os.path.dirname(self._root), filename)
         if not os.path.isfile(filepath):
-            # we need to look in common directory
-            # take path and back up 2 directories and tack on '/common/yaml'
+            # we need to look in bindings/* directories
+            # take path and back up 1 directory and parse in '/bindings/*'
             filepath = os.path.dirname(self._root).split('/')
-            filepath = '/'.join(filepath[:-2])
-            filepath = os.path.join(filepath + '/common/yaml', filename)
+            filepath = '/'.join(filepath[:-1])
+            for root, dirnames, file in os.walk(filepath):
+                if fnmatch.filter(file, filename):
+                    filepath = os.path.join(root, filename)
         with open(filepath, 'r') as f:
             return yaml.load(f, Loader)
 
@@ -171,8 +173,8 @@ def compress_nodes(nodes, path):
     if 'props' in nodes:
         status = nodes['props'].get('status')
 
-    if status == "disabled":
-        return
+        if status == "disabled":
+            return
 
     if isinstance(nodes, dict):
         reduced[path] = dict(nodes)
@@ -197,6 +199,19 @@ def find_parent_irq_node(node_address):
 
     return reduced[phandles[interrupt_parent]]
 
+def find_parent_prop(node_address, prop):
+    parent_address = ''
+
+    for comp in node_address.split('/')[1:-1]:
+        parent_address += '/' + comp
+
+    if prop in reduced[parent_address]['props']:
+        parent_prop = reduced[parent_address]['props'].get(prop)
+    else:
+        raise Exception("Parent of node " + node_address +
+                        " has no " + prop + " property")
+
+    return parent_prop
 
 def extract_interrupts(node_address, yaml, y_key, names, defs, def_label):
     node = reduced[node_address]
@@ -221,7 +236,7 @@ def extract_interrupts(node_address, yaml, y_key, names, defs, def_label):
             name = []
         else:
             try:
-                name = [names.pop(0).upper()]
+                name = [convert_string_to_label(names.pop(0)).upper()]
             except:
                 name = []
 
@@ -257,7 +272,7 @@ def extract_reg_prop(node_address, names, defs, def_label, div, post_label):
     address_cells = reduced['/']['props'].get('#address-cells')
     size_cells = reduced['/']['props'].get('#size-cells')
     address = ''
-    for comp in node_address.split('/')[1:]:
+    for comp in node_address.split('/')[1:-1]:
         address += '/' + comp
         address_cells = reduced[address]['props'].get(
             '#address-cells', address_cells)
@@ -428,6 +443,10 @@ def extract_single(node_address, yaml, prop, key, prefix, defs, def_label):
     else:
         k = convert_string_to_label(key).upper()
         label = def_label + '_' + k
+
+        if prop == 'parent-label':
+            prop = find_parent_prop(node_address, 'label')
+
         if isinstance(prop, str):
             prop = "\"" + prop + "\""
         prop_def[label] = prop
@@ -458,17 +477,58 @@ def extract_string_prop(node_address, yaml, key, label, defs):
     return
 
 
+def get_node_label(node_compat, node_address):
+
+    def_label = convert_string_to_label(node_compat.upper())
+    if '@' in node_address:
+        def_label += '_' + node_address.split('@')[-1].upper()
+    else:
+        def_label += convert_string_to_label(node_address.upper())
+
+    return def_label
+
 def extract_property(node_compat, yaml, node_address, y_key, y_val, names,
                      prefix, defs, label_override):
 
     if 'base_label' in yaml[node_compat]:
         def_label = yaml[node_compat].get('base_label')
     else:
-        def_label = convert_string_to_label(node_compat.upper())
-        if '@' in node_address:
-            def_label += '_' + node_address.split('@')[-1].upper()
-        else:
-            def_label += convert_string_to_label(node_address.upper())
+        def_label = get_node_label(node_compat, node_address)
+
+    if 'parent' in yaml[node_compat]:
+        if 'bus' in yaml[node_compat]['parent']:
+            # get parent label
+            parent_address = ''
+            for comp in node_address.split('/')[1:-1]:
+                parent_address += '/' + comp
+
+            #check parent has matching child bus value
+            try:
+                parent_yaml = \
+                    yaml[reduced[parent_address]['props']['compatible']]
+                parent_bus = parent_yaml['child']['bus']
+            except (KeyError, TypeError) as e:
+                raise Exception(str(node_address) + " defines parent " +
+                        str(parent_address) + " as bus master but " +
+                        str(parent_address) + " not configured as bus master " +
+                        "in yaml description")
+
+            if parent_bus != yaml[node_compat]['parent']['bus']:
+                bus_value = yaml[node_compat]['parent']['bus']
+                raise Exception(str(node_address) + " defines parent " +
+                        str(parent_address) + " as " + bus_value +
+                        " bus master but " + str(parent_address) +
+                        " configured as " + str(parent_bus) +
+                        " bus master")
+
+            # Use parent label to generate label
+            parent_label = get_node_label(
+                find_parent_prop(node_address,'compatible') , parent_address)
+            def_label = parent_label + '_' + def_label
+
+            # Generate bus-name define
+            extract_single(node_address, yaml, 'parent-label',
+                           'bus-name', prefix, defs, def_label)
 
     if label_override is not None:
         def_label += '_' + label_override
@@ -579,18 +639,11 @@ def yaml_traverse_inherited(node):
     """
 
     if 'inherits' in node.keys():
-        try:
-            yaml_traverse_inherited(node['inherits']['inherits'])
-        except KeyError:
-            dict_merge(node['inherits'], node)
-            node = node['inherits']
-            node.pop('inherits')
-        except TypeError:
-            #'node['inherits']['inherits'] type is 'list' instead of
-            #expected type 'dtc'
-            #Likely due to use of "-" before attribute in yaml file
-            raise Exception("Element '" + str(node['title']) +
-                            "' uses yaml 'series' instead of 'mapping'")
+        if 'inherits' in node['inherits'].keys():
+            node['inherits'] = yaml_traverse_inherited(node['inherits'])
+        dict_merge(node['inherits'], node)
+        node = node['inherits']
+        node.pop('inherits')
     return node
 
 
@@ -797,8 +850,15 @@ def main():
         raise Exception("No information parsed from dts file.")
 
     if 'zephyr,flash' in chosen:
+        node_addr = chosen['zephyr,flash']
         extract_reg_prop(chosen['zephyr,flash'], None,
                          defs, "CONFIG_FLASH", 1024, None)
+
+        flash_keys = ["label", "write-block-size", "erase-block-size"]
+        for key in flash_keys:
+            if key in reduced[node_addr]['props']:
+                prop = reduced[node_addr]['props'][key]
+                extract_single(node_addr, None, prop, key, None, defs, "FLASH")
     else:
         # We will add address/size of 0 for systems with no flash controller
         # This is what they already do in the Kconfig options anyway
@@ -809,11 +869,16 @@ def main():
         extract_reg_prop(chosen['zephyr,sram'], None,
                          defs, "CONFIG_SRAM", 1024, None)
 
+    if 'zephyr,ccm' in chosen:
+        extract_reg_prop(chosen['zephyr,ccm'], None,
+                         defs, "CONFIG_CCM", 1024, None)
+
     name_dict = {
             "CONFIG_UART_CONSOLE_ON_DEV_NAME": "zephyr,console",
             "CONFIG_BT_UART_ON_DEV_NAME": "zephyr,bt-uart",
             "CONFIG_UART_PIPE_ON_DEV_NAME": "zephyr,uart-pipe",
-            "CONFIG_BT_MONITOR_ON_DEV_NAME": "zephyr,bt-mon-uart"
+            "CONFIG_BT_MONITOR_ON_DEV_NAME": "zephyr,bt-mon-uart",
+            "CONFIG_UART_MCUMGR_ON_DEV_NAME": "zephyr,uart-mcumgr",
             }
 
     for k, v in name_dict.items():

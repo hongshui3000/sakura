@@ -352,30 +352,23 @@ u32_t radio_adv_enable(u16_t interval, u8_t chan_map, u8_t filter_policy,
 #endif /* !CONFIG_BT_CTLR_ADV_EXT */
 
 u32_t radio_adv_disable(void);
-u32_t radio_adv_is_enabled(void);
+u32_t ll_adv_is_enabled(void);
 u32_t radio_adv_filter_pol_get(void);
 /* Downstream - Scanner */
 u32_t radio_scan_enable(u8_t type, u8_t init_addr_type, u8_t *init_addr,
 			u16_t interval, u16_t window, u8_t filter_policy,
 			u8_t rpa_gen, u8_t rl_idx);
 u32_t radio_scan_disable(void);
-u32_t radio_scan_is_enabled(void);
+u32_t ll_scan_is_enabled(void);
 u32_t radio_scan_filter_pol_get(void);
 
 u32_t radio_connect_enable(u8_t adv_addr_type, u8_t *adv_addr,
 			   u16_t interval, u16_t latency,
 			   u16_t timeout);
 /* Upstream */
-u8_t radio_rx_get(struct radio_pdu_node_rx **radio_pdu_node_rx,
-		  u16_t *handle);
-void radio_rx_dequeue(void);
-void radio_rx_mem_release(struct radio_pdu_node_rx **radio_pdu_node_rx);
 u8_t radio_rx_fc_set(u16_t handle, u8_t fc);
 u8_t radio_rx_fc_get(u16_t *handle);
-struct radio_pdu_node_tx *radio_tx_mem_acquire(void);
-void radio_tx_mem_release(struct radio_pdu_node_tx *pdu_data_node_tx);
-u32_t radio_tx_mem_enqueue(u16_t handle,
-			   struct radio_pdu_node_tx *pdu_data_node_tx);
+
 /* Callbacks */
 extern void radio_active_callback(u8_t active);
 extern void radio_event_callback(void);

@@ -136,76 +136,6 @@ _SYSCALL_HANDLER(k_uptime_get, ret_p)
 }
 #endif
 
-/**
- *
- * @brief Return number of ticks since a reference time
- *
- * This function is meant to be used in contained fragments of code. The first
- * call to it in a particular code fragment fills in a reference time variable
- * which then gets passed and updated every time the function is called. From
- * the second call on, the delta between the value passed to it and the current
- * tick count is the return value. Since the first call is meant to only fill in
- * the reference time, its return value should be discarded.
- *
- * Since a code fragment that wants to use sys_tick_delta() passes in its
- * own reference time variable, multiple code fragments can make use of this
- * function concurrently.
- *
- * e.g.
- * u64_t  reftime;
- * (void) sys_tick_delta(&reftime);  /# prime it #/
- * [do stuff]
- * x = sys_tick_delta(&reftime);     /# how long since priming #/
- * [do more stuff]
- * y = sys_tick_delta(&reftime);     /# how long since [do stuff] #/
- *
- * @return tick count since reference time; undefined for first invocation
- *
- * NOTE: We use inline function for both 64-bit and 32-bit functions.
- * Compiler optimizes out 64-bit result handling in 32-bit version.
- */
-static ALWAYS_INLINE s64_t _nano_tick_delta(s64_t *reftime)
-{
-	s64_t  delta;
-	s64_t  saved;
-
-	/*
-	 * Lock the interrupts when reading _sys_clock_tick_count 64-bit
-	 * variable.  Some architectures (x86) do not handle 64-bit atomically,
-	 * so we have to lock the timer interrupt that causes change of
-	 * _sys_clock_tick_count
-	 */
-	unsigned int imask = irq_lock();
-
-#ifdef CONFIG_TICKLESS_KERNEL
-	saved = _get_elapsed_clock_time();
-#else
-	saved = _sys_clock_tick_count;
-#endif
-	irq_unlock(imask);
-	delta = saved - (*reftime);
-	*reftime = saved;
-
-	return delta;
-}
-
-/**
- *
- * @brief Return number of ticks since a reference time
- *
- * @return tick count since reference time; undefined for first invocation
- */
-s64_t sys_tick_delta(s64_t *reftime)
-{
-	return _nano_tick_delta(reftime);
-}
-
-
-u32_t sys_tick_delta_32(s64_t *reftime)
-{
-	return (u32_t)_nano_tick_delta(reftime);
-}
-
 s64_t k_uptime_delta(s64_t *reftime)
 {
 	s64_t uptime, delta;
@@ -249,18 +179,16 @@ static inline void handle_timeouts(s32_t ticks)
 
 	key = irq_lock();
 
-	struct _timeout *head =
-		(struct _timeout *)sys_dlist_peek_head(&_timeout_q);
+	sys_dnode_t *next = sys_dlist_peek_head(&_timeout_q);
+	struct _timeout *timeout = (struct _timeout *)next;
 
 	K_DEBUG("head: %p, delta: %d\n",
-		head, head ? head->delta_ticks_from_prev : -2112);
+		timeout, timeout ? timeout->delta_ticks_from_prev : -2112);
 
-	if (!head) {
+	if (!next) {
 		irq_unlock(key);
 		return;
 	}
-
-	head->delta_ticks_from_prev -= ticks;
 
 	/*
 	 * Dequeue all expired timeouts from _timeout_q, relieving irq lock
@@ -269,32 +197,57 @@ static inline void handle_timeouts(s32_t ticks)
 	 * of a timeout which delta is 0, since timeouts of 0 ticks are
 	 * prohibited.
 	 */
-	sys_dnode_t *next = &head->node;
-	struct _timeout *timeout = (struct _timeout *)next;
 
 	_handling_timeouts = 1;
 
-	while (timeout && timeout->delta_ticks_from_prev == 0) {
-
-		sys_dlist_remove(next);
+	while (next) {
 
 		/*
-		 * Reverse the order that that were queued in the timeout_q:
-		 * timeouts expiring on the same ticks are queued in the
-		 * reverse order, time-wise, that they are added to shorten the
-		 * amount of time with interrupts locked while walking the
-		 * timeout_q. By reversing the order _again_ when building the
-		 * expired queue, they end up being processed in the same order
-		 * they were added, time-wise.
+		 * In the case where ticks number is greater than the first
+		 * timeout delta of the list, the lag produced by this initial
+		 * difference must also be applied to others timeouts in list
+		 * until it was entirely consumed.
 		 */
-		sys_dlist_prepend(&expired, next);
 
-		timeout->delta_ticks_from_prev = _EXPIRED;
+		s32_t tmp = timeout->delta_ticks_from_prev;
+
+		if (timeout->delta_ticks_from_prev < ticks) {
+			timeout->delta_ticks_from_prev = 0;
+		} else {
+			timeout->delta_ticks_from_prev -= ticks;
+		}
+
+		ticks -= tmp;
+
+		next = sys_dlist_peek_next(&_timeout_q, next);
+
+		if (timeout->delta_ticks_from_prev == 0) {
+			sys_dnode_t *node = &timeout->node;
+
+			sys_dlist_remove(node);
+
+			/*
+			 * Reverse the order that that were queued in the
+			 * timeout_q: timeouts expiring on the same ticks are
+			 * queued in the reverse order, time-wise, that they are
+			 * added to shorten the amount of time with interrupts
+			 * locked while walking the timeout_q. By reversing the
+			 * order _again_ when building the expired queue, they
+			 * end up being processed in the same order they were
+			 * added, time-wise.
+			 */
+
+			sys_dlist_prepend(&expired, node);
+
+			timeout->delta_ticks_from_prev = _EXPIRED;
+
+		} else if (ticks <= 0) {
+			break;
+		}
 
 		irq_unlock(key);
 		key = irq_lock();
 
-		next = sys_dlist_peek_head(&_timeout_q);
 		timeout = (struct _timeout *)next;
 	}
 
@@ -364,6 +317,13 @@ static void handle_time_slicing(s32_t ticks)
  */
 void _nano_sys_clock_tick_announce(s32_t ticks)
 {
+#ifdef CONFIG_SMP
+	/* sys_clock timekeeping happens only on the main CPU */
+	if (_arch_curr_cpu()->id) {
+		return;
+	}
+#endif
+
 #ifndef CONFIG_TICKLESS_KERNEL
 	unsigned int  key;
 

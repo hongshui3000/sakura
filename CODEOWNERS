@@ -10,22 +10,24 @@ MAINTAINERS                              @inakypg @nashif
 arch/arc/*                               @cjordan44 @ruuddw
 arch/arc/core/*                          @andrewboie
 arch/arm/*                               @MaureenHelm @galak
-arch/arm/core/*                          @andrewboie
 arch/arm/soc/arm/mps2/*                  @fvincenzo
+arch/arm/soc/atmel_sam/sam4s             @fallrisk
+arch/arm/soc/nxp*/                       @MaureenHelm
 arch/arm/soc/st_stm32/*                  @erwango
 arch/arm/soc/st_stm32/stm32f4/*          @rsalveti @idlethread
 arch/arm/soc/ti_simplelink/cc32xx        @GAnthony
 arch/arm/soc/ti_simplelink/msp432p4xx    @Mani-Sadhasivam
-arch/nios2/*                             @andrewboie
-arch/nios2/core/*                        @andrewboie
-arch/riscv32                             @fractalclone
+arch/nios2/*                             @andrewboie @ramakrishnapallala
+arch/nios2/core/*                        @andrewboie @ramakrishnapallala
+arch/posix/*                             @aescolar-ot
+arch/riscv32                             @fractalclone @kgugala @pgielda
 arch/x86/*                               @andrewboie @youvedeep
 arch/x86/core/*                          @andrewboie
 arch/x86/core/crt0.S                     @youvedeep @nashif
 arch/x86/soc/intel_quark/quark_d2000/*   @nashif
 arch/x86/soc/intel_quark/quark_se/*      @nashif
 arch/x86/soc/intel_quark/quark_x1000/*   @nashif
-arch/xtensa/*                            @andrewboie
+arch/xtensa/*                            @andrewboie @rgundi @andyross
 boards/arc/*                             @cjordan44 @ruuddw
 boards/arc/arduino_101_sss/*             @nashif
 boards/arc/em_starterkit/*               @cjordan44
@@ -37,56 +39,65 @@ boards/arm/96b_neonkey/*                 @Mani-Sadhasivam
 boards/arm/arduino_101_ble/*             @jhedberg
 boards/arm/cc3220sf_launchxl/*           @GAnthony
 boards/arm/disco_l475_iot1/*             @erwango
-boards/arm/frdm_k64f/*                   @MaureenHelm
-boards/arm/frdm_kw41z/*                  @MaureenHelm
-boards/arm/hexiwear_k64/*                @MaureenHelm
+boards/arm/frdm*/*                       @MaureenHelm
+boards/arm/hexiwear*/*                   @MaureenHelm
+boards/arm/lpcxpresso*/*                 @MaureenHelm
+boards/arm/mimxrt*/*                     @MaureenHelm
 boards/arm/mps2_an385/*                  @fvincenzo
 boards/arm/msp_exp432p401r_launchxl/*    @Mani-Sadhasivam
 boards/arm/nrf51_blenano/*               @rsalveti
 boards/arm/nrf52_pca10040/*              @carlescufi
 boards/arm/nucleo_f401re/*               @rsalveti @idlethread
+boards/arm/sam4s_xplained                @fallrisk
 boards/arm/v2m_beetle/*                  @fvincenzo
 boards/arm/olimexino_stm32/*             @ydamigos
 boards/arm/stm32f3_disco/*               @ydamigos
-boards/nios2/*                           @andrewboie
-boards/nios2/altera_max10/*              @andrewboie
-boards/riscv32                           @fractalclone
-boards/x86/*                             @andrewboie @youvedeep
+boards/nios2/*                           @ramakrishnapallala
+boards/nios2/altera_max10/*              @ramakrishnapallala
+boards/posix/*                           @aescolar-ot
+boards/riscv32                           @fractalclone @kgugala @pgielda
+boards/x86/*                             @andrewboie @nashif
 boards/x86/arduino_101/*                 @nashif
 boards/x86/galileo/*                     @nashif
 boards/x86/quark_d2000_crb/*             @nashif
 boards/x86/quark_se_c1000_devboard/*     @nashif
-boards/xtensa/*                          @andrewboie
+boards/xtensa/*                          @andrewboie @ramakrishnapallala
 # All cmake related files
 cmake/*                                  @nashif @SebastianBoe
-CMakeLists.txt                           @nashif @SebastianBoe
+/CMakeLists.txt                          @nashif @SebastianBoe
 doc/*                                    @dbkinder
 doc/subsystems/bluetooth/*               @sjanc @jhedberg @Vudentz
+drivers/*/*mcux*                         @MaureenHelm
 drivers/*/*qmsi*                         @nashif
 drivers/*/*stm32*                        @erwango
+drivers/*/*native_posix*                 @aescolar-ot
+drivers/adc/*                            @anangl
 drivers/bluetooth/*                      @sjanc @jhedberg @Vudentz
 drivers/clock_control/*stm32f4*          @rsalveti @idlethread
+drivers/counter/*                        @anangl
 drivers/ethernet/*                       @jukkar @tbursztyka
 drivers/flash/*                          @nashif
+drivers/flash/*stm32*                    @superna9999
 drivers/gpio/*stm32*                     @rsalveti @idlethread
-drivers/gpio/gpio_pulpino.c              @fractalclone
+drivers/gpio/gpio_pulpino.c              @fractalclone @kgugala @pgielda
 drivers/ieee802154/*                     @jukkar @tbursztyka
 drivers/interrupt_controller/*           @andrewboie
+drivers/led_strip/*                      @mbolivar
 drivers/pinmux/stm32/*                   @rsalveti @idlethread
 drivers/sensor/*                         @bogdan-davidoaia
-drivers/serial/uart_altera_jtag.c        @andrewboie
-drivers/serial/uart_riscv_qemu.c         @fractalclone
-drivers/slip/*                           @jukkar @tbursztyka
+drivers/serial/uart_altera_jtag.c        @ramakrishnapallala
+drivers/serial/uart_riscv_qemu.c         @fractalclone @kgugala @pgielda
+drivers/net/slip/*                       @jukkar @tbursztyka
 drivers/spi/*                            @tbursztyka
-drivers/spi/spi_ll_stm32.*               @superna9999 @mbolivar
-drivers/timer/altera_avalon_timer.c      @andrewboie
-drivers/timer/pulpino_timer.c            @fractalclone
-drivers/timer/riscv_machine_timer.c      @fractalclone
+drivers/spi/spi_ll_stm32.*               @superna9999
+drivers/timer/altera_avalon_timer.c      @ramakrishnapallala
+drivers/timer/pulpino_timer.c            @fractalclone @kgugala @pgielda
+drivers/timer/riscv_machine_timer.c      @fractalclone @kgugala @pgielda
 drivers/usb                              @youvedeep @andyross
 drivers/usb/device/usb_dc_stm32.c        @ydamigos @loicpoulain
 drivers/i2c/i2c_ll_stm32*                @ldts @ydamigos
 dts/arm/st/*                             @erwango
-ext/fs/*                                 @nashif
+ext/fs/*                                 @nashif @ramakrishnapallala
 ext/hal/cmsis/*                          @MaureenHelm @galak
 ext/hal/nordic/mdk/*                     @carlescufi
 ext/hal/nxp/mcux/*                       @MaureenHelm
@@ -94,6 +105,7 @@ ext/hal/qmsi/*                           @nashif
 ext/hal/st/stm32cube/*                   @erwango
 ext/lib/crypto/mbedtls/*                 @nashif
 ext/lib/crypto/tinycrypt/*               @lpereira
+include/adc.h                            @anangl
 include/arch/arc/*                       @cjordan44 @ruuddw
 include/arch/arc/arch.h                  @andrewboie
 include/arch/arc/v2/irq.h                @andrewboie
@@ -101,27 +113,27 @@ include/arch/arm/*                       @MaureenHelm @galak
 include/arch/arm/cortex_m/irq.h          @andrewboie
 include/arch/nios2/*                     @andrewboie
 include/arch/nios2/arch.h                @andrewboie
-include/arch/riscv32                     @fractalclone
+include/arch/riscv32                     @fractalclone @kgugala @pgielda
 include/arch/x86/*                       @andrewboie @youvedeep
 include/arch/x86/arch.h                  @andrewboie
 include/arch/xtensa/*                    @andrewboie
 include/atomic.h                         @andrewboie @andyross
 include/bluetooth/*                      @sjanc @jhedberg @Vudentz
 include/cache.h                          @andrewboie @andyross
+include/counter.h                        @anangl
 include/device.h                         @youvedeep @nashif
 include/drivers/bluetooth/*              @sjanc @jhedberg @Vudentz
 include/drivers/ioapic.h                 @andrewboie
 include/drivers/loapic.h                 @andrewboie
 include/drivers/mvic.h                   @andrewboie
-include/fs.h                             @nashif
-include/fs/*                             @nashif
+include/fs.h                             @nashif @ramakrishnapallala
+include/fs/*                             @nashif @ramakrishnapallala
 include/init.h                           @andrewboie @andyross
-include/init.h                           @youvedeep @nashif
-include/irq.h                            @andrewboie
 include/irq.h                            @andrewboie @andyross
 include/irq_offload.h                    @andrewboie @andyross
 include/kernel.h                         @andrewboie @andyross
 include/kernel_version.h                 @andrewboie @andyross
+include/led_strip.h                      @mbolivar
 include/linker/linker-defs.h             @andrewboie @andyross
 include/linker/linker-tool-gcc.h         @andrewboie @andyross
 include/linker/linker-tool.h             @andrewboie @andyross
@@ -141,6 +153,7 @@ include/toolchain.h                      @andrewboie @andyross
 include/toolchain/*                      @andrewboie @andyross
 include/zephyr.h                         @andrewboie @andyross
 kernel/*                                 @andrewboie @andyross
+kernel/posix/*				 @youvedeep
 kernel/device.c                          @youvedeep @nashif
 kernel/idle.c                            @youvedeep @nashif
 samples/bluetooth/*                      @sjanc @jhedberg @Vudentz
@@ -149,15 +162,16 @@ samples/net/*                            @jukkar @tbursztyka
 samples/net/dns_resolve/*                @jukkar @tbursztyka
 samples/net/http_server/*                @jukkar @tbursztyka
 samples/net/lwm2m_client/*               @mike-scott
-samples/net/mbedtls_sslclient/*          @nashif
+samples/net/mbedtls_sslclient/*          @jukkar
 samples/net/mqtt_publisher/*             @jukkar @tbursztyka
-samples/net/zoap_client/*                @vcgomes
-samples/net/zoap_server/*                @vcgomes
+samples/net/coap_client/*                @rveerama1
+samples/net/coap_server/*                @rveerama1
 samples/sensor/*                         @bogdan-davidoaia
 samples/subsys/usb                       @youvedeep @andyross
 scripts/expr_parser.py                   @andrewboie
 scripts/sanity_chk/*                     @andrewboie
-scripts/sanitycheck                      @andrewboie
+scripts/sanitycheck                      @andrewboie @nashif
+scripts/support/runner/*                 @mbolivar
 subsys/bluetooth/*                       @sjanc @jhedberg @Vudentz
 subsys/bluetooth/controller/*            @carlescufi @cvinayak
 subsys/fs/*                              @nashif
@@ -168,7 +182,7 @@ subsys/net/lib/dns/*                     @jukkar @tbursztyka
 subsys/net/lib/http/*                    @jukkar @tbursztyka
 subsys/net/lib/lwm2m/*                   @mike-scott
 subsys/net/lib/mqtt/*                    @jukkar @tbursztyka
-subsys/net/lib/zoap/*                    @vcgomes
+subsys/net/lib/coap/*                    @rveerama1
 subsys/usb                               @youvedeep @andyross
 tests/bluetooth/*                        @sjanc @jhedberg @Vudentz
 tests/crypto/*                           @lpereira
@@ -180,5 +194,5 @@ tests/net/buf/*                          @jukkar @jhedberg @tbursztyka
 tests/net/lib/*                          @jukkar @tbursztyka
 tests/net/lib/http_header_fields/*       @jukkar @tbursztyka
 tests/net/lib/mqtt_packet/*              @jukkar @tbursztyka
-tests/net/lib/zoap/*                     @vcgomes
-tests/subsys/fs/*                        @nashif
+tests/net/lib/coap/*                     @rveerama1
+tests/subsys/fs/*                        @nashif @ramakrishnapallala

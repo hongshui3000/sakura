@@ -2,7 +2,6 @@ sample:
   description: TBD
   name: TBD
 tests:
-  - test:
-      build_only: true
-      filter: CONFIG_SOC_QUARK_SE_C1000
-      tags: samples ipm
+  test:
+    filter: CONFIG_SOC_QUARK_SE_C1000
+    tags: samples ipm

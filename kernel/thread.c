@@ -24,6 +24,8 @@
 #include <wait_q.h>
 #include <atomic.h>
 #include <syscall_handler.h>
+#include <kernel_internal.h>
+#include <kswap.h>
 
 extern struct _static_thread_data _static_thread_data_list_start[];
 extern struct _static_thread_data _static_thread_data_list_end[];
@@ -69,6 +71,7 @@ int _is_thread_essential(void)
 	return _current->base.user_options & K_ESSENTIAL;
 }
 
+#if !defined(CONFIG_ARCH_HAS_CUSTOM_BUSY_WAIT)
 void k_busy_wait(u32_t usec_to_wait)
 {
 #if defined(CONFIG_TICKLESS_KERNEL) && \
@@ -96,6 +99,7 @@ int saved_always_on = k_enable_sys_clock_always_on();
 	_sys_clock_always_on = saved_always_on;
 #endif
 }
+#endif
 
 #ifdef CONFIG_THREAD_CUSTOM_DATA
 void _impl_k_thread_custom_data_set(void *value)
@@ -135,10 +139,13 @@ void _thread_monitor_exit(struct k_thread *thread)
 		struct k_thread *prev_thread;
 
 		prev_thread = _kernel.threads;
-		while (thread != prev_thread->next_thread) {
+		while (prev_thread != NULL &&
+		       thread != prev_thread->next_thread) {
 			prev_thread = prev_thread->next_thread;
 		}
-		prev_thread->next_thread = thread->next_thread;
+		if (prev_thread != NULL) {
+			prev_thread->next_thread = thread->next_thread;
+		}
 	}
 
 	irq_unlock(key);
@@ -314,7 +321,10 @@ _SYSCALL_HANDLER(k_thread_create,
 		 new_thread_p, stack_p, stack_size, entry, p1, more_args)
 {
 	int prio;
-	u32_t options, delay, guard_size, total_size;
+	u32_t options, delay;
+#ifndef CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT
+	u32_t guard_size, total_size;
+#endif
 	struct _k_object *stack_object;
 	struct k_thread *new_thread = (struct k_thread *)new_thread_p;
 	volatile struct _syscall_10_args *margs =
@@ -329,18 +339,25 @@ _SYSCALL_HANDLER(k_thread_create,
 						   _OBJ_INIT_FALSE),
 			    "bad stack object");
 
+#ifndef CONFIG_MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT
 	/* Verify that the stack size passed in is OK by computing the total
 	 * size and comparing it with the size value in the object metadata
+	 *
+	 * We skip this check for SoCs which utilize MPUs with power of two
+	 * alignment requirements as the guard is allocated out of the stack
+	 * size and not allocated in addition to the stack size
 	 */
 	guard_size = (u32_t)K_THREAD_STACK_BUFFER(stack) - (u32_t)stack;
 	_SYSCALL_VERIFY_MSG(!__builtin_uadd_overflow(guard_size, stack_size,
 						     &total_size),
 			    "stack size overflow (%u+%u)", stack_size,
 			    guard_size);
+
 	/* They really ought to be equal, make this more strict? */
 	_SYSCALL_VERIFY_MSG(total_size <= stack_object->data,
 			    "stack size %u is too big, max is %u",
 			    total_size, stack_object->data);
+#endif
 
 	/* Verify the struct containing args 6-10 */
 	_SYSCALL_MEMORY_READ(margs, sizeof(*margs));
@@ -402,54 +419,6 @@ int _impl_k_thread_cancel(k_tid_t tid)
 #ifdef CONFIG_USERSPACE
 _SYSCALL_HANDLER1_SIMPLE(k_thread_cancel, K_OBJ_THREAD, struct k_thread *);
 #endif
-
-static inline int is_in_any_group(struct _static_thread_data *thread_data,
-				  u32_t groups)
-{
-	return !!(thread_data->init_groups & groups);
-}
-
-void _k_thread_group_op(u32_t groups, void (*func)(struct k_thread *))
-{
-	unsigned int  key;
-
-	__ASSERT(!_is_in_isr(), "");
-
-	_sched_lock();
-
-	/* Invoke func() on each static thread in the specified group set. */
-
-	_FOREACH_STATIC_THREAD(thread_data) {
-		if (is_in_any_group(thread_data, groups)) {
-			key = irq_lock();
-			func(thread_data->init_thread);
-			irq_unlock(key);
-		}
-	}
-
-	/*
-	 * If the current thread is still in a ready state, then let the
-	 * "unlock scheduler" code determine if any rescheduling is needed.
-	 */
-	if (_is_thread_ready(_current)) {
-		k_sched_unlock();
-		return;
-	}
-
-	/* The current thread is no longer in a ready state--reschedule. */
-	key = irq_lock();
-	_sched_unlock_no_reschedule();
-	_Swap(key);
-}
-
-void _k_thread_single_start(struct k_thread *thread)
-{
-	_mark_thread_as_started(thread);
-
-	if (_is_thread_ready(thread)) {
-		_add_thread_to_ready_q(thread);
-	}
-}
 
 void _k_thread_single_suspend(struct k_thread *thread)
 {
@@ -613,27 +582,6 @@ void _init_thread_base(struct _thread_base *thread_base, int priority,
 	/* swap_data does not need to be initialized */
 
 	_init_thread_timeout(thread_base);
-}
-
-u32_t _k_thread_group_mask_get(struct k_thread *thread)
-{
-	struct _static_thread_data *thread_data = thread->init_data;
-
-	return thread_data->init_groups;
-}
-
-void _k_thread_group_join(u32_t groups, struct k_thread *thread)
-{
-	struct _static_thread_data *thread_data = thread->init_data;
-
-	thread_data->init_groups |= groups;
-}
-
-void _k_thread_group_leave(u32_t groups, struct k_thread *thread)
-{
-	struct _static_thread_data *thread_data = thread->init_data;
-
-	thread_data->init_groups &= ~groups;
 }
 
 void k_thread_access_grant(struct k_thread *thread, ...)

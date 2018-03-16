@@ -9,6 +9,7 @@
 #include <misc/util.h>
 
 #define BTP_MTU 1024
+#define BTP_DATA_MAX_SIZE (BTP_MTU - sizeof(struct btp_hdr))
 
 #define BTP_INDEX_NONE		0xff
 
@@ -16,6 +17,7 @@
 #define BTP_SERVICE_ID_GAP	1
 #define BTP_SERVICE_ID_GATT	2
 #define BTP_SERVICE_ID_L2CAP	3
+#define BTP_SERVICE_ID_MESH	4
 
 #define BTP_STATUS_SUCCESS	0x00
 #define BTP_STATUS_FAILED	0x01
@@ -52,6 +54,11 @@ struct core_read_supported_services_rp {
 
 #define CORE_REGISTER_SERVICE		0x03
 struct core_register_service_cmd {
+	u8_t id;
+} __packed;
+
+#define CORE_UNREGISTER_SERVICE		0x04
+struct core_unregister_service_cmd {
 	u8_t id;
 } __packed;
 
@@ -237,8 +244,8 @@ struct gap_new_settings_ev {
 
 #define GAP_EV_DEVICE_FOUND		0x81
 struct gap_device_found_ev {
-	u8_t  address[6];
 	u8_t  address_type;
+	u8_t  address[6];
 	s8_t   rssi;
 	u8_t  flags;
 	u16_t eir_data_len;
@@ -247,14 +254,14 @@ struct gap_device_found_ev {
 
 #define GAP_EV_DEVICE_CONNECTED		0x82
 struct gap_device_connected_ev {
-	u8_t address[6];
 	u8_t address_type;
+	u8_t address[6];
 } __packed;
 
 #define GAP_EV_DEVICE_DISCONNECTED	0x83
 struct gap_device_disconnected_ev {
-	u8_t address[6];
 	u8_t address_type;
+	u8_t address[6];
 } __packed;
 
 #define GAP_EV_PASSKEY_DISPLAY		0x84
@@ -516,6 +523,34 @@ struct gatt_cfg_notify_cmd {
 	u16_t ccc_handle;
 } __packed;
 
+#define GATT_GET_ATTRIBUTES		0x1c
+struct gatt_get_attributes_cmd {
+	u16_t start_handle;
+	u16_t end_handle;
+	u8_t type_length;
+	u8_t type[0];
+} __packed;
+struct gatt_get_attributes_rp {
+	u8_t attrs_count;
+	u8_t attrs[0];
+} __packed;
+struct gatt_attr {
+	u16_t handle;
+	u8_t permission;
+	u8_t type_length;
+	u8_t type[0];
+} __packed;
+
+#define GATT_GET_ATTRIBUTE_VALUE	0x1d
+struct gatt_get_attribute_value_cmd {
+	u16_t handle;
+} __packed;
+struct gatt_get_attribute_value_rp {
+	u8_t att_response;
+	u16_t value_length;
+	u8_t value[0];
+} __packed;
+
 /* GATT events */
 #define GATT_EV_NOTIFICATION		0x80
 struct gatt_notification_ev {
@@ -626,20 +661,185 @@ struct l2cap_data_received_ev {
 	u8_t data[0];
 } __packed;
 
+/* MESH Service */
+/* commands */
+#define MESH_READ_SUPPORTED_COMMANDS	0x01
+struct mesh_read_supported_commands_rp {
+	u8_t data[0];
+} __packed;
+
+#define MESH_OUT_BLINK			BIT(0)
+#define MESH_OUT_BEEP			BIT(1)
+#define MESH_OUT_VIBRATE		BIT(2)
+#define MESH_OUT_DISPLAY_NUMBER		BIT(3)
+#define MESH_OUT_DISPLAY_STRING		BIT(4)
+
+#define MESH_IN_PUSH			BIT(0)
+#define MESH_IN_TWIST			BIT(1)
+#define MESH_IN_ENTER_NUMBER		BIT(2)
+#define MESH_IN_ENTER_STRING		BIT(3)
+
+#define MESH_CONFIG_PROVISIONING	0x02
+struct mesh_config_provisioning_cmd {
+	u8_t uuid[16];
+	u8_t static_auth[16];
+	u8_t out_size;
+	u16_t out_actions;
+	u8_t in_size;
+	u16_t in_actions;
+} __packed;
+
+#define MESH_PROVISION_NODE		0x03
+struct mesh_provision_node_cmd {
+	u8_t net_key[16];
+	u16_t net_key_idx;
+	u8_t flags;
+	u32_t iv_index;
+	u32_t seq_num;
+	u16_t addr;
+	u8_t dev_key[16];
+} __packed;
+
+#define MESH_INIT			0x04
+#define MESH_RESET			0x05
+#define MESH_INPUT_NUMBER		0x06
+struct mesh_input_number_cmd {
+	u32_t number;
+} __packed;
+
+#define MESH_INPUT_STRING		0x07
+struct mesh_input_string_cmd {
+	u8_t string_len;
+	u8_t string[0];
+} __packed;
+
+#define MESH_IVU_TEST_MODE		0x08
+struct mesh_ivu_test_mode_cmd {
+	u8_t enable;
+} __packed;
+
+#define MESH_IVU_TOGGLE_STATE			0x09
+
+#define MESH_NET_SEND			0x0a
+struct mesh_net_send_cmd {
+	u8_t ttl;
+	u16_t src;
+	u16_t dst;
+	u8_t payload_len;
+	u8_t payload[0];
+} __packed;
+
+#define MESH_HEALTH_GENERATE_FAULTS	0x0b
+struct mesh_health_generate_faults_rp {
+	u8_t test_id;
+	u8_t cur_faults_count;
+	u8_t reg_faults_count;
+	u8_t current_faults[0];
+	u8_t registered_faults[0];
+} __packed;
+
+#define MESH_HEALTH_CLEAR_FAULTS	0x0c
+
+#define MESH_LPN			0x0d
+struct mesh_lpn_set_cmd {
+	u8_t enable;
+} __packed;
+
+#define MESH_LPN_POLL			0x0e
+
+#define MESH_MODEL_SEND			0x0f
+struct mesh_model_send_cmd {
+	u16_t src;
+	u16_t dst;
+	u8_t payload_len;
+	u8_t payload[0];
+} __packed;
+
+#define MESH_LPN_SUBSCRIBE		0x10
+struct mesh_lpn_subscribe_cmd {
+	u16_t address;
+} __packed;
+
+#define MESH_LPN_UNSUBSCRIBE		0x11
+struct mesh_lpn_unsubscribe_cmd {
+	u16_t address;
+} __packed;
+
+#define MESH_RPL_CLEAR			0x12
+
+/* events */
+#define MESH_EV_OUT_NUMBER_ACTION	0x80
+struct mesh_out_number_action_ev {
+	u16_t action;
+	u32_t number;
+} __packed;
+
+#define MESH_EV_OUT_STRING_ACTION	0x81
+struct mesh_out_string_action_ev {
+	u8_t string_len;
+	u8_t string[0];
+} __packed;
+
+#define MESH_EV_IN_ACTION		0x82
+struct mesh_in_action_ev {
+	u16_t action;
+	u8_t size;
+} __packed;
+
+#define MESH_EV_PROVISIONED		0x83
+
+#define MESH_PROV_BEARER_PB_ADV		0x00
+#define MESH_PROV_BEARER_PB_GATT	0x01
+#define MESH_EV_PROV_LINK_OPEN		0x84
+struct mesh_prov_link_open_ev {
+	u8_t bearer;
+} __packed;
+
+#define MESH_EV_PROV_LINK_CLOSED	0x85
+struct mesh_prov_link_closed_ev {
+	u8_t bearer;
+} __packed;
+
+#define MESH_EV_NET_RECV		0x86
+struct mesh_net_recv_ev {
+	u8_t ttl;
+	u8_t ctl;
+	u16_t src;
+	u16_t dst;
+	u8_t payload_len;
+	u8_t payload[0];
+} __packed;
+
+#define MESH_EV_INVALID_BEARER		0x87
+struct mesh_invalid_bearer_ev {
+	u8_t opcode;
+} __packed;
+
+#define MESH_EV_INCOMP_TIMER_EXP	0x88
+
 void tester_init(void);
 void tester_rsp(u8_t service, u8_t opcode, u8_t index, u8_t status);
 void tester_send(u8_t service, u8_t opcode, u8_t index, u8_t *data,
 		 size_t len);
 
 u8_t tester_init_gap(void);
+u8_t tester_unregister_gap(void);
 void tester_handle_gap(u8_t opcode, u8_t index, u8_t *data,
 		       u16_t len);
 u8_t tester_init_gatt(void);
+u8_t tester_unregister_gatt(void);
 void tester_handle_gatt(u8_t opcode, u8_t index, u8_t *data,
 			u16_t len);
 
 #if defined(CONFIG_BT_L2CAP_DYNAMIC_CHANNEL)
 u8_t tester_init_l2cap(void);
+u8_t tester_unregister_l2cap(void);
 void tester_handle_l2cap(u8_t opcode, u8_t index, u8_t *data,
 			 u16_t len);
 #endif /* CONFIG_BT_L2CAP_DYNAMIC_CHANNEL */
+
+#if defined(CONFIG_BT_MESH)
+u8_t tester_init_mesh(void);
+u8_t tester_unregister_mesh(void);
+void tester_handle_mesh(u8_t opcode, u8_t index, u8_t *data, u16_t len);
+#endif /* CONFIG_BT_MESH */

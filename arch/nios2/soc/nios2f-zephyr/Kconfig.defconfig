@@ -8,6 +8,30 @@ config SYS_CLOCK_HW_CYCLES_PER_SEC
 	int
 	default 50000000
 
+config ALTERA_AVALON_SYSID
+	def_bool y
+
+if GPIO_ALTERA_NIOS2
+
+config ALTERA_AVALON_PIO
+	def_bool y
+
+endif # GPIO_ALTERA_NIOS2
+
+if SOC_FLASH_NIOS2_QSPI
+
+config ALTERA_AVALON_QSPI
+	def_bool y
+
+endif #SOC_FLASH_NIOS2_QSPI
+
+if I2C_NIOS2
+
+config ALTERA_AVALON_I2C
+	def_bool y
+
+endif # I2C_NIOS2
+
 if UART_NS16550
 
 config UART_NS16550_PCI

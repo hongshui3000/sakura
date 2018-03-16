@@ -31,6 +31,20 @@ const struct net_eth_addr *net_eth_broadcast_addr(void)
 	return &broadcast_eth_addr;
 }
 
+void net_eth_ipv6_mcast_to_mac_addr(const struct in6_addr *ipv6_addr,
+				    struct net_eth_addr *mac_addr)
+{
+	/* RFC 2464 7. Address Mapping -- Multicast
+	 * "An IPv6 packet with a multicast destination address DST,
+	 * consisting of the sixteen octets DST[1] through DST[16],
+	 * is transmitted to the Ethernet multicast address whose
+	 * first two octets are the value 3333 hexadecimal and whose
+	 * last four octets are the last four octets of DST."
+	 */
+	mac_addr->addr[0] = mac_addr->addr[1] = 0x33;
+	memcpy(mac_addr->addr + 2, &ipv6_addr->s6_addr[12], 4);
+}
+
 #if defined(CONFIG_NET_DEBUG_L2_ETHERNET)
 #define print_ll_addrs(pkt, type, len)					   \
 	do {								   \
@@ -213,8 +227,8 @@ static enum net_verdict ethernet_send(struct net_if *iface,
 			NET_DBG("Sending arp pkt %p (orig %p) to iface %p",
 				arp_pkt, pkt, iface);
 
-			/* Either pkt went to ARP pending queue
-			 * or there was not space in the queue anymore
+			/* Either pkt went to ARP pending queue or
+			 * there was no space in the queue anymore.
 			 */
 			net_pkt_unref(pkt);
 

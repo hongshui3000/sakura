@@ -146,9 +146,10 @@ struct net_mgmt_event_callback {
 	 */
 	union {
 		/** A mask of network events on which the above handler should
-		 * be called in case those events come. Such mask can be
-		 * modified whenever necessary by the owner, and thus will
-		 * affect the handler being called or not.
+		 * be called in case those events come.
+		 * Note that only the command part is treated as a mask,
+		 * matching one to several commands. Layer and layer code will
+		 * be made of an exact match.
 		 */
 		u32_t event_mask;
 		/** Internal place holder when a synchronous event wait is
@@ -269,6 +270,7 @@ void net_mgmt_event_init(void);
 #define net_mgmt_add_event_callback(...)
 #define net_mgmt_event_notify(...)
 #define net_mgmt_event_init(...)
+#define net_mgmt_event_notify_with_info(...)
 
 static inline int net_mgmt_event_wait(u32_t mgmt_event_mask,
 				      u32_t *raised_event,

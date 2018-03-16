@@ -49,8 +49,22 @@
 			#clocks-cells = <3>;
 		};
 
-		flash0: flash@0 {
-			reg = <0 0x80000>;
+		flash-controller@40020000 {
+			compatible = "nxp,kinetis-ftfa";
+			label = "FLASH_CTRL";
+			reg = <0x40020000 0x2c>;
+			interrupts = <5 0>;
+
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			flash0: flash@0 {
+				compatible = "soc-nv-flash";
+				label = "MCUX_FLASH";
+				reg = <0 0x80000>;
+				erase-block-size = <1024>;
+				write-block-size = <4>;
+			};
 		};
 
 		i2c0: i2c@40066000 {
@@ -176,6 +190,8 @@
 			cs = <&gpiob 18 0>, <&gpiob 17 0>;
 			pinctrl-0 = <&spi0_default>;
 			pinctrl-names = "default";
+			#address-cells = <1>;
+			#size-cells = <0>;
 		};
 
 		spi1: spi@4002d000 {
@@ -184,6 +200,8 @@
 			interrupts = <29 0>;
 			clocks = <&sim KINETIS_SIM_BUS_CLK 0x103C 13>;
 			status = "disabled";
+			#address-cells = <1>;
+			#size-cells = <0>;
 		};
 
 		pwm0: pwm@40038000 {

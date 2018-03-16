@@ -36,6 +36,8 @@
 /* Nothing yet to include */
 #elif defined(CONFIG_XTENSA)
 /* Nothing yet to include */
+#elif defined(CONFIG_ARCH_POSIX)
+/* Nothing yet to include */
 #else
 #error Arch not supported.
 #endif
@@ -97,10 +99,13 @@
  * their shell commands are automatically initialized by the kernel.
  */
 
-#define	SHELL_INIT_SECTIONS()		\
-		__shell_cmd_start = .;		\
-		KEEP(*(".shell_*"));		\
-		__shell_cmd_end = .;
+#define	SHELL_INIT_SECTIONS()				\
+		__shell_module_start = .;		\
+		KEEP(*(".shell_module_*"));		\
+		__shell_module_end = .;			\
+		__shell_cmd_start = .;			\
+		KEEP(*(".shell_cmd_*"));		\
+		__shell_cmd_end = .;			\
 
 #ifdef CONFIG_APPLICATION_MEMORY
 
@@ -113,8 +118,8 @@
    archives like KBuild did.*/
 #endif
 
-#define X(i, j)  KERNEL_OBJECT_FILE_##i (j)
-#define Y(i, j) *KERNEL_OBJECT_FILE_##i
+#define X(i, j) KERNEL_OBJECT_FILE_##i (j)
+#define Y(i, j) KERNEL_OBJECT_FILE_##i
 
 #define KERNEL_INPUT_SECTION(sect) \
     UTIL_LISTIFY(NUM_KERNEL_OBJECT_FILES, X, sect)
@@ -229,6 +234,19 @@ extern char _vector_end[];
 
 /* end address of image, used by newlib for the heap */
 extern char _end[];
+
+#ifdef CONFIG_CCM_BASE_ADDRESS
+extern char __ccm_data_rom_start[];
+extern char __ccm_start[];
+extern char __ccm_data_start[];
+extern char __ccm_data_end[];
+extern char __ccm_bss_start[];
+extern char __ccm_bss_end[];
+extern char __ccm_noinit_start[];
+extern char __ccm_noinit_end[];
+extern char __ccm_end[];
+#endif /* CONFIG_CCM_BASE_ADDRESS */
+
 
 #endif /* ! _ASMLANGUAGE */
 

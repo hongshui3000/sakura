@@ -79,6 +79,10 @@ The Zephyr nucleo_412zg board configuration supports the following hardware feat
 +-----------+------------+-------------------------------------+
 | GPIO      | on-chip    | gpio                                |
 +-----------+------------+-------------------------------------+
+| I2C       | on-chip    | i2c                                 |
++-----------+------------+-------------------------------------+
+| USB       | on-chip    | usb                                 |
++-----------+------------+-------------------------------------+
 | PWM       | on-chip    | pwm                                 |
 +-----------+------------+-------------------------------------+
 
@@ -129,6 +133,10 @@ Default Zephyr Peripheral Mapping:
 - LD1 : PB0
 - LD2 : PB7
 - LD3 : PB14
+- I2C1 SCL : PB8
+- I2C1 SDA : PB9
+- USB DM : PA11
+- USB DP : PA12
 
 System Clock
 ------------
@@ -148,8 +156,7 @@ Programming and Debugging
 *************************
 
 Nucleo F412ZG board includes an ST-LINK/V2-1 embedded debug tool interface.
-However this interface is currently not supported by OpenOCD. You will need
-to use ST tools or an external JTAG probe.
+This interface is supported by the openocd version included in Zephyr SDK.
 
 
 .. _Nucleo F412ZG website:

@@ -1,6 +1,7 @@
 #! /usr/bin/env python3
 
 # Copyright (c) 2017 Linaro Limited.
+# Copyright (c) 2017 Open Source Foundries Limited.
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -11,56 +12,27 @@ as well as some other helpers for concrete runner classes.
 """
 
 import abc
+import argparse
 import os
 import platform
-import pprint
 import shlex
 import signal
 import subprocess
-import sys
 
 
-def get_env_or_bail(env_var):
-    '''Get an environment variable, or raise an error.
-
-    In case of KeyError, an error message is printed, along with the
-    environment, and the exception is re-raised.
-    '''
-    try:
-        return os.environ[env_var]
-    except KeyError:
-        print('Variable {} not in environment:'.format(
-                  env_var), file=sys.stderr)
-        pprint.pprint(dict(os.environ), stream=sys.stderr)
-        raise
+# Turn on to enable just printing the commands that would be run,
+# without actually running them. This can break runners that are expecting
+# output or if one command depends on another, so it's just for debugging.
+DEBUG = False
 
 
-def get_env_bool_or(env_var, default_value):
-    '''Get an environment variable as a boolean, or return a default value.
+class _DebugDummyPopen:
 
-    Get an environment variable, interpret it as a base ten
-    integer, and convert that to a boolean.
+    def terminate(self):
+        pass
 
-    In case the environment variable is not defined, return default_value.
-    '''
-    try:
-        return bool(int(os.environ[env_var]))
-    except KeyError:
-        return default_value
-
-
-def get_env_strip_or(env_var, to_strip, default_value):
-    '''Get and clean up an environment variable, or return a default value.
-
-    Get the value of env_var from the environment. If it is
-    defined, return that value with to_strip stripped off. If it
-    is undefined, return default_value (without any stripping).
-    '''
-    value = os.environ.get(env_var, None)
-    if value is not None:
-        return value.strip(to_strip)
-    else:
-        return default_value
+    def wait(self):
+        pass
 
 
 def quote_sh_list(cmd):
@@ -142,15 +114,100 @@ class NetworkPortHelper:
         return {int(b) for b in used_bytes}
 
 
+class BuildConfiguration:
+    '''This helper class provides access to build-time configuration.
+
+    Configuration options can be read as if the object were a dict,
+    either object['CONFIG_FOO'] or object.get('CONFIG_FOO').
+
+    Configuration values in .config and generated_dts_board.conf are
+    available.'''
+
+    def __init__(self, build_dir):
+        self.build_dir = build_dir
+        self.options = {}
+        self._init()
+
+    def __getitem__(self, item):
+        return self.options[item]
+
+    def get(self, option, *args):
+        return self.options.get(option, *args)
+
+    def _init(self):
+        build_z = os.path.join(self.build_dir, 'zephyr')
+        generated = os.path.join(build_z, 'include', 'generated')
+        files = [os.path.join(build_z, '.config'),
+                 os.path.join(generated, 'generated_dts_board.conf')]
+        for f in files:
+            self._parse(f)
+
+    def _parse(self, filename):
+        with open(filename, 'r') as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith('#'):
+                    continue
+                option, value = line.split('=', 1)
+                self.options[option] = self._parse_value(value)
+
+    def _parse_value(self, value):
+        if value.startswith('"') or value.startswith("'"):
+            return value.split()
+        try:
+            return int(value, 0)
+        except ValueError:
+            return value
+
+
+class RunnerCaps:
+    '''This class represents a runner class's capabilities.
+
+    Each capability is represented as an attribute with the same
+    name. Flag attributes are True or False.
+
+    Available capabilities:
+
+    - commands: set of supported commands; default is {'flash',
+      'debug', 'debugserver'}.
+
+    - flash_addr: whether the runner supports flashing to an
+      arbitrary address. Default is False. If true, the runner
+      must honor the --dt-flash option.
+    '''
+
+    def __init__(self,
+                 commands={'flash', 'debug', 'debugserver'},
+                 flash_addr=False):
+        self.commands = commands
+        self.flash_addr = bool(flash_addr)
+
+
+_YN_CHOICES = ['Y', 'y', 'N', 'n', 'yes', 'no', 'YES', 'NO']
+
+
+class _DTFlashAction(argparse.Action):
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        if values.lower().startswith('y'):
+            namespace.dt_flash = True
+        else:
+            namespace.dt_flash = False
+
+
 class ZephyrBinaryRunner(abc.ABC):
     '''Abstract superclass for binary runners (flashers, debuggers).
+
+    **Note**: these APIs are still evolving, and will change!
 
     With some exceptions, boards supported by Zephyr must provide
     generic means to be flashed (have a Zephyr firmware binary
     permanently installed on the device for running) and debugged
     (have a breakpoint debugger and program loader on a host
-    workstation attached to a running target). This is supported by
-    three top-level commands managed by the Zephyr build system:
+    workstation attached to a running target).
+
+    This is supported by three top-level commands managed by the
+    Zephyr build system:
 
     - 'flash': flash a previously configured binary to the board,
       start execution on the target, then return.
@@ -164,70 +221,181 @@ class ZephyrBinaryRunner(abc.ABC):
       connect to a debug server with symbol tables loaded from the
       binary.
 
-    Runner functionality relies on a variety of target-specific tools
-    and configuration values, the user interface to which is
-    abstracted by this class. Each runner subclass should take any
-    values it needs to execute one of these commands in its
-    constructor.  The actual command execution is handled in the run()
-    method.
+    This class provides an API for these commands. Every runner has a
+    name (like 'pyocd'), and declares commands it can handle (like
+    'flash'). Zephyr boards (like 'nrf52_pca10040') declare compatible
+    runner(s) by name to the build system, which makes concrete runner
+    instances to execute commands via this class.
 
-    This functionality has replaced the legacy Zephyr runners,
-    which were shell scripts.
+    If your board can use an existing runner, all you have to do is
+    give its name to the build system. How to do that is out of the
+    scope of this documentation, but use the existing boards as a
+    starting point.
 
-    At present, the Zephyr build system uses a variety of
-    tool-specific environment variables to control runner behavior.
-    To support a transition to ZephyrBinaryRunner and subclasses, this
-    class provides a create_for_shell_script() static factory method.
-    This method iterates over ZephyrBinaryRunner subclasses,
-    determines which (if any) can provide equivalent functionality to
-    the old shell-based runner, and returns a subclass instance with its
-    configuration determined from the environment.
+    If you want to define and use your own runner:
 
-    To support this, subclasess currently must provide a pair of
-    static methods, replaces_shell_script() and create_from_env(). The
-    first allows the runner subclass to declare which commands and
-    scripts it can replace. The second is called by
-    create_for_shell_script() to create a concrete runner instance.
+    1. Define a ZephyrBinaryRunner subclass, and implement its
+       abstract methods. You may need to override capabilities().
 
-    The environment-based factories are for legacy use *only*; the
-    user must be able to construct and use a runner using only the
-    constructor and run() method.'''
+    2. Make sure the Python module defining your runner class is
+       imported, e.g. by editing this package's __init__.py (otherwise,
+       get_runners() won't work).
+
+    3. Give your runner's name to the Zephyr build system in your
+       board's build files.
+
+    For command-line invocation from the Zephyr build system, runners
+    define their own argparse-based interface through the common
+    add_parser() (and runner-specific do_add_parser() it delegates
+    to), and provide a way to create instances of themselves from
+    parsed arguments via create_from_args().
+
+    Runners use a variety of target-specific tools and configuration
+    values, the user interface to which is abstracted by this
+    class. Each runner subclass should take any values it needs to
+    execute one of these commands in its constructor.  The actual
+    command execution is handled in the run() method.'''
 
     def __init__(self, debug=False):
         self.debug = debug
 
     @staticmethod
-    def create_for_shell_script(shell_script, command, debug):
-        '''Factory for using as a drop-in replacement to a shell script.
+    def get_runners():
+        '''Get a list of all currently defined runner classes.'''
+        return ZephyrBinaryRunner.__subclasses__()
 
-        Command is one of 'flash', 'debug', 'debugserver'.
-
-        Get runner instance to use in place of shell_script, deriving
-        configuration from the environment.'''
-        for sub_cls in ZephyrBinaryRunner.__subclasses__():
-            if sub_cls.replaces_shell_script(shell_script, command):
-                return sub_cls.create_from_env(command, debug)
-        raise ValueError('cannot implement script {} command {}'.format(
-                             shell_script, command))
-
-    @staticmethod
+    @classmethod
     @abc.abstractmethod
-    def replaces_shell_script(shell_script, command):
-        '''Check if this class replaces shell_script for the given command.'''
+    def name(cls):
+        '''Return this runner's user-visible name.
 
-    @staticmethod
+        When choosing a name, pick something short and lowercase,
+        based on the name of the tool (like openocd, jlink, etc.) or
+        the target architecture/board (like xtensa, em-starterkit,
+        etc.).'''
+
+    @classmethod
+    def capabilities(cls):
+        '''Returns a RunnerCaps representing this runner's capabilities.
+
+        This implementation returns the default capabilities.
+
+        Subclasses should override appropriately if needed.'''
+        return RunnerCaps()
+
+    @classmethod
+    def add_parser(cls, parser):
+        '''Adds a sub-command parser for this runner.
+
+        The given object, parser, is a sub-command parser from the
+        argparse module. For more details, refer to the documentation
+        for argparse.ArgumentParser.add_subparsers().
+
+        The standard (required) arguments are:
+
+        * --board-dir
+        * --kernel-elf, --kernel-hex, --kernel-bin
+
+        The standard optional arguments are:
+
+        * --gdb
+        * --openocd, --openocd-search
+        * --dt-flash (if the runner capabilities includes flash_addr)
+
+        Runner-specific options are added through the do_add_parser()
+        hook.
+
+        The single positional argument is "command". This is currently
+        restricted to values 'flash', 'debug', and 'debugserver'.'''
+        # Required options.
+        parser.add_argument('--board-dir', required=True,
+                            help='Zephyr board directory')
+        parser.add_argument('--kernel-elf', required=True,
+                            help='path to kernel binary in .elf format')
+        parser.add_argument('--kernel-hex', required=True,
+                            help='path to kernel binary in .hex format')
+        parser.add_argument('--kernel-bin', required=True,
+                            help='path to kernel binary in .bin format')
+
+        # Optional options.
+        if cls.capabilities().flash_addr:
+            parser.add_argument('--dt-flash', default='n', choices=_YN_CHOICES,
+                                action=_DTFlashAction,
+                                help='''If 'yes', use configuration
+                                generated by device tree (DT) to compute flash
+                                addresses.''')
+        parser.add_argument('--gdb', default=None,
+                            help='GDB compatible with the target')
+        parser.add_argument('--openocd', default='openocd',
+                            help='OpenOCD to use')
+        parser.add_argument('--openocd-search', default=None,
+                            help='directory to add to OpenOCD search path')
+
+        # Runner-specific options.
+        cls.do_add_parser(parser)
+
+        # The lone positional argument. Note that argparse can't cope
+        # with adding options after the first positional argument, so
+        # this must come last.
+        parser.add_argument('command',
+                            choices=['flash', 'debug', 'debugserver'],
+                            help='command to run (flash, debug, debugserver)')
+
+    @classmethod
     @abc.abstractmethod
-    def create_from_env(command, debug):
-        '''Create new flasher instance from environment variables.
+    def do_add_parser(cls, parser):
+        '''Hook for adding runner-specific options.
 
-        This class must be able to replace the current shell script
-        (FLASH_SCRIPT or DEBUG_SCRIPT, depending on command). The
-        environment variables expected by that script are used to build
-        the flasher in a backwards-compatible manner.'''
+        Subclasses **must not** add positional arguments. That is, when
+        calling parser.add_argument(), make sure to begin the argument
+        with '-' so it is interpreted as an option, rather than a
+        positional argument.
 
+        * OK: parser.add_argument('--my-option')
+        * Not OK: parser.add_argument('my-argument').'''
+
+    @classmethod
     @abc.abstractmethod
+    def create_from_args(cls, args):
+        '''Create an instance from command-line arguments.
+
+        These will have been parsed from the command line according to
+        the specification defined by add_parser().'''
+
+    @classmethod
+    def get_flash_address(cls, args, build_conf, default=0x0):
+        '''Helper method for extracting a flash address.
+
+        If args.dt_flash is true, get the address from the
+        BoardConfiguration, build_conf. (If
+        CONFIG_HAS_FLASH_LOAD_OFFSET is n in that configuration, it
+        returns CONFIG_FLASH_BASE_ADDRESS. Otherwise, it returns
+        CONFIG_FLASH_BASE_ADDRESS + CONFIG_FLASH_LOAD_OFFSET.)
+
+        Otherwise (when args.dt_flash is False), the default value is
+        returned.'''
+        if args.dt_flash:
+            if build_conf['CONFIG_HAS_FLASH_LOAD_OFFSET']:
+                return (build_conf['CONFIG_FLASH_BASE_ADDRESS'] +
+                        build_conf['CONFIG_FLASH_LOAD_OFFSET'])
+            else:
+                return build_conf['CONFIG_FLASH_BASE_ADDRESS']
+        else:
+            return default
+
     def run(self, command, **kwargs):
-        '''Run a command ('flash', 'debug', 'debugserver').
+        '''Runs command ('flash', 'debug', 'debugserver').
+
+        This is the main entry point to this runner.'''
+        caps = self.capabilities()
+        if command not in caps.commands:
+            raise ValueError('runner {} does not implement command {}'.format(
+                self.name(), command))
+        self.do_run(command, **kwargs)
+
+    @abc.abstractmethod
+    def do_run(self, command, **kwargs):
+        '''Concrete runner; run() delegates to this. Implement in subclasses.
 
         In case of an unsupported command, raise a ValueError.'''
 
@@ -257,9 +425,17 @@ class ZephyrBinaryRunner(abc.ABC):
         subprocess and check that it executed correctly, rather than
         using subprocess directly, to keep accurate debug logs.
         '''
-        if self.debug:
+        if DEBUG or self.debug:
             print(quote_sh_list(cmd))
-        subprocess.check_call(cmd)
+
+        if DEBUG:
+            return
+
+        try:
+            subprocess.check_call(cmd)
+        except subprocess.CalledProcessError:
+            print('Error running {}'.format(quote_sh_list(cmd)))
+            raise
 
     def check_output(self, cmd):
         '''Subclass subprocess.check_output() wrapper.
@@ -270,7 +446,15 @@ class ZephyrBinaryRunner(abc.ABC):
         '''
         if self.debug:
             print(quote_sh_list(cmd))
-        return subprocess.check_output(cmd)
+
+        if DEBUG:
+            return b''
+
+        try:
+            return subprocess.check_output(cmd)
+        except subprocess.CalledProcessError:
+            print('Error running {}'.format(quote_sh_list(cmd)))
+            raise
 
     def popen_ignore_int(self, cmd):
         '''Spawn a child command, ensuring it ignores SIGINT.
@@ -285,7 +469,10 @@ class ZephyrBinaryRunner(abc.ABC):
         elif system in {'Linux', 'Darwin'}:
             preexec = os.setsid
 
-        if self.debug:
+        if DEBUG or self.debug:
             print(quote_sh_list(cmd))
+
+        if DEBUG:
+            return _DebugDummyPopen()
 
         return subprocess.Popen(cmd, creationflags=cflags, preexec_fn=preexec)

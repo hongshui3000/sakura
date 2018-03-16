@@ -2,6 +2,7 @@
 
 /*
  * Copyright (c) 2017 PHYTEC Messtechnik GmbH
+ * Copyright (c) 2017, 2018 Intel Corporation
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -12,9 +13,10 @@
 #include <usb/usb_common.h>
 #include <usb/class/usb_msc.h>
 #include <usb/class/usb_cdc.h>
+#include <usb/class/usb_hid.h>
 #include "usb_descriptor.h"
 
-#define SYS_LOG_LEVEL CONFIG_SYS_LOG_USB_LEVEL
+#define SYS_LOG_LEVEL CONFIG_SYS_LOG_USB_DEVICE_LEVEL
 #include <logging/sys_log.h>
 
 /*
@@ -59,6 +61,23 @@ struct dev_common_descriptor {
 		struct usb_ep_descriptor if1_out_ep;
 	} __packed cdc_acm_cfg;
 #endif
+#ifdef CONFIG_USB_DEVICE_NETWORK_RNDIS
+	struct usb_rndis_config {
+#ifdef CONFIG_USB_COMPOSITE_DEVICE
+		struct usb_association_descriptor iad;
+#endif
+		struct usb_if_descriptor if0;
+		struct cdc_header_descriptor if0_header;
+		struct cdc_cm_descriptor if0_cm;
+		struct cdc_acm_descriptor if0_acm;
+		struct cdc_union_descriptor if0_union;
+		struct usb_ep_descriptor if0_int_ep;
+
+		struct usb_if_descriptor if1;
+		struct usb_ep_descriptor if1_in_ep;
+		struct usb_ep_descriptor if1_out_ep;
+	} __packed rndis_cfg;
+#endif /* CONFIG_USB_DEVICE_NETWORK_RNDIS */
 #ifdef CONFIG_USB_DEVICE_NETWORK_ECM
 	struct usb_cdc_ecm_config {
 #ifdef CONFIG_USB_COMPOSITE_DEVICE
@@ -83,6 +102,13 @@ struct dev_common_descriptor {
 		struct usb_ep_descriptor if0_in_ep;
 		struct usb_ep_descriptor if0_out_ep;
 	} __packed mass_cfg;
+#endif
+#ifdef CONFIG_USB_DEVICE_HID
+	struct usb_hid_config {
+		struct usb_if_descriptor if0;
+		struct usb_hid_descriptor if0_hid;
+		struct usb_ep_descriptor if0_int_ep;
+	} __packed hid_cfg;
 #endif
 	struct usb_string_desription {
 		struct usb_string_descriptor lang_descr;
@@ -261,6 +287,118 @@ static struct dev_common_descriptor common_desc = {
 		},
 	},
 #endif
+#ifdef CONFIG_USB_DEVICE_NETWORK_RNDIS
+	.rndis_cfg = {
+#ifdef CONFIG_USB_COMPOSITE_DEVICE
+		.iad = {
+			.bLength = sizeof(struct usb_association_descriptor),
+			.bDescriptorType = USB_ASSOCIATION_DESC,
+			.bFirstInterface = FIRST_IFACE_RNDIS,
+			.bInterfaceCount = 0x02,
+			.bFunctionClass = COMMUNICATION_DEVICE_CLASS,
+			.bFunctionSubClass = 6,
+			.bFunctionProtocol = 0,
+			.iFunction = 0,
+		},
+#endif
+		/* Interface descriptor 0 */
+		/* CDC Communication interface */
+		.if0 = {
+			.bLength = sizeof(struct usb_if_descriptor),
+			.bDescriptorType = USB_INTERFACE_DESC,
+			.bInterfaceNumber = FIRST_IFACE_RNDIS,
+			.bAlternateSetting = 0,
+			.bNumEndpoints = 1,
+			.bInterfaceClass = COMMUNICATION_DEVICE_CLASS,
+			.bInterfaceSubClass = ACM_SUBCLASS,
+			.bInterfaceProtocol = ACM_VENDOR_PROTOCOL,
+			.iInterface = 0,
+		},
+		/* Header Functional Descriptor */
+		.if0_header = {
+			.bFunctionLength = sizeof(struct cdc_header_descriptor),
+			.bDescriptorType = CS_INTERFACE,
+			.bDescriptorSubtype = HEADER_FUNC_DESC,
+			.bcdCDC = sys_cpu_to_le16(USB_1_1),
+		},
+		/* Call Management Functional Descriptor */
+		.if0_cm = {
+			.bFunctionLength = sizeof(struct cdc_cm_descriptor),
+			.bDescriptorType = CS_INTERFACE,
+			.bDescriptorSubtype = CALL_MANAGEMENT_FUNC_DESC,
+			.bmCapabilities = 0x00,
+			.bDataInterface = 1,
+		},
+		/* ACM Functional Descriptor */
+		.if0_acm = {
+			.bFunctionLength = sizeof(struct cdc_acm_descriptor),
+			.bDescriptorType = CS_INTERFACE,
+			.bDescriptorSubtype = ACM_FUNC_DESC,
+			/* Device supports the request combination of:
+			 *	Set_Line_Coding,
+			 *	Set_Control_Line_State,
+			 *	Get_Line_Coding
+			 *	and the notification Serial_State
+			 */
+			.bmCapabilities = 0x00,
+		},
+		/* Union Functional Descriptor */
+		.if0_union = {
+			.bFunctionLength = sizeof(struct cdc_union_descriptor),
+			.bDescriptorType = CS_INTERFACE,
+			.bDescriptorSubtype = UNION_FUNC_DESC,
+			.bControlInterface = 0,
+			.bSubordinateInterface0 = 1,
+		},
+		/* Notification EP Descriptor */
+		.if0_int_ep = {
+			.bLength = sizeof(struct usb_ep_descriptor),
+			.bDescriptorType = USB_ENDPOINT_DESC,
+			.bEndpointAddress = CONFIG_RNDIS_INT_EP_ADDR,
+			.bmAttributes = USB_DC_EP_INTERRUPT,
+			.wMaxPacketSize =
+				sys_cpu_to_le16(
+				CONFIG_RNDIS_INTERRUPT_EP_MPS),
+			.bInterval = 0x09,
+		},
+
+		/* Interface descriptor 1 */
+		/* CDC Data Interface */
+		.if1 = {
+			.bLength = sizeof(struct usb_if_descriptor),
+			.bDescriptorType = USB_INTERFACE_DESC,
+			.bInterfaceNumber = FIRST_IFACE_RNDIS + 1,
+			.bAlternateSetting = 0,
+			.bNumEndpoints = 2,
+			.bInterfaceClass = COMMUNICATION_DEVICE_CLASS_DATA,
+			.bInterfaceSubClass = 0,
+			.bInterfaceProtocol = 0,
+			.iInterface = 0,
+		},
+		/* Data Endpoint IN */
+		.if1_in_ep = {
+			.bLength = sizeof(struct usb_ep_descriptor),
+			.bDescriptorType = USB_ENDPOINT_DESC,
+			.bEndpointAddress = CONFIG_RNDIS_IN_EP_ADDR,
+			.bmAttributes = USB_DC_EP_BULK,
+			.wMaxPacketSize =
+				sys_cpu_to_le16(
+				CONFIG_RNDIS_BULK_EP_MPS),
+			.bInterval = 0x00,
+		},
+		/* Data Endpoint OUT */
+		.if1_out_ep = {
+			.bLength = sizeof(struct usb_ep_descriptor),
+			.bDescriptorType = USB_ENDPOINT_DESC,
+			.bEndpointAddress = CONFIG_RNDIS_OUT_EP_ADDR,
+			.bmAttributes = USB_DC_EP_BULK,
+			.wMaxPacketSize =
+				sys_cpu_to_le16(
+				CONFIG_RNDIS_BULK_EP_MPS),
+			.bInterval = 0x00,
+		},
+	},
+#endif /* CONFIG_USB_DEVICE_NETWORK_RNDIS */
 #ifdef CONFIG_USB_DEVICE_NETWORK_ECM
 	.cdc_ecm_cfg = {
 #ifdef CONFIG_USB_COMPOSITE_DEVICE
@@ -415,7 +553,48 @@ static struct dev_common_descriptor common_desc = {
 			.bInterval = 0x00,
 		},
 	},
-#endif
+#endif /* CONFIG_USB_MASS_STORAGE */
+#ifdef CONFIG_USB_DEVICE_HID
+	.hid_cfg = {
+		/* Interface descriptor */
+		.if0 = {
+			.bLength = sizeof(struct usb_if_descriptor),
+			.bDescriptorType = USB_INTERFACE_DESC,
+			.bInterfaceNumber = FIRST_IFACE_HID,
+			.bAlternateSetting = 0,
+			.bNumEndpoints = 1,
+			.bInterfaceClass = HID_CLASS,
+			.bInterfaceSubClass = 0,
+			.bInterfaceProtocol = 0,
+			.iInterface = 0,
+		},
+		.if0_hid = {
+			.bLength = sizeof(struct usb_hid_descriptor),
+			.bDescriptorType = USB_HID_DESC,
+			.bcdHID = sys_cpu_to_le16(USB_1_1),
+			.bCountryCode = 0,
+			.bNumDescriptors = 1,
+			.subdesc[0] = {
+				.bDescriptorType = USB_HID_REPORT_DESC,
+				/*
+				 * descriptor length needs to be set
+				 * after initialization
+				 */
+				.wDescriptorLength = 0,
+			},
+		},
+		.if0_int_ep = {
+			.bLength = sizeof(struct usb_ep_descriptor),
+			.bDescriptorType = USB_ENDPOINT_DESC,
+			.bEndpointAddress = CONFIG_HID_INT_EP_ADDR,
+			.bmAttributes = USB_DC_EP_INTERRUPT,
+			.wMaxPacketSize =
+				sys_cpu_to_le16(
+				CONFIG_HID_INTERRUPT_EP_MPS),
+			.bInterval = 0x09,
+		},
+	},
+#endif /* CONFIG_USB_DEVICE_HID */
 	.string_descr = {
 		.lang_descr = {
 			.bLength = sizeof(struct usb_string_descriptor),
@@ -485,3 +664,11 @@ u8_t *usb_get_device_descriptor(void)
 
 	return (u8_t *) &common_desc;
 }
+
+#ifdef CONFIG_USB_DEVICE_HID
+void usb_set_hid_report_size(u16_t report_desc_size)
+{
+	common_desc.hid_cfg.if0_hid.subdesc[0].wDescriptorLength =
+		sys_cpu_to_le16(report_desc_size);
+}
+#endif

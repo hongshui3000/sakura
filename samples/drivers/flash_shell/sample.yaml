@@ -3,7 +3,7 @@ sample:
     behavior
   name: Flash shell
 tests:
-  - test:
-      build_only: true
-      platform_whitelist: 96b_carbon
-      tags: apps
+  test:
+    platform_whitelist: 96b_carbon frdm_k64f frdm_kw41z frdm_kl25z
+    tags: apps
+    harness: keyboard

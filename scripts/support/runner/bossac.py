@@ -4,11 +4,9 @@
 
 '''bossac-specific runner (flash only) for Atmel SAM microcontrollers.'''
 
-from os import path
-import os
 import platform
 
-from .core import ZephyrBinaryRunner, get_env_or_bail
+from .core import ZephyrBinaryRunner, RunnerCaps
 
 DEFAULT_BOSSAC_PORT = '/dev/ttyACM0'
 
@@ -23,33 +21,27 @@ class BossacBinaryRunner(ZephyrBinaryRunner):
         self.bossac = bossac
         self.port = port
 
-    def replaces_shell_script(shell_script, command):
-        return command == 'flash' and shell_script == 'bossa-flash.sh'
+    @classmethod
+    def name(cls):
+        return 'bossac'
 
-    def create_from_env(command, debug):
-        '''Create flasher from environment.
+    @classmethod
+    def capabilities(cls):
+        return RunnerCaps(commands={'flash'})
 
-        Required:
+    @classmethod
+    def do_add_parser(cls, parser):
+        parser.add_argument('--bossac', default='bossac',
+                            help='path to bossac, default is bossac')
+        parser.add_argument('--bossac-port', default='/dev/ttyACM0',
+                            help='serial port to use, default is /dev/ttyACM0')
 
-        - O: build output directory
-        - KERNEL_BIN_NAME: name of kernel binary
+    @classmethod
+    def create_from_args(command, args):
+        return BossacBinaryRunner(args.kernel_bin, bossac=args.bossac,
+                                  port=args.bossac_port, debug=args.verbose)
 
-        Optional:
-
-        - BOSSAC: path to bossac, default is bossac
-        - BOSSAC_PORT: serial port to use, default is /dev/ttyACM0
-        '''
-        bin_name = path.join(get_env_or_bail('O'),
-                             get_env_or_bail('KERNEL_BIN_NAME'))
-        bossac = os.environ.get('BOSSAC', 'bossac')
-        port = os.environ.get('BOSSAC_PORT', DEFAULT_BOSSAC_PORT)
-        return BossacBinaryRunner(bin_name, bossac=bossac, port=port,
-                                  debug=debug)
-
-    def run(self, command, **kwargs):
-        if command != 'flash':
-            raise ValueError('only flash is supported')
-
+    def do_run(self, command, **kwargs):
         if platform.system() != 'Linux':
             msg = 'CAUTION: No flash tool for your host system found!'
             raise NotImplementedError(msg)

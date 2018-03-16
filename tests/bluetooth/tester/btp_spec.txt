@@ -12,7 +12,7 @@ and implementation under test (IUT).
 
 The protocol is SOCK_STREAM based and follows a strict PDU specification
 with a generic header and initial registration exchange. The communication is
-driver from tester with commands/response exchange. The protocol is single PDU
+driven from tester with commands/response exchange. The protocol is single PDU
 exchanged based, meaning every command requires a response. IUT will use events
 to signal notifications.
 
@@ -456,8 +456,8 @@ Events:
 	Opcode 0x81 - Device Found event
 
 		Controller Index:	<controller id>
-		Event parameters:	Address (6 octets)
-					Address_Type (1 octet)
+		Event parameters:	Address_Type (1 octet)
+					Address (6 octets)
 					RSSI (1 octet)
 					Flags (1 octet)
 					EIR_Data_Length (2 Octets)
@@ -1111,6 +1111,47 @@ Commands and responses:
 
 		In case of an error, the error response will be returned.
 
+	Opcode 0x1c - Get Attributes
+
+		Controller Index:	<controller id>
+		Command parameters:	Start Handle (2 octets)
+					End Handle (2 octets)
+					Type_Length (1 octet)
+					Type (2 or 16 octets)
+		Response parameters:	Attributes_Count (1 octet)
+					[array] Attribute (variable)
+
+		Object Attribute is defined as:
+					Handle (2 octets)
+					Permission (1 octet)
+					Type_Length (1 octet)
+					Type (2 or 16 octets)
+
+		Valid Type_Length parameter values:
+					0x02 = UUID16
+					0x10 = UUID128
+
+		This procedure is used to query GATT Server for attributes based
+		on given search pattern. Attributes can be searched using
+		Attribute Handle range and Attribute Type.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x1d - Get Attribute Value
+
+		Controller Index:	<controller id>
+		Command parameters:	Handle (2 octets)
+		Response parameters:	ATT_Response (1 octet)
+					Value_Length (2 octet)
+					Value (variable)
+
+		This procedure is used to query GATT Server for attribute value.
+		In case of long attribute value, multiple responses will be
+		sent. BTP_STATUS_SUCCESS response indicates the procedure is
+		finished.
+
+		In case of an error, the error response will be returned.
+
 Events:
 	Opcode 0x80 - Notification/Indication Received
 
@@ -1391,6 +1432,110 @@ Commands and responses:
 
 		In case of an error, the error response will be returned.
 
+	Opcode 0x08 - IV Update Test Mode
+		Controller Index:	<controller id>
+		Command parameters:	Toggle (1 octet)
+
+		Valid Toggle values:
+					0x00 = Disable
+					0x01 = Enable
+
+		This command is used to toggle the IV Update test mode.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x09 - IV Update toggle state
+		Controller Index:	<controller id>
+		Command parameters:	<none>
+
+		This command is used to make a IV Update state transition
+		while in IV Update test mode, ignoring the 96 hour limit.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x0a - Network Send
+		Controller Index:	<controller id>
+		Command parameters:	TTL (1 octet)
+					SRC (2 octets)
+					DST (2 octets)
+					Payload_Len (1 octet)
+					Payload (variable)
+
+		This command is used to send network layer packet.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x0b - Health Generate Faults
+		Controller Index:	<controller id>
+		Command parameters:	<none>
+		Response parameters:	Test_ID (1 octet)
+					Current_Faults_Count (1 octet)
+					Registered_Faults_Count (1 octet)
+					Current_Faults (variable)
+					Registered_Faults (variable)
+
+		This command is used to generate health faults on IUT.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x0c - Health Clear Faults
+		Controller Index:	<controller id>
+		Command parameters:	<none>
+
+		This command is used to clear fault arrays on IUT.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x0d - Low Power Node
+		Controller Index:	<controller id>
+		Command parameters:	Toggle (1 octet)
+
+		Valid Toggle values:
+					0x00 = Disable
+					0x01 = Enable
+
+		This command is used to toggle the Low Power feature of the
+		local device.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x0e - Low Power Node Poll
+		Controller Index:	<controller id>
+		Command parameters:	<none>
+
+		This command is used to send out a Friend Poll message.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x0f - Model Send
+		Controller Index:	<controller id>
+		Command parameters:	SRC (2 octets)
+					DST (2 octets)
+					Payload_Len (1 octet)
+					Payload (variable)
+
+		This command is used to send Mesh model message.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x10 - Low Power Node Subscribe
+		Controller Index:	<controller id>
+		Command parameters:	Address (2 octets)
+
+		This command is used to send out a Friend Subscription List
+		Add message message.
+
+		In case of an error, the error response will be returned.
+
+	Opcode 0x11 - Low Power Node Unsubscribe
+		Controller Index:	<controller id>
+		Command parameters:	Address (2 octets)
+
+		This command is used to send out a Friend Subscription List
+		Remove message.
+
+		In case of an error, the error response will be returned.
+
 Events:
 	Opcode 0x80 - Output number action Event
 
@@ -1422,3 +1567,57 @@ Events:
 		Event parameters:	<none>
 
 		This event indicate that node was provisioned.
+
+	Opcode 0x84 - Link open Event
+
+		Controller Index:	<controller id>
+		Event parameters:	Bearer (1 octet)
+
+		Valid Bearer parameter values:
+
+					0x00 = PB-ADV
+					0x01 = PB-GATT
+
+		This event indicates that provisioning link has been opened on
+		given bearer.
+
+	Opcode 0x85 - Link closed Event
+
+		Controller Index:	<controller id>
+		Event parameters:	Bearer (1 octet)
+
+		Valid Bearer parameter values:
+
+					0x00 = PB-ADV
+					0x01 = PB-GATT
+
+		This event indicates that provisioning link has been closed on
+		given bearer.
+
+	Opcode 0x86 - Network receive Event
+
+		Controller Index:	<controller id>
+		Event parameters:	TTL (1 octet)
+					CTL (1 octet)
+					SRC (2 octets)
+					DST (2 octets)
+					Payload_Len (1 octet)
+					Payload (variable)
+
+		This event indicates reception of network packet.
+
+	Opcode 0x87 - Invalid BearerOpcode Event
+
+		Controller Index:	<controller id>
+		Event parameters:	Opcode (1 octet)
+
+		This event indicates reception of provisioning message with
+		invalid RFU BearerOpcode.
+
+	Opcode 0x88 - Transport Incomplete Timer Expired Event
+
+		Controller Index:	<controller id>
+		Event parameters:	<none>
+
+		This event indicates that segmented message incomplete timer
+		expired.

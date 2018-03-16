@@ -130,11 +130,11 @@ struct net_tcp {
 	/** Retransmit timer */
 	struct k_delayed_work retry_timer;
 
+	/** TIME_WAIT timer */
+	struct k_delayed_work timewait_timer;
+
 	/** List pointer used for TCP retransmit buffering */
 	sys_slist_t sent_list;
-
-	/** Max acknowledgment. */
-	u32_t recv_max_ack;
 
 	/** Current sequence number. */
 	u32_t send_seq;
@@ -302,12 +302,15 @@ int net_tcp_prepare_ack(struct net_tcp *tcp, const struct sockaddr *remote,
  * @brief Prepare a TCP RST message that can be send to peer.
  *
  * @param tcp TCP context
+ * @param local Source address
  * @param remote Peer address
  * @param pkt Network buffer
  *
  * @return 0 if ok, < 0 if error
  */
-int net_tcp_prepare_reset(struct net_tcp *tcp, const struct sockaddr *remote,
+int net_tcp_prepare_reset(struct net_tcp *tcp,
+			  const struct sockaddr *local,
+			  const struct sockaddr *remote,
 			  struct net_pkt **pkt);
 
 typedef void (*net_tcp_cb_t)(struct net_tcp *tcp, void *user_data);
@@ -353,8 +356,9 @@ int net_tcp_send_pkt(struct net_pkt *pkt);
  *
  * @param cts Context
  * @param seq Received ACK sequence number
+ * @return False if ACK sequence number is invalid, true otherwise
  */
-void net_tcp_ack_received(struct net_context *ctx, u32_t ack);
+bool net_tcp_ack_received(struct net_context *ctx, u32_t ack);
 
 /**
  * @brief Calculates and returns the MSS for a given TCP context

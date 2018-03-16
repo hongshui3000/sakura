@@ -9,15 +9,20 @@
 #include <tc_util.h>
 #include <kernel_structs.h>
 #include <irq_offload.h>
+#include <kswap.h>
 
-#define STACKSIZE 2048
+#if defined(CONFIG_X86) && defined(CONFIG_X86_MMU)
+#define STACKSIZE (8192)
+#else
+#define  STACKSIZE (2048)
+#endif
 #define MAIN_PRIORITY 7
 #define PRIORITY 5
 
 static K_THREAD_STACK_DEFINE(alt_stack, STACKSIZE);
 
 #ifdef CONFIG_STACK_SENTINEL
-#define OVERFLOW_STACKSIZE 1024
+#define OVERFLOW_STACKSIZE (STACKSIZE / 2)
 static k_thread_stack_t *overflow_stack =
 		alt_stack + (STACKSIZE - OVERFLOW_STACKSIZE);
 #else
@@ -29,12 +34,25 @@ volatile int rv;
 
 static volatile int crash_reason;
 
-/* ARM is a special case, in that k_thread_abort() does indeed return
- * instead of calling _Swap() directly. The PendSV exception is queued
- * and immediately fires upon completing the exception path; the faulting
- * thread is never run again.
+/* On some architectures, k_thread_abort(_current) will return instead
+ * of _Swap'ing away.
+ *
+ * On ARM the PendSV exception is queued and immediately fires upon
+ * completing the exception path; the faulting thread is never run
+ * again.
+ *
+ * On Xtensa/asm2 the handler is running in interrupt context and on
+ * the interrupt stack and needs to return through the interrupt exit
+ * code.
+ *
+ * In both cases the thread is guaranteed never to run again once we
+ * return from the _SysFatalErrorHandler().
  */
-#ifndef CONFIG_ARM
+#if !(defined(CONFIG_ARM) || defined(CONFIG_XTENSA_ASM2))
+#define ERR_IS_NORETURN 1
+#endif
+
+#ifdef ERR_IS_NORETURN
 FUNC_NORETURN
 #endif
 void _SysFatalErrorHandler(unsigned int reason, const NANO_ESF *pEsf)
@@ -43,7 +61,7 @@ void _SysFatalErrorHandler(unsigned int reason, const NANO_ESF *pEsf)
 	crash_reason = reason;
 
 	k_thread_abort(_current);
-#ifndef CONFIG_ARM
+#ifdef ERR_IS_NORETURN
 	CODE_UNREACHABLE;
 #endif
 }
@@ -124,9 +142,14 @@ void stack_thread2(void)
 }
 
 
-void testing_fatal(void)
+void test_fatal(void)
 {
 	int expected_reason;
+
+#if defined(CONFIG_ARCH_POSIX)
+	ARG_UNUSED(expected_reason);
+	ARG_UNUSED(overflow_stack);
+#endif
 
 	rv = TC_PASS;
 
@@ -137,6 +160,7 @@ void testing_fatal(void)
 	 */
 	k_thread_priority_set(_current, K_PRIO_PREEMPT(MAIN_PRIORITY));
 
+#ifndef CONFIG_ARCH_POSIX
 	TC_PRINT("test alt thread 1: generic CPU exception\n");
 	k_thread_create(&alt_thread, alt_stack,
 			K_THREAD_STACK_SIZEOF(alt_stack),
@@ -144,6 +168,13 @@ void testing_fatal(void)
 			NULL, NULL, NULL, K_PRIO_COOP(PRIORITY), 0,
 			K_NO_WAIT);
 	zassert_not_equal(rv, TC_FAIL, "thread was not aborted\n");
+#else
+	/*
+	 * We want the native OS to handle segfaults so we can debug it
+	 * with the normal linux tools
+	 */
+	TC_PRINT("test alt thread 1: skipped for POSIX ARCH\n");
+#endif
 
 	TC_PRINT("test alt thread 2: initiate kernel oops\n");
 	k_thread_create(&alt_thread, alt_stack,
@@ -169,6 +200,7 @@ void testing_fatal(void)
 		      crash_reason, _NANO_ERR_KERNEL_PANIC);
 	zassert_not_equal(rv, TC_FAIL, "thread was not aborted\n");
 
+#ifndef CONFIG_ARCH_POSIX
 	TC_PRINT("test stack overflow - timer irq\n");
 #ifdef CONFIG_STACK_SENTINEL
 	/* When testing stack sentinel feature, the overflow stack is a
@@ -211,11 +243,19 @@ void testing_fatal(void)
 		      crash_reason, _NANO_ERR_STACK_CHK_FAIL);
 
 	zassert_not_equal(rv, TC_FAIL, "thread was not aborted\n");
+#else
+	TC_PRINT("test stack overflow - skipped for POSIX arch\n");
+	/*
+	 * We do not have a stack check for the posix ARCH
+	 * again we relay on the native OS
+	 */
+#endif
 }
 
 /*test case main entry*/
 void test_main(void)
 {
-	ztest_test_suite(test_fatal, ztest_unit_test(testing_fatal));
-	ztest_run_test_suite(test_fatal);
+	ztest_test_suite(testing_fatal,
+			ztest_unit_test(test_fatal));
+	ztest_run_test_suite(testing_fatal);
 }

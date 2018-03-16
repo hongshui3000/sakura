@@ -22,6 +22,7 @@
 #include <kernel.h>
 #include <net/net_pkt.h>
 #include <net/net_if.h>
+#include <net/ethernet.h>
 
 #include "fsl_enet.h"
 #include "fsl_phy.h"
@@ -91,7 +92,7 @@ struct eth_context {
 static void eth_0_config_func(void);
 
 static enet_rx_bd_struct_t __aligned(ENET_BUFF_ALIGNMENT)
-rx_buffer_desc[CONFIG_ETH_MCUX_TX_BUFFERS];
+rx_buffer_desc[CONFIG_ETH_MCUX_RX_BUFFERS];
 
 static enet_tx_bd_struct_t __aligned(ENET_BUFF_ALIGNMENT)
 tx_buffer_desc[CONFIG_ETH_MCUX_TX_BUFFERS];
@@ -537,13 +538,6 @@ static int eth_0_init(struct device *dev)
 	enet_config.interrupt |= kENET_MiiInterrupt;
 
 #ifdef CONFIG_ETH_MCUX_PROMISCUOUS_MODE
-	/* FIXME: Workaround for lack of driver API support for multicast
-	 * management. So, instead we want to receive all multicast
-	 * frames "by default", or otherwise basic IPv6 features, like
-	 * address resolution, don't work. On Kinetis Ethernet controller,
-	 * that translates to enabling promiscuous mode. The real
-	 * fix depends on https://jira.zephyrproject.org/browse/ZEP-1673.
-	 */
 	enet_config.macSpecialConfig |= kENET_ControlPromiscuousEnable;
 #endif
 
@@ -578,7 +572,15 @@ static void net_if_mcast_cb(struct net_if *iface,
 			    const struct in6_addr *addr,
 			    bool is_joined)
 {
-	/* TBD */
+	struct net_eth_addr mac_addr;
+
+	net_eth_ipv6_mcast_to_mac_addr(addr, &mac_addr);
+
+	if (is_joined) {
+		ENET_AddMulticastGroup(ENET, mac_addr.addr);
+	} else {
+		ENET_LeaveMulticastGroup(ENET, mac_addr.addr);
+	}
 }
 #endif /* CONFIG_NET_IPV6 */
 

@@ -1,8 +1,2 @@
-set(FLASH_SCRIPT pyocd.sh)
-set(DEBUG_SCRIPT pyocd.sh)
-
-set(PYOCD_TARGET nrf51)
-
-set_property(GLOBAL APPEND PROPERTY FLASH_SCRIPT_ENV_VARS
-  PYOCD_TARGET
-  )
+board_runner_args(pyocd "--target=nrf51")
+include(${ZEPHYR_BASE}/boards/common/pyocd.board.cmake)

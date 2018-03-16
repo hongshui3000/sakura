@@ -33,7 +33,7 @@ static inline void sock_set_flag(struct net_context *ctx, u32_t mask,
 				 u32_t flag)
 {
 	u32_t val = POINTER_TO_INT(ctx->user_data);
-	val = (val & mask) | flag;
+	val = (val & ~mask) | flag;
 	(ctx)->user_data = INT_TO_POINTER(val);
 }
 
@@ -78,6 +78,10 @@ int zsock_socket(int family, int type, int proto)
 	struct net_context *ctx;
 
 	SET_ERRNO(net_context_get(family, type, proto, &ctx));
+
+	/* Initialize user_data, all other calls will preserve it */
+	ctx->user_data = NULL;
+
 	/* recv_q and accept_q are in union */
 	k_fifo_init(&ctx->recv_q);
 
@@ -108,13 +112,16 @@ static void zsock_accepted_cb(struct net_context *new_ctx,
 			      int status, void *user_data) {
 	struct net_context *parent = user_data;
 
-	/* This just installs a callback, so cannot fail. */
-	(void)net_context_recv(new_ctx, zsock_received_cb, K_NO_WAIT, NULL);
-	k_fifo_init(&new_ctx->recv_q);
-
 	NET_DBG("parent=%p, ctx=%p, st=%d", parent, new_ctx, status);
 
-	k_fifo_put(&parent->accept_q, new_ctx);
+	if (status == 0) {
+		/* This just installs a callback, so cannot fail. */
+		(void)net_context_recv(new_ctx, zsock_received_cb, K_NO_WAIT,
+				       NULL);
+		k_fifo_init(&new_ctx->recv_q);
+
+		k_fifo_put(&parent->accept_q, new_ctx);
+	}
 }
 
 static void zsock_received_cb(struct net_context *ctx, struct net_pkt *pkt,
@@ -169,7 +176,7 @@ int zsock_bind(int sock, const struct sockaddr *addr, socklen_t addrlen)
 	 */
 	if (net_context_get_type(ctx) == SOCK_DGRAM) {
 		SET_ERRNO(net_context_recv(ctx, zsock_received_cb, K_NO_WAIT,
-					   NULL));
+					   ctx->user_data));
 	}
 
 	return 0;
@@ -181,7 +188,7 @@ int zsock_connect(int sock, const struct sockaddr *addr, socklen_t addrlen)
 
 	SET_ERRNO(net_context_connect(ctx, addr, addrlen, NULL, K_FOREVER,
 				      NULL));
-	SET_ERRNO(net_context_recv(ctx, zsock_received_cb, K_NO_WAIT, NULL));
+	SET_ERRNO(net_context_recv(ctx, zsock_received_cb, K_NO_WAIT, ctx->user_data));
 
 	return 0;
 }
@@ -258,7 +265,7 @@ ssize_t zsock_sendto(int sock, const void *buf, size_t len, int flags,
 	/* Register the callback before sending in order to receive the response
 	 * from the peer.
 	 */
-	err = net_context_recv(ctx, zsock_received_cb, K_NO_WAIT, NULL);
+	err = net_context_recv(ctx, zsock_received_cb, K_NO_WAIT, ctx->user_data);
 	if (err < 0) {
 		net_pkt_unref(send_pkt);
 		errno = -err;
@@ -267,9 +274,9 @@ ssize_t zsock_sendto(int sock, const void *buf, size_t len, int flags,
 
 	if (dest_addr) {
 		err = net_context_sendto(send_pkt, dest_addr, addrlen, NULL,
-					 timeout, NULL, NULL);
+					 timeout, NULL, ctx->user_data);
 	} else {
-		err = net_context_send(send_pkt, NULL, timeout, NULL, NULL);
+		err = net_context_send(send_pkt, NULL, timeout, NULL, ctx->user_data);
 	}
 
 	if (err < 0) {
@@ -324,8 +331,12 @@ static inline ssize_t zsock_recv_stream(struct net_context *ctx,
 		}
 
 		frag = pkt->frags;
-		__ASSERT(frag != NULL,
-			 "net_pkt has empty fragments on start!");
+		if (!frag) {
+			NET_ERR("net_pkt has empty fragments on start!");
+			errno = EAGAIN;
+			return -1;
+		}
+
 		frag_len = frag->len;
 		recv_len = frag_len;
 		if (recv_len > max_len) {

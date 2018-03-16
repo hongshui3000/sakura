@@ -1,7 +1,3 @@
-set(DEBUG_SCRIPT jlink.sh)
+board_runner_args(jlink "--device=MKW24D512xxx5" "--speed=4000")
 
-set(JLINK_DEVICE MKW24D512xxx5)
-
-set_property(GLOBAL APPEND PROPERTY FLASH_SCRIPT_ENV_VARS
-  JLINK_DEVICE
-  )
+include(${ZEPHYR_BASE}/boards/common/jlink.board.cmake)

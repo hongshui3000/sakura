@@ -66,6 +66,10 @@ struct net_pkt {
 
 	/** @cond ignore */
 
+#if defined(CONFIG_NET_ROUTING)
+	struct net_if *orig_iface; /* Original network interface */
+#endif
+
 	u8_t *appdata;	/* application data starts here */
 	u8_t *next_hdr;	/* where is the next header */
 
@@ -124,7 +128,7 @@ struct net_pkt {
 #endif /* CONFIG_NET_IPV6_FRAGMENT */
 #endif /* CONFIG_NET_IPV6 */
 
-#if defined(CONFIG_NET_L2_IEEE802154) || defined(CONFIG_IEEE802154_RAW_MODE)
+#if defined(CONFIG_IEEE802154)
 	u8_t ieee802154_rssi; /* Received Signal Strength Indication */
 	u8_t ieee802154_lqi;  /* Link Quality Indicator */
 #endif
@@ -179,6 +183,23 @@ static inline void net_pkt_set_iface(struct net_pkt *pkt, struct net_if *iface)
 	 */
 	pkt->lladdr_src.type = iface->link_addr.type;
 	pkt->lladdr_dst.type = iface->link_addr.type;
+}
+
+static inline struct net_if *net_pkt_orig_iface(struct net_pkt *pkt)
+{
+#if defined(CONFIG_NET_ROUTING)
+	return pkt->orig_iface;
+#else
+	return pkt->iface;
+#endif
+}
+
+static inline void net_pkt_set_orig_iface(struct net_pkt *pkt,
+					  struct net_if *iface)
+{
+#if defined(CONFIG_NET_ROUTING)
+	pkt->orig_iface = iface;
+#endif
 }
 
 static inline u8_t net_pkt_family(struct net_pkt *pkt)
@@ -426,7 +447,7 @@ static inline void net_pkt_ll_swap(struct net_pkt *pkt)
 	net_pkt_ll_dst(pkt)->addr = addr;
 }
 
-#if defined(CONFIG_NET_L2_IEEE802154) || defined(CONFIG_IEEE802154_RAW_MODE)
+#if defined(CONFIG_IEEE802154) || defined(CONFIG_IEEE802154_RAW_MODE)
 static inline u8_t net_pkt_ieee802154_rssi(struct net_pkt *pkt)
 {
 	return pkt->ieee802154_rssi;
@@ -1095,7 +1116,7 @@ struct net_buf *net_frag_read(struct net_buf *frag, u16_t offset,
  * length of data is placed in multiple fragments, this function will skip from
  * all fragments until it reaches N number of bytes. This function is useful
  * when unwanted data (e.g. reserved or not supported data in message) is part
- * of fragment and want to skip it.
+ * of fragment and we want to skip it.
  *
  * @param frag Network buffer fragment.
  * @param offset Offset of input buffer.

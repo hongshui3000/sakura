@@ -21,8 +21,10 @@
 #ifdef CONFIG_PRINTK
 #include <misc/printk.h>
 #define PR_EXC(...) printk(__VA_ARGS__)
+#define STORE_xFAR(reg_var, reg) u32_t reg_var = (u32_t)reg
 #else
 #define PR_EXC(...)
+#define STORE_xFAR(reg_var, reg)
 #endif /* CONFIG_PRINTK */
 
 #if (CONFIG_FAULT_DUMP > 0)
@@ -59,8 +61,8 @@ void _FaultDump(const NANO_ESF *esf, int fault)
 	       k_current_get(),
 	       esf->pc);
 
-#if defined(CONFIG_ARMV6_M)
-#elif defined(CONFIG_ARMV7_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	int escalation = 0;
 
 	if (3 == fault) { /* hard fault */
@@ -73,15 +75,26 @@ void _FaultDump(const NANO_ESF *esf, int fault)
 	PR_EXC("MMFSR: 0x%x, BFSR: 0x%x, UFSR: 0x%x\n",
 	       SCB_MMFSR, SCB_BFSR, SCB_MMFSR);
 
+	/* In a fault handler, to determine the true faulting address:
+	 * 1. Read and save the MMFAR or BFAR value.
+	 * 2. Read the MMARVALID bit in the MMFSR, or the BFARVALID bit in the
+	 * BFSR. The MMFAR or BFAR address is valid only if this bit is 1.
+	 *
+	 * Software must follow this sequence because another higher priority
+	 * exception might change the MMFAR or BFAR value.
+	 */
+	STORE_xFAR(mmfar, SCB->MMFAR);
+	STORE_xFAR(bfar, SCB->BFAR);
+
 	if (SCB->CFSR & CFSR_MMARVALID_Msk) {
-		PR_EXC("MMFAR: 0x%x\n", SCB->MMFAR);
+		PR_EXC("MMFAR: 0x%x\n", mmfar);
 		if (escalation) {
 			/* clear MMAR[VALID] to reset */
 			SCB->CFSR &= ~CFSR_MMARVALID_Msk;
 		}
 	}
 	if (SCB->CFSR & CFSR_BFARVALID_Msk) {
-		PR_EXC("BFAR: 0x%x\n", SCB->BFAR);
+		PR_EXC("BFAR: 0x%x\n", bfar);
 		if (escalation) {
 			/* clear CFSR_BFAR[VALID] to reset */
 			SCB->CFSR &= ~CFSR_BFARVALID_Msk;
@@ -92,7 +105,7 @@ void _FaultDump(const NANO_ESF *esf, int fault)
 	SCB->CFSR |= SCB_CFSR_USGFAULTSR_Msk;
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 }
 #endif
 
@@ -112,8 +125,9 @@ static void _FaultThreadShow(const NANO_ESF *esf)
 	       k_current_get(), esf->pc);
 }
 
-#if defined(CONFIG_ARMV6_M)
-#elif defined(CONFIG_ARMV7_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+/* HardFault is used for all fault conditions on ARMv6-M. */
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 
 /**
  *
@@ -135,8 +149,18 @@ static void _MpuFault(const NANO_ESF *esf, int fromHardFault)
 		PR_EXC("  Unstacking error\n");
 	} else if (SCB->CFSR & CFSR_DACCVIOL_Msk) {
 		PR_EXC("  Data Access Violation\n");
+		/* In a fault handler, to determine the true faulting address:
+		 * 1. Read and save the MMFAR value.
+		 * 2. Read the MMARVALID bit in the MMFSR.
+		 * The MMFAR address is valid only if this bit is 1.
+		 *
+		 * Software must follow this sequence because another higher
+		 * priority exception might change the MMFAR value.
+		 */
+		STORE_xFAR(mmfar, SCB->MMFAR);
+
 		if (SCB->CFSR & CFSR_MMARVALID_Msk) {
-			PR_EXC("  Address: 0x%x\n", (u32_t)SCB->MMFAR);
+			PR_EXC("  Address: 0x%x\n", mmfar);
 			if (fromHardFault) {
 				/* clear MMAR[VALID] to reset */
 				SCB->CFSR &= ~CFSR_MMARVALID_Msk;
@@ -167,8 +191,18 @@ static void _BusFault(const NANO_ESF *esf, int fromHardFault)
 		PR_EXC("  Unstacking error\n");
 	} else if (SCB->CFSR & CFSR_PRECISERR_Msk) {
 		PR_EXC("  Precise data bus error\n");
+		/* In a fault handler, to determine the true faulting address:
+		 * 1. Read and save the BFAR value.
+		 * 2. Read the BFARVALID bit in the BFSR.
+		 * The BFAR address is valid only if this bit is 1.
+		 *
+		 * Software must follow this sequence because another
+		 * higher priority exception might change the BFAR value.
+		 */
+		STORE_xFAR(bfar, SCB->BFAR);
+
 		if (SCB->CFSR & CFSR_BFARVALID_Msk) {
-			PR_EXC("  Address: 0x%x\n", (u32_t)SCB->BFAR);
+			PR_EXC("  Address: 0x%x\n", bfar);
 			if (fromHardFault) {
 				/* clear CFSR_BFAR[VALID] to reset */
 				SCB->CFSR &= ~CFSR_BFARVALID_Msk;
@@ -240,7 +274,7 @@ static void _DebugMonitor(const NANO_ESF *esf)
 
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
 /**
  *
@@ -254,9 +288,9 @@ static void _HardFault(const NANO_ESF *esf)
 {
 	PR_EXC("***** HARD FAULT *****\n");
 
-#if defined(CONFIG_ARMV6_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
 	_FaultThreadShow(esf);
-#elif defined(CONFIG_ARMV7_M)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	if (SCB->HFSR & SCB_HFSR_VECTTBL_Msk) {
 		PR_EXC("  Bus fault on vector table read\n");
 	} else if (SCB->HFSR & SCB_HFSR_FORCED_Msk) {
@@ -271,7 +305,7 @@ static void _HardFault(const NANO_ESF *esf)
 	}
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 }
 
 /**
@@ -316,8 +350,9 @@ static void _FaultDump(const NANO_ESF *esf, int fault)
 	case 3:
 		_HardFault(esf);
 		break;
-#if defined(CONFIG_ARMV6_M)
-#elif defined(CONFIG_ARMV7_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+	/* HardFault is used for all fault conditions on ARMv6-M. */
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	case 4:
 		_MpuFault(esf, 0);
 		break;
@@ -332,7 +367,7 @@ static void _FaultDump(const NANO_ESF *esf, int fault)
 		break;
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 	default:
 		_ReservedException(esf, fault);
 		break;
@@ -375,10 +410,10 @@ void _Fault(const NANO_ESF *esf)
  */
 void _FaultInit(void)
 {
-#if defined(CONFIG_ARMV6_M)
-#elif defined(CONFIG_ARMV7_M)
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
 	SCB->CCR |= SCB_CCR_DIV_0_TRP_Msk;
 #else
 #error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M */
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 }

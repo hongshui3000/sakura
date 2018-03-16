@@ -2,10 +2,10 @@
 config BOARD_DEPRECATED
 	string
 	help
-	This hidden option is set in the board configuration and indicates
-	the Zephyr release that the board configuration will be removed.
-	When set, any build for that board will generate a clearly visible
-	deprecation warning.
+	  This hidden option is set in the board configuration and indicates
+	  the Zephyr release that the board configuration will be removed.
+	  When set, any build for that board will generate a clearly visible
+	  deprecation warning.
 
 config QEMU_TARGET
 	bool
@@ -16,10 +16,10 @@ config QEMU_TARGET
 
 choice
 prompt "Board Selection"
-source "boards/*/*/Kconfig.board"
+source "$ENV_VAR_SYM_BOARD_DIR/Kconfig.board"
 endchoice
 
 
 menu "Board Options"
-source "boards/*/*/Kconfig"
+source "$ENV_VAR_SYM_BOARD_DIR/Kconfig"
 endmenu

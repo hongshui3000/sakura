@@ -12,7 +12,7 @@
 
 #include <pinmux/stm32/pinmux_stm32.h>
 
-/* pin assignments for NUCLEO-F103RB board */
+/* pin assignments for OLIMEXINO-STM32 board */
 static const struct pin_config pinconf[] = {
 #ifdef CONFIG_UART_STM32_PORT_1
 	{STM32_PIN_PA9,  STM32F1_PINMUX_FUNC_PA9_USART1_TX},
@@ -30,6 +30,15 @@ static const struct pin_config pinconf[] = {
 	{STM32_PIN_PB10, STM32F1_PINMUX_FUNC_PB10_I2C2_SCL},
 	{STM32_PIN_PB11, STM32F1_PINMUX_FUNC_PB11_I2C2_SDA},
 #endif /* CONFIG_I2C_2 */
+#ifdef CONFIG_SPI_1
+	{STM32_PIN_PA4, STM32F1_PINMUX_FUNC_PA4_SPI1_MASTER_NSS_OE},
+	{STM32_PIN_PA5, STM32F1_PINMUX_FUNC_PA5_SPI1_MASTER_SCK},
+	{STM32_PIN_PA6, STM32F1_PINMUX_FUNC_PA6_SPI1_MASTER_MISO},
+	{STM32_PIN_PA7, STM32F1_PINMUX_FUNC_PA7_SPI1_MASTER_MOSI},
+#endif
+#ifdef CONFIG_PWM_STM32_1
+	{STM32_PIN_PA8, STM32F1_PINMUX_FUNC_PA8_PWM1_CH1},
+#endif /* CONFIG_PWM_STM32_1 */
 };
 
 static int pinmux_stm32_init(struct device *port)

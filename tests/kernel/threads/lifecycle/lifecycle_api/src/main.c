@@ -24,6 +24,8 @@ extern void test_threads_cancel_delayed(void);
 extern void test_threads_cancel_started(void);
 extern void test_threads_abort_self(void);
 extern void test_threads_abort_others(void);
+extern void test_threads_abort_repeat(void);
+extern void test_abort_handler(void);
 
 __kernel struct k_thread tdata;
 #define STACK_SIZE (256 + CONFIG_TEST_EXTRA_STACKSIZE)
@@ -45,7 +47,9 @@ void test_main(void)
 			 ztest_user_unit_test(test_threads_cancel_delayed),
 			 ztest_user_unit_test(test_threads_cancel_started),
 			 ztest_user_unit_test(test_threads_abort_self),
-			 ztest_user_unit_test(test_threads_abort_others)
+			 ztest_user_unit_test(test_threads_abort_others),
+			 ztest_unit_test(test_threads_abort_repeat),
+			 ztest_unit_test(test_abort_handler)
 			 );
 	ztest_run_test_suite(test_threads_lifecycle);
 }

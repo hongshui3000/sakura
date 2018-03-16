@@ -1,7 +1,4 @@
-set(FLASH_SCRIPT nrf_flash.sh)
-
-set(NRF_FAMILY NRF51)
-
-set_property(GLOBAL APPEND PROPERTY FLASH_SCRIPT_ENV_VARS
-  NRF_FAMILY
-  )
+board_runner_args(nrfjprog "--nrf-family=NRF51")
+board_runner_args(jlink "--device=nrf51" "--speed=4000")
+include(${ZEPHYR_BASE}/boards/common/nrfjprog.board.cmake)
+include(${ZEPHYR_BASE}/boards/common/jlink.board.cmake)

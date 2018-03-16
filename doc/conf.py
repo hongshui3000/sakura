@@ -29,7 +29,7 @@ sys.path.insert(0, os.path.join(os.path.abspath('.'), 'extensions'))
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.autodoc', 'breathe', 'sphinx.ext.todo',
+    'breathe', 'sphinx.ext.todo',
     'sphinx.ext.extlinks',
     'zephyr.application',
 ]
@@ -53,6 +53,10 @@ project = u'Zephyr Project'
 copyright = u'2015-2017 Zephyr Project members and individual contributors.'
 author = u'many'
 
+if "ZEPHYR_BASE" not in os.environ:
+    sys.stderr.write("$ZEPHYR_BASE environment variable undefined.\n")
+    exit(1)
+ZEPHYR_BASE = os.environ["ZEPHYR_BASE"]
 
 # The following code tries to extract the information by reading the Makefile,
 # when Sphinx is run directly (e.g. by Read the Docs).
@@ -61,7 +65,7 @@ try:
     version_minor = None
     patchlevel = None
     extraversion = None
-    for line in open('../VERSION'):
+    for line in open(os.path.join(ZEPHYR_BASE, 'VERSION')):
         key, val = [x.strip() for x in line.split('=', 2)]
         if key == 'VERSION_MAJOR':
             version_major = val
@@ -76,7 +80,7 @@ try:
 except:
     pass
 finally:
-    if version_major and version_minor and patchlevel and extraversion:
+    if version_major and version_minor and patchlevel and extraversion is not None :
         version = release = version_major + '.' + version_minor + '.' + patchlevel
         if extraversion != '':
             version = release = version + '-' + extraversion
@@ -167,7 +171,7 @@ if tags.has('release'):
     docs_title = 'Docs / %s' %(version)
 else:
     is_release = False
-    docs_title = 'Docs'
+    docs_title = 'Docs / Latest'
 
 # The name for this set of Sphinx documents.  If None, it defaults to
 # "<project> v<release> documentation".

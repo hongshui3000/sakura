@@ -30,7 +30,7 @@ create the application image.
 Device tree uses a specific format to describe the device nodes in a system.
 This format is described in `EPAPR document`_.
 
-.. _EPAPR document: http://www.devicetree.org/specifications-pdf
+.. _EPAPR document: https://www.devicetree.org/downloads/devicetree-specification-v0.1-20160524.pdf
 
 More device tree information can be found at the `device tree repository`_.
 
@@ -173,6 +173,10 @@ The following is a more precise list of required files:
   * Add a board level .dts file that includes the SoC family .dtsi files
     and enables the nodes required for that specific board.
   * Board .dts file should specify the SRAM and FLASH devices, if present.
+
+    * Flash device node might specify flash partitions. For more details see
+      :ref:'flash_partitions'
+
   * Add board-specific YAML files, if required.  This would occur if the
     board has additional hardware that is not covered by the SoC family
     .dtsi/.yaml files.
@@ -182,6 +186,14 @@ The following is a more precise list of required files:
   * Fixup files contain mappings from existing Kconfig options to the actual
     underlying DTS derived configuration #defines.  Fixup files are temporary
     artifacts until additional DTS changes are made to make them unnecessary.
+
+* Overlay Files (optional)
+
+  * Overlay files contain tweaks or changes to the SoC and Board support files
+    described above. They can be used to modify Device Tree configurations
+    without having to change the SoC and Board files. See
+    :ref:`application_dt` for more information on overlay files and the Zephyr
+    build system.
 
 Adding support for device tree in drivers
 *****************************************

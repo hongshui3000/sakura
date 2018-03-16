@@ -13,6 +13,8 @@ menuconfig LPS22HB
 	  Enable driver for LPS22HB I2C-based pressure and temperature
 	  sensor.
 
+if !HAS_DTS_I2C_DEVICE
+
 config LPS22HB_DEV_NAME
 	string
 	prompt "Device name"
@@ -40,6 +42,8 @@ config LPS22HB_I2C_MASTER_DEV_NAME
 	help
 	  Specify the device name of the I2C master device to which
 	  LPS22HB is connected.
+
+endif
 
 menu "Attributes"
 	depends on LPS22HB

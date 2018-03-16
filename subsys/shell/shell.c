@@ -9,20 +9,24 @@
  * @brief Console handler implementation of shell.h API
  */
 
-
 #include <zephyr.h>
 #include <stdio.h>
 #include <string.h>
+#include <version.h>
 
 #include <console/console.h>
 #include <misc/printk.h>
 #include <misc/util.h>
+#include "mgmt/serial.h"
 
 #ifdef CONFIG_UART_CONSOLE
 #include <console/uart_console.h>
 #endif
 #ifdef CONFIG_TELNET_CONSOLE
 #include <console/telnet_console.h>
+#endif
+#ifdef CONFIG_NATIVE_POSIX_CONSOLE
+#include <console/native_posix_console.h>
 #endif
 
 #include <shell/shell.h>
@@ -35,13 +39,19 @@
 #define PROMPT_MAX_LEN (MODULE_NAME_MAX_LEN + PROMPT_SUFFIX)
 
 /* command table is located in the dedicated memory segment (.shell_) */
-extern struct shell_module __shell_cmd_start[];
-extern struct shell_module __shell_cmd_end[];
-#define NUM_OF_SHELL_ENTITIES (__shell_cmd_end - __shell_cmd_start)
+extern struct shell_module __shell_module_start[];
+extern struct shell_module __shell_module_end[];
+
+extern struct shell_cmd __shell_cmd_start[];
+extern struct shell_cmd __shell_cmd_end[];
+
+#define NUM_OF_SHELL_ENTITIES (__shell_module_end - __shell_module_start)
+#define NUM_OF_SHELL_CMDS (__shell_cmd_end - __shell_cmd_start)
 
 static const char *prompt;
 static char default_module_prompt[PROMPT_MAX_LEN];
 static struct shell_module *default_module;
+static bool no_promt;
 
 #define STACKSIZE CONFIG_CONSOLE_SHELL_STACKSIZE
 static K_THREAD_STACK_DEFINE(stack, STACKSIZE);
@@ -55,6 +65,9 @@ static struct k_fifo cmds_queue;
 
 static shell_cmd_function_t app_cmd_handler;
 static shell_prompt_function_t app_prompt_handler;
+
+static shell_mcumgr_function_t mcumgr_cmd_handler;
+static void *mcumgr_arg;
 
 static const char *get_prompt(void)
 {
@@ -141,9 +154,9 @@ static struct shell_module *get_destination_module(const char *module_str)
 
 	for (i = 0; i < NUM_OF_SHELL_ENTITIES; i++) {
 		if (!strncmp(module_str,
-			     __shell_cmd_start[i].module_name,
+			     __shell_module_start[i].module_name,
 			     MODULE_NAME_MAX_LEN)) {
-			return &__shell_cmd_start[i];
+			return &__shell_module_start[i];
 		}
 	}
 
@@ -189,12 +202,28 @@ static const struct shell_cmd *get_cmd(const struct shell_cmd cmds[],
 	return NULL;
 }
 
-static const struct shell_cmd *get_mod_cmd(struct shell_module *module,
+static const struct shell_cmd *get_module_cmd(struct shell_module *module,
 					   const char *cmd_str)
 {
 	return get_cmd(module->commands, cmd_str);
 }
 
+static const struct shell_cmd *get_standalone(const char *command)
+{
+	int i;
+
+	for (i = 0; i < NUM_OF_SHELL_CMDS; i++) {
+		if (!strcmp(command, __shell_cmd_start[i].cmd_name)) {
+			return &__shell_cmd_start[i];
+		}
+	}
+
+	return NULL;
+}
+
+/**
+ * Handle internal 'help' command
+ */
 static int cmd_help(int argc, char *argv[])
 {
 	struct shell_module *module = default_module;
@@ -217,16 +246,21 @@ static int cmd_help(int argc, char *argv[])
 		}
 
 		if (!module) {
-			printk("No help found for '%s'\n", cmd_str);
-			return -EINVAL;
-		}
-
-		cmd = get_mod_cmd(module, cmd_str);
-		if (cmd) {
-			return show_cmd_help(cmd, true);
+			cmd = get_standalone(cmd_str);
+			if (cmd) {
+				return show_cmd_help(cmd, true);
+			} else {
+				printk("No help found for '%s'\n", cmd_str);
+				return -EINVAL;
+			}
 		} else {
-			printk("Unknown command '%s'\n", cmd_str);
-			return -EINVAL;
+			cmd = get_module_cmd(module, cmd_str);
+			if (cmd) {
+				return show_cmd_help(cmd, true);
+			} else {
+				printk("Unknown command '%s'\n", cmd_str);
+				return -EINVAL;
+			}
 		}
 	}
 
@@ -238,9 +272,24 @@ module_help:
 	} else { /* help for all entities */
 		int i;
 
-		printk("Available modules:\n");
+		printk("[Modules]\n");
+
+		if (NUM_OF_SHELL_ENTITIES == 0) {
+			printk("No registered modules.\n");
+		}
+
 		for (i = 0; i < NUM_OF_SHELL_ENTITIES; i++) {
-			printk("%s\n", __shell_cmd_start[i].module_name);
+			printk("%s\n", __shell_module_start[i].module_name);
+		}
+
+		printk("\n[Commands]\n");
+
+		if (NUM_OF_SHELL_CMDS == 0) {
+			printk("No registered commands.\n");
+		}
+
+		for (i = 0; i < NUM_OF_SHELL_CMDS; i++) {
+			printk("%s\n", __shell_cmd_start[i].cmd_name);
 		}
 
 		printk("\nTo select a module, enter 'select <module name>'.\n");
@@ -255,7 +304,7 @@ static int set_default_module(const char *name)
 
 	if (strlen(name) > MODULE_NAME_MAX_LEN) {
 		printk("Module name %s is too long, default is not changed\n",
-			name);
+		       name);
 		return -EINVAL;
 	}
 
@@ -293,6 +342,16 @@ static int cmd_exit(int argc, char *argv[])
 	return 0;
 }
 
+static int cmd_noprompt(int argc, char *argv[])
+{
+	no_promt = true;
+	return 0;
+}
+
+#define SHELL_CMD_NOPROMPT "noprompt"
+SHELL_REGISTER_COMMAND(SHELL_CMD_NOPROMPT, cmd_noprompt,
+		       "Disable shell prompt");
+
 static const struct shell_cmd *get_internal(const char *command)
 {
 	static const struct shell_cmd internal_commands[] = {
@@ -303,6 +362,12 @@ static const struct shell_cmd *get_internal(const char *command)
 	};
 
 	return get_cmd(internal_commands, command);
+}
+
+void shell_register_mcumgr_handler(shell_mcumgr_function_t handler, void *arg)
+{
+	mcumgr_cmd_handler = handler;
+	mcumgr_arg = arg;
 }
 
 int shell_exec(char *line)
@@ -321,13 +386,18 @@ int shell_exec(char *line)
 		goto done;
 	}
 
-	if (argc == 1 && !default_module) {
+	cmd = get_standalone(argv[0]);
+	if (cmd) {
+		goto done;
+	}
+
+	if (argc == 1 && !default_module && NUM_OF_SHELL_CMDS == 0) {
 		printk("No module selected. Use 'select' or 'help'.\n");
 		return -EINVAL;
 	}
 
 	if (default_module) {
-		cmd = get_mod_cmd(default_module, argv[0]);
+		cmd = get_module_cmd(default_module, argv[0]);
 	}
 
 	if (!cmd && argc > 1) {
@@ -335,7 +405,7 @@ int shell_exec(char *line)
 
 		module = get_destination_module(argv[0]);
 		if (module) {
-			cmd = get_mod_cmd(module, argv[1]);
+			cmd = get_module_cmd(module, argv[1]);
 			if (cmd) {
 				argc--;
 				argv_start++;
@@ -364,18 +434,38 @@ done:
 
 static void shell(void *p1, void *p2, void *p3)
 {
+	bool skip_prompt = false;
+
 	ARG_UNUSED(p1);
 	ARG_UNUSED(p2);
 	ARG_UNUSED(p3);
 
+	printk("Zephyr Shell, Zephyr version: %s\n", KERNEL_VERSION_STRING);
+	printk("Type 'help' for a list of available commands\n");
 	while (1) {
 		struct console_input *cmd;
 
-		printk("%s", get_prompt());
+		if (!no_promt && !skip_prompt) {
+			printk("%s", get_prompt());
+#if defined(CONFIG_NATIVE_POSIX_CONSOLE)
+			/* The native printk driver is line buffered */
+			posix_flush_stdout();
+#endif
+		}
 
 		cmd = k_fifo_get(&cmds_queue, K_FOREVER);
 
-		shell_exec(cmd->line);
+		/* If the received line is an mcumgr frame, divert it to the
+		 * mcumgr handler.  Don't print the shell prompt this time, as
+		 * that will interfere with the mcumgr response.
+		 */
+		if (mcumgr_cmd_handler != NULL && cmd->is_mcumgr) {
+			mcumgr_cmd_handler(cmd->line, mcumgr_arg);
+			skip_prompt = true;
+		} else {
+			shell_exec(cmd->line);
+			skip_prompt = false;
+		}
 
 		k_fifo_put(&avail_queue, cmd);
 	}
@@ -544,6 +634,9 @@ void shell_init(const char *str)
 #endif
 #ifdef CONFIG_TELNET_CONSOLE
 	telnet_register_input(&avail_queue, &cmds_queue, completion);
+#endif
+#ifdef CONFIG_NATIVE_POSIX_STDIN_CONSOLE
+	native_stdin_register_input(&avail_queue, &cmds_queue, completion);
 #endif
 }
 

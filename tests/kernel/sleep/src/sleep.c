@@ -23,8 +23,6 @@
 #include <irq_offload.h>
 #include <stdbool.h>
 
-#include <util_test_common.h>
-
 #if defined(CONFIG_ASSERT) && defined(CONFIG_DEBUG)
 #define THREAD_STACK    (384 + CONFIG_TEST_EXTRA_STACKSIZE)
 #else
@@ -68,6 +66,9 @@ static void align_to_tick_boundary(void)
 	tick = k_uptime_get_32();
 	while (k_uptime_get_32() == tick) {
 		/* Busy wait to align to tick boundary */
+#if defined(CONFIG_ARCH_POSIX)
+		posix_halt_cpu();
+#endif
 	}
 
 }
@@ -180,7 +181,7 @@ static void helper_thread(int arg1, int arg2)
 	irq_offload(irq_offload_isr, (void *)test_thread_id);
 }
 
-void testing_sleep(void)
+void test_sleep(void)
 {
 	int       status = TC_FAIL;
 	u32_t  start_tick;
@@ -239,6 +240,7 @@ void testing_sleep(void)
 /*test case main entry*/
 void test_main(void)
 {
-	ztest_test_suite(test_sleep, ztest_unit_test(testing_sleep));
-	ztest_run_test_suite(test_sleep);
+	ztest_test_suite(testing_sleep,
+			ztest_unit_test(test_sleep));
+	ztest_run_test_suite(testing_sleep);
 }

@@ -11,12 +11,21 @@ CONFIG_DIR=${ZEPHYR_BASE}/.known-issues/doc
 
 LOG_FILE=$1
 
-red='\E[31m'
-green='\e[32m'
-
 if [ -z "${LOG_FILE}" ]; then
         echo "Error in $0: missing input parameter <logfile>"
         exit 1
+fi
+
+# When running in background, detached from terminal jobs, tput will
+# fail; we usually can tell because there is no TERM env variable.
+if [ -z "${TERM:-}" -o "${TERM:-}" = dumb ]; then
+    TPUT="true"
+    red=''
+    green=''
+else
+    TPUT="tput"
+    red='\E[31m'
+    green='\e[32m'
 fi
 
 if [ -s "${LOG_FILE}" ]; then
@@ -25,13 +34,13 @@ if [ -s "${LOG_FILE}" ]; then
 	   echo
 	   echo -e "${red}New errors/warnings found, please fix them:"
 	   echo -e "=============================================="
-	   tput sgr0
+	   $TPUT sgr0
 	   echo
 	   cat doc.warnings
 	   echo
    else
 	   echo -e "${green}No new errors/warnings."
-	   tput sgr0
+	   $TPUT sgr0
    fi
 
 else

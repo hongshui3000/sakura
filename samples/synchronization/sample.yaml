@@ -3,7 +3,12 @@ sample:
     basic sanity of the kernel.
   name: Synchronization Sample
 tests:
-  - test:
-      build_on_all: true
-      build_only: true
-      tags: apps
+  test:
+    build_on_all: true
+    tags: apps
+    harness: console
+    harness_config:
+      type: multi_line
+      regex:
+        - "threadA: Hello World from (.*)!"
+        - "threadB: Hello World from (.*)!"

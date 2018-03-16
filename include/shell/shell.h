@@ -44,6 +44,19 @@ struct shell_module {
 	shell_prompt_function_t prompt;
 };
 
+/** @typedef shell_mcumgr_function_t
+ * @brief Callback that is executed when an mcumgr packet is received over the
+ *        shell.
+ *
+ * The packet argument must be exactly what was received over the console,
+ * except the terminating newline must be replaced with '\0'.
+ *
+ * @param line The received mcumgr packet.
+ * @param arg An optional argument.
+ *
+ * @return  on success; negative error code on failure.
+ */
+typedef int (*shell_mcumgr_function_t)(const char *line, void *arg);
 
 /**
  * @brief Kernel Shell API
@@ -79,6 +92,21 @@ struct shell_module {
  * Shell array entries must be packed to calculate array size correctly.
  * @param _prompt Optional prompt handler to be set when module is selected.
  */
+
+
+/**
+ * @def SHELL_REGISTER_COMMAND
+ *
+ * @brief Create a standalone command and set it up for boot time
+ * initialization.
+ *
+ * @details This macro defines a shell_cmd object that is automatically
+ * configured by the kernel during system initialization.
+ *
+ * The command will be available in the default module, so it will be available
+ * immediately.
+ *
+ */
 #ifdef CONFIG_CONSOLE_SHELL
 #define SHELL_REGISTER(_name, _commands) \
 	SHELL_REGISTER_WITH_PROMPT(_name, _commands, NULL)
@@ -86,14 +114,24 @@ struct shell_module {
 #define SHELL_REGISTER_WITH_PROMPT(_name, _commands, _prompt) \
 	\
 	static struct shell_module (__shell__name) __used \
-	__attribute__((__section__(".shell_"))) = { \
+	__attribute__((__section__(".shell_module_"))) = { \
 		  .module_name = _name, \
 		  .commands = _commands, \
 		  .prompt = _prompt \
 	}
+
+#define SHELL_REGISTER_COMMAND(name, callback, _help) \
+	\
+	const struct shell_cmd (__shell__##name) __used \
+	__attribute__((__section__(".shell_cmd_"))) = { \
+		  .cmd_name = name, \
+		  .cb = callback, \
+		  .help = _help \
+	}
 #else
 #define SHELL_REGISTER(_name, _commands)
 #define SHELL_REGISTER_WITH_PROMPT(_name, _commands, _prompt)
+#define SHELL_REGISTER_COMMAND(_name, _callback, _help)
 #endif
 
 /** @brief Initialize shell with optional prompt, NULL in case no prompt is
@@ -122,6 +160,13 @@ void shell_register_prompt_handler(shell_prompt_function_t handler);
  *  @param name Module name.
  */
 void shell_register_default_module(const char *name);
+
+/** @brief Configures a callback for received mcumgr packets.
+ *
+ *  @param handler The callback to execute when an mcumgr packet is received.
+ *  @param arg An optional argument to pass to the callback.
+ */
+void shell_register_mcumgr_handler(shell_mcumgr_function_t handler, void *arg);
 
 /** @brief Execute command line.
  *

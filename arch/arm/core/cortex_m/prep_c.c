@@ -20,23 +20,12 @@
 #include <zephyr/types.h>
 #include <toolchain.h>
 #include <linker/linker-defs.h>
-#include <nano_internal.h>
+#include <kernel_internal.h>
 #include <arch/arm/cortex_m/cmsis.h>
 #include <string.h>
 
-#ifdef CONFIG_ARMV6_M
+#ifdef CONFIG_CPU_CORTEX_M_HAS_VTOR
 
-#define VECTOR_ADDRESS 0
-void __weak relocate_vector_table(void)
-{
-#if defined(CONFIG_XIP) && (CONFIG_FLASH_BASE_ADDRESS != 0) || \
-    !defined(CONFIG_XIP) && (CONFIG_SRAM_BASE_ADDRESS != 0)
-	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
-	memcpy(VECTOR_ADDRESS, _vector_start, vector_size);
-#endif
-}
-
-#elif defined(CONFIG_ARMV7_M)
 #ifdef CONFIG_XIP
 #define VECTOR_ADDRESS ((uintptr_t)&_image_rom_start + \
 			CONFIG_TEXT_SECTION_OFFSET)
@@ -49,9 +38,26 @@ static inline void relocate_vector_table(void)
 	__DSB();
 	__ISB();
 }
+
 #else
-#error Unknown ARM architecture
-#endif /* CONFIG_ARMv6_M */
+
+#if defined(CONFIG_SW_VECTOR_RELAY)
+_GENERIC_SECTION(.vt_pointer_section) void *_vector_table_pointer;
+#endif
+
+#define VECTOR_ADDRESS 0
+void __weak relocate_vector_table(void)
+{
+#if defined(CONFIG_XIP) && (CONFIG_FLASH_BASE_ADDRESS != 0) || \
+    !defined(CONFIG_XIP) && (CONFIG_SRAM_BASE_ADDRESS != 0)
+	size_t vector_size = (size_t)_vector_end - (size_t)_vector_start;
+	memcpy(VECTOR_ADDRESS, _vector_start, vector_size);
+#elif defined(CONFIG_SW_VECTOR_RELAY)
+	_vector_table_pointer = _vector_start;
+#endif
+}
+
+#endif /* CONFIG_CPU_CORTEX_M_HAS_VTOR */
 
 #ifdef CONFIG_FLOAT
 static inline void enable_floating_point(void)

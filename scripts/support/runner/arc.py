@@ -1,21 +1,20 @@
 # Copyright (c) 2017 Linaro Limited.
+# Copyright (c) 2017 Open Source Foundries Limited.
 #
 # SPDX-License-Identifier: Apache-2.0
 
-'''ARC architecture-specific runner.'''
+'''ARC architecture-specific runners.'''
 
 from os import path
-import os
-import shlex
 
-from .core import ZephyrBinaryRunner, get_env_or_bail
+from .core import ZephyrBinaryRunner
 
 DEFAULT_ARC_TCL_PORT = 6333
 DEFAULT_ARC_TELNET_PORT = 4444
 DEFAULT_ARC_GDB_PORT = 3333
 
 
-class ArcBinaryRunner(ZephyrBinaryRunner):
+class EmStarterKitBinaryRunner(ZephyrBinaryRunner):
     '''Runner front-end for the EM Starterkit board, using openocd.'''
 
     # This unusual 'flash' implementation matches the original shell script.
@@ -24,82 +23,51 @@ class ArcBinaryRunner(ZephyrBinaryRunner):
     # client to it to load the program, and running 'continue' within the
     # client to execute the application.
     #
-    # TODO: exit immediately when flashing is done, leaving Zephyr running.
 
-    def __init__(self, elf, zephyr_base, board_dir,
-                 gdb, openocd='openocd', extra_init=None, default_path=None,
-                 tui=None, tcl_port=DEFAULT_ARC_TCL_PORT,
+    def __init__(self, board_dir, elf, gdb,
+                 openocd='openocd', search=None,
+                 tui=False, tcl_port=DEFAULT_ARC_TCL_PORT,
                  telnet_port=DEFAULT_ARC_TELNET_PORT,
                  gdb_port=DEFAULT_ARC_GDB_PORT, debug=False):
-        super(ArcBinaryRunner, self).__init__(debug=debug)
-        self.elf = elf
-        self.zephyr_base = zephyr_base
+        super(EmStarterKitBinaryRunner, self).__init__(debug=debug)
         self.board_dir = board_dir
-        self.gdb = gdb
+        self.elf = elf
+        self.gdb_cmd = [gdb] + (['-tui'] if tui else [])
         search_args = []
-        if default_path is not None:
-            search_args = ['-s', default_path]
+        if search is not None:
+            search_args = ['-s', search]
         self.openocd_cmd = [openocd] + search_args
-        self.extra_init = extra_init if extra_init is not None else []
-        self.tui = tui
         self.tcl_port = tcl_port
         self.telnet_port = telnet_port
         self.gdb_port = gdb_port
 
-    def replaces_shell_script(shell_script, command):
-        return (command in {'flash', 'debug', 'debugserver'} and
-                shell_script == 'arc_debugger.sh')
+    @classmethod
+    def name(cls):
+        return 'em-starterkit'
 
-    def create_from_env(command, debug):
-        '''Create runner from environment.
+    @classmethod
+    def do_add_parser(cls, parser):
+        parser.add_argument('--tui', default=False, action='store_true',
+                            help='if given, GDB uses -tui')
+        parser.add_argument('--tcl-port', default=DEFAULT_ARC_TCL_PORT,
+                            help='openocd TCL port, defaults to 6333')
+        parser.add_argument('--telnet-port', default=DEFAULT_ARC_TELNET_PORT,
+                            help='openocd telnet port, defaults to 4444')
+        parser.add_argument('--gdb-port', default=DEFAULT_ARC_GDB_PORT,
+                            help='openocd gdb port, defaults to 3333')
 
-        Required:
+    @classmethod
+    def create_from_args(cls, args):
+        if args.gdb is None:
+            raise ValueError('--gdb not provided at command line')
 
-        - O: build output directory
-        - KERNEL_ELF_NAME: zephyr kernel binary in ELF format
-        - ZEPHYR_BASE: zephyr Git repository base directory
-        - BOARD_DIR: board directory
-        - GDB: gdb executable
+        return EmStarterKitBinaryRunner(
+            args.board_dir, args.kernel_elf, args.gdb,
+            openocd=args.openocd, search=args.openocd_search,
+            tui=args.tui, tcl_port=args.tcl_port, telnet_port=args.telnet_port,
+            gdb_port=args.gdb_port, debug=args.verbose)
 
-        Optional:
-
-        - OPENOCD: path to openocd, defaults to openocd
-        - OPENOCD_EXTRA_INIT: initialization command for GDB server
-        - OPENOCD_DEFAULT_PATH: openocd search path to use
-        - TUI: if present, passed to gdb server used to flash
-        - TCL_PORT: openocd TCL port, defaults to 6333
-        - TELNET_PORT: openocd telnet port, defaults to 4444
-        - GDB_PORT: openocd gdb port, defaults to 3333
-        '''
-        elf = path.join(get_env_or_bail('O'),
-                        get_env_or_bail('KERNEL_ELF_NAME'))
-        zephyr_base = get_env_or_bail('ZEPHYR_BASE')
-        board_dir = get_env_or_bail('BOARD_DIR')
-        gdb = get_env_or_bail('GDB')
-
-        openocd = os.environ.get('OPENOCD', 'openocd')
-        extra_init = os.environ.get('OPENOCD_EXTRA_INIT', None)
-        if extra_init is not None:
-            extra_init = shlex.split(extra_init)
-        default_path = os.environ.get('OPENOCD_DEFAULT_PATH', None)
-        tui = os.environ.get('TUI', None)
-        tcl_port = int(os.environ.get('TCL_PORT',
-                                      str(DEFAULT_ARC_TCL_PORT)))
-        telnet_port = int(os.environ.get('TELNET_PORT',
-                                         str(DEFAULT_ARC_TELNET_PORT)))
-        gdb_port = int(os.environ.get('GDB_PORT',
-                                      str(DEFAULT_ARC_GDB_PORT)))
-
-        return ArcBinaryRunner(elf, zephyr_base, board_dir,
-                               gdb, openocd=openocd, extra_init=extra_init,
-                               default_path=default_path, tui=tui,
-                               tcl_port=tcl_port, telnet_port=telnet_port,
-                               gdb_port=gdb_port, debug=debug)
-
-    def run(self, command, **kwargs):
-        if command not in {'flash', 'debug', 'debugserver'}:
-            raise ValueError('{} is not supported'.format(command))
-
+    def do_run(self, command, **kwargs):
         kwargs['openocd-cfg'] = path.join(self.board_dir, 'support',
                                           'openocd.cfg')
 
@@ -113,7 +81,6 @@ class ArcBinaryRunner(ZephyrBinaryRunner):
 
         server_cmd = (self.openocd_cmd +
                       ['-f', config] +
-                      self.extra_init +
                       ['-c', 'tcl_port {}'.format(self.tcl_port),
                        '-c', 'telnet_port {}'.format(self.telnet_port),
                        '-c', 'gdb_port {}'.format(self.gdb_port),
@@ -121,16 +88,12 @@ class ArcBinaryRunner(ZephyrBinaryRunner):
                        '-c', 'targets',
                        '-c', 'halt'])
 
-        tui_arg = []
-        if self.tui is not None:
-            tui_arg = [self.tui]
-
         continue_arg = []
         if command == 'flash':
-            continue_arg = ['-ex', 'c']
+            continue_arg = ['-ex', 'set confirm off', '-ex', 'monitor resume',
+                            '-ex', 'quit']
 
-        gdb_cmd = ([self.gdb] +
-                   tui_arg +
+        gdb_cmd = (self.gdb_cmd +
                    ['-ex', 'target remote :{}'.format(self.gdb_port),
                     '-ex', 'load'] +
                    continue_arg +

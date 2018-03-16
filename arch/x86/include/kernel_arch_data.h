@@ -34,7 +34,7 @@
 
 #ifndef _ASMLANGUAGE
 #include <kernel.h>
-#include <nano_internal.h>
+#include <kernel_internal.h>
 #include <zephyr/types.h>
 #include <misc/dlist.h>
 #endif
@@ -401,9 +401,6 @@ extern "C" {
 
 
 struct _kernel_arch {
-#if defined(CONFIG_DEBUG_INFO)
-	NANO_ISF *isf;    /* ptr to interrupt stack frame */
-#endif
 };
 
 typedef struct _kernel_arch _kernel_arch_t;
