@@ -5,9 +5,9 @@ TM4C123GXL Launchpad
 
 Overview
 ********
-The TM4C123G LaunchPad Evaluation Kit is a low-cost evaluation platform for ARM 
-Cortex-M4F based microcontrollers from Texas Instruments. The design of the 
-TM4C123G LaunchPad highlights the TM4C123GH6PM microcontroller with a USB 2.0 
+The TM4C123G LaunchPad Evaluation Kit is a low-cost evaluation platform for ARM
+Cortex-M4F based microcontrollers from Texas Instruments. The design of the
+TM4C123G LaunchPad highlights the TM4C123GH6PM microcontroller with a USB 2.0
 device interface and hibernation module.
 
 .. image:: img/TITivaLaunchpad.jpg
@@ -29,7 +29,7 @@ Features:
     + USB 2.0 Host/Device/OTG + PHY
     + Dual 12-bit 2MSPS ADCs, motion control PWMs
     + 8 UART, 6 I2C, 4 SPI
-    
+
 * On-board In-Circuit Debug Interface (ICDI)
 * USB Micro-B plug to USB-A plug cable
 * Preloaded RGB quick-start application
@@ -81,37 +81,6 @@ the file :file:`boards/arm/ti_tm4c123gxl_lauchpad/pinmux.c`.
 
 The default configuration can be found in the Kconfig file at
 :file:`boards/arm/ti_tm4c123gxl_lauchpad/tm4c123gxl_launchxl_defconfig`.
-
-
-Programming and Debugging
-*************************
-
-Flashing
-========
-
-Flashing Command:
------------------
-
-.. code-block:: console
-
-  $ sudo -E make -C samples/hello_world BOARD=ti_tm4c123gxl_launchpad flash
-
-To see program output from UART0, one can execute in a separate terminal
-window:
-
-.. code-block:: console
-
-  % screen /dev/ttyACM0 115200 8N1
-
-Debugging
-=========
-
-Debugging Command
------------------
-
-.. code-block:: console
-
-  $ sudo -E make -C samples/hello_world BOARD=ti_tm4c123gxl_launchpad debug
 
 References
 **********
