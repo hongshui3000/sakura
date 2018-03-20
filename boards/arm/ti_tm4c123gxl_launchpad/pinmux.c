@@ -61,34 +61,38 @@
 int pinmux_initialize(struct device* port)
 {
 
-#if defined(CONFIG_UART_TM4C123) || (CONFIG_SSI0_TM4C123)
+#if defined(CONFIG_UART_TM4C123) || defined(CONFIG_SSI0_TM4C123)
     /* Enable Peripheral Clocks */
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 #endif
-#if defined(CONFIG_SW_TM4C123) || (CONFIG_LED_RGB_TM4C123)
+#if defined(CONFIG_GPIO_TM4C123_F0) || defined(CONFIG_GPIO_TM4C123_F1) || defined(CONFIG_GPIO_TM4C123_F2) || defined(CONFIG_GPIO_TM4C123_F3) || defined(CONFIG_GPIO_TM4C123_F4)
+
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
-#endif
-#ifdef CONFIG_SW_TM4C123
-    /* Configure the GPIO Pin Mux for PF4 for GPIO_PF4 */
-    MAP_GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
-    MAP_GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
 
     /* Unlock the Port Pin and Set the Commit Bit */
     HWREG(GPIO_PORTF_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;
     HWREG(GPIO_PORTF_BASE + GPIO_O_CR) |= GPIO_PIN_0;
     HWREG(GPIO_PORTF_BASE + GPIO_O_LOCK) = 0x0;
-
+#endif
+#ifdef CONFIG_GPIO_TM4C123_F4
+    /* Configure the GPIO Pin Mux for PF4 for GPIO_PF4 */
+    MAP_GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
+    MAP_GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_4, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
+#endif
+#ifdef CONFIG_GPIO_TM4C123_F0
     /* Configure the GPIO Pin Mux for PF0 for GPIO_PF0 */
     MAP_GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_0);
     MAP_GPIOPadConfigSet(GPIO_PORTF_BASE, GPIO_PIN_0, GPIO_STRENGTH_2MA, GPIO_PIN_TYPE_STD_WPU);
 #endif
-#ifdef CONFIG_LED_RGB_TM4C123
+#ifdef CONFIG_GPIO_TM4C123_F1
     /* Configure the GPIO Pin Mux for PF1 for GPIO_PF1 */
     MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_1);
-
+#endif
+#ifdef CONFIG_GPIO_TM4C123_F3
     /* Configure the GPIO Pin Mux for PF3 for GPIO_PF3 */
     MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_3);
-
+#endif
+#ifdef CONFIG_GPIO_TM4C123_F2
     /* Configure the GPIO Pin Mux for PF2 for GPIO_PF2 */
     MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2);
 #endif

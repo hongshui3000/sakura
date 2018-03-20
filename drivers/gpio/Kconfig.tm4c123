@@ -10,84 +10,104 @@ menuconfig GPIO_TM4C123
 
 if GPIO_TM4C123
 
-config GPIO_TM4C123_A0
-	bool "GPIO block A0"
+config GPIO_TM4C123_F1
+	bool "GPIO block F1"
 	depends on GPIO_TM4C123
 	default n
 	help
-	  Include support for the GPIO port A0.
+	  Include support for the GPIO port F1.
 
-config GPIO_TM4C123_A0_NAME
+config GPIO_TM4C123_F1_NAME
 	string "Driver name"
-	depends on GPIO_TM4C123_A0
-	default "GPIO_A0"
+	depends on GPIO_TM4C123_F1
+	default "GPIO_F1"
 
-config GPIO_TM4C123_A0_IRQ_PRI
-	int "GPIO A0 interrupt priority"
-	depends on GPIO_TM4C123_A0
+config GPIO_TM4C123_F1_IRQ_PRI
+	int "GPIO F1 interrupt priority"
+	depends on GPIO_TM4C123_F1
 	range 0 5
 	default 1
 	help
-	  TM4C123 GPIO A0 IRQ priority.
+	  TM4C123 GPIO F1 IRQ priority.
 
-config GPIO_TM4C123_A1
-	bool "GPIO block A1"
+config GPIO_TM4C123_F2
+	bool "GPIO block F2"
 	depends on GPIO_TM4C123
 	default n
 	help
-	  Include support for the GPIO port A1.
+	  Include support for the GPIO port F2.
 
-config GPIO_TM4C123_A1_NAME
+config GPIO_TM4C123_F2_NAME
 	string "Driver name"
-	depends on GPIO_TM4C123_A1
-	default "GPIO_A1"
+	depends on GPIO_TM4C123_F2
+	default "GPIO_F2"
 
-config GPIO_TM4C123_A1_IRQ_PRI
-	int "GPIO A1 interrupt priority"
-	depends on GPIO_TM4C123_A1
+config GPIO_TM4C123_F2_IRQ_PRI
+	int "GPIO F2 interrupt priority"
+	depends on GPIO_TM4C123_F2
 	range 0 5
 	default 1
 	help
-	  TM4C123 GPIO A1 IRQ priority.
+	  TM4C123 GPIO F2 IRQ priority.
 
-config GPIO_TM4C123_A2
-	bool "GPIO block A2"
+config GPIO_TM4C123_F3
+	bool "GPIO block F3"
 	depends on GPIO_TM4C123
 	default n
 	help
-	  Include support for the GPIO port A2.
+	  Include support for the GPIO port F3.
 
-config GPIO_TM4C123_A2_NAME
+config GPIO_TM4C123_F3_NAME
 	string "Driver name"
-	depends on GPIO_TM4C123_A2
-	default "GPIO_A2"
+	depends on GPIO_TM4C123_F3
+	default "GPIO_F3"
 
-config GPIO_TM4C123_A2_IRQ_PRI
-	int "GPIO A2 interrupt priority"
-	depends on GPIO_TM4C123_A2
+config GPIO_TM4C123_F3_IRQ_PRI
+	int "GPIO F3 interrupt priority"
+	depends on GPIO_TM4C123_F3
 	range 0 5
 	default 1
 	help
-	  TM4C123 GPIO A2 IRQ priority.
+	  TM4C123 GPIO F3 IRQ priority.
 
-config GPIO_TM4C123_A3
-	bool "GPIO block A3"
+config GPIO_TM4C123_F0
+	bool "GPIO block F0"
 	depends on GPIO_TM4C123
 	default n
 	help
-	  Include support for the GPIO port A3.
+	  Include support for the GPIO port F0.
 
-config GPIO_TM4C123_A3_NAME
+config GPIO_TM4C123_F0_NAME
 	string "Driver name"
-	depends on GPIO_TM4C123_A3
-	default "GPIO_A3"
+	depends on GPIO_TM4C123_F0
+	default "GPIO_F0"
 
-config GPIO_TM4C123_A3_IRQ_PRI
-	int "GPIO A3 interrupt priority"
-	depends on GPIO_TM4C123_A3
+config GPIO_TM4C123_F0_IRQ_PRI
+	int "GPIO F0 interrupt priority"
+	depends on GPIO_TM4C123_F0
 	range 0 5
 	default 1
 	help
-	  TM4C123 GPIO A3 IRQ priority.
+	  TM4C123 GPIO F0 IRQ priority.
+
+config GPIO_TM4C123_F4
+	bool "GPIO block F4"
+	depends on GPIO_TM4C123
+	default n
+	help
+	  Include support for the GPIO port F4.
+
+config GPIO_TM4C123_F4_NAME
+	string "Driver name"
+	depends on GPIO_TM4C123_F4
+	default "GPIO_F4"
+
+config GPIO_TM4C123_F4_IRQ_PRI
+	int "GPIO F4 interrupt priority"
+	depends on GPIO_TM4C123_F4
+	range 0 5
+	default 1
+	help
+	  TM4C123 GPIO F4 IRQ priority.
 
 endif # GPIO_TM4C123
