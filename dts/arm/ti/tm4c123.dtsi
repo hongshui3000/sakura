@@ -22,10 +22,18 @@
 		uart0: uart@4000C000 {
 			compatible = "ti,tm4c123-uart";
 			reg = <0x4000C000 0x1000>;
-			interrupts = <5 0>;
+			interrupts = <5 0>; /* 5 = 21(TI uart interrupt num) - 16(zephyr), for compatible zephyr */
 			interrupt-names = "status";
 			status = "disabled";
 			label = "UART_0";
+		};
+
+		spi0: spi@40008000 {
+			compatible = "ti,tm4c123-spi";
+			reg = <0x40008000 0x1000>;
+			interrupts = <7 0>; /* 7 = 23(TI uart interrupt num) - 16(zephyr), for compatible zephyr */
+			status = "disabled";
+			label = "SPI_0";
 		};
 	};
 };

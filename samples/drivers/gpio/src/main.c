@@ -125,29 +125,33 @@
 #include <misc/util.h>
 
 #if defined(CONFIG_SOC_QUARK_SE_C1000_SS)
-#define GPIO_OUT_PIN	2
-#define GPIO_INT_PIN	3
-#define GPIO_NAME	"GPIO_SS_"
+#define GPIO_OUT_PIN 2
+#define GPIO_INT_PIN 3
+#define GPIO_NAME "GPIO_SS_"
 #elif defined(CONFIG_SOC_QUARK_SE_C1000)
-#define GPIO_OUT_PIN	16
-#define GPIO_INT_PIN	19
-#define GPIO_NAME	"GPIO_"
+#define GPIO_OUT_PIN 16
+#define GPIO_INT_PIN 19
+#define GPIO_NAME "GPIO_"
 #elif defined(CONFIG_SOC_PART_NUMBER_SAM3X8E)
-#define GPIO_OUT_PIN	25
-#define GPIO_INT_PIN	27
-#define GPIO_NAME	"GPIO_"
+#define GPIO_OUT_PIN 25
+#define GPIO_INT_PIN 27
+#define GPIO_NAME "GPIO_"
 #elif defined(CONFIG_SOC_QUARK_D2000)
-#define GPIO_OUT_PIN	8
-#define GPIO_INT_PIN	24
-#define GPIO_NAME	"GPIO_"
+#define GPIO_OUT_PIN 8
+#define GPIO_INT_PIN 24
+#define GPIO_NAME "GPIO_"
 #elif defined(CONFIG_SOC_CC2650)
-#define GPIO_OUT_PIN	10
-#define GPIO_INT_PIN	4
-#define GPIO_NAME	"GPIO_"
+#define GPIO_OUT_PIN 10
+#define GPIO_INT_PIN 4
+#define GPIO_NAME "GPIO_"
 #elif defined(CONFIG_SOC_ESP32)
-#define GPIO_OUT_PIN	4
-#define GPIO_INT_PIN	2
-#define GPIO_NAME	"GPIO_"
+#define GPIO_OUT_PIN 4
+#define GPIO_INT_PIN 2
+#define GPIO_NAME "GPIO_"
+#elif defined(CONFIG_BOARD_TI_TM4C123GXL_LAUNCHPAD)
+#define GPIO_OUT_PIN 1
+#define GPIO_INT_PIN 1
+#define GPIO_NAME "GPIO_"
 #endif
 
 #if defined(CONFIG_GPIO_DW_0)
@@ -160,78 +164,78 @@
 #define GPIO_DRV_NAME CONFIG_GPIO_ATMEL_SAM3_PORTB_DEV_NAME
 #elif defined(CONFIG_GPIO_ESP32)
 #define GPIO_DRV_NAME CONFIG_GPIO_ESP32_0_NAME
+#elif defined(CONFIG_BOARD_TI_TM4C123GXL_LAUNCHPAD)
+#define GPIO_DRV_NAME CONFIG_GPIO_TM4C123_F1_NAME
+#define PIN_OUT 1 /* DIO4 */
+#define PIN_IN 1 /* DIO2 */
 #else
 #define GPIO_DRV_NAME "GPIO_0"
 #endif
 
-void gpio_callback(struct device *port,
-		   struct gpio_callback *cb, u32_t pins)
+void gpio_callback(struct device* port,
+    struct gpio_callback* cb, u32_t pins)
 {
-	printk(GPIO_NAME "%d triggered\n", GPIO_INT_PIN);
+    printk(GPIO_NAME "%d triggered\n", GPIO_INT_PIN);
 }
 
 static struct gpio_callback gpio_cb;
 
 void main(void)
 {
-	struct device *gpio_dev;
-	int ret;
-	int toggle = 1;
+    struct device* gpio_dev;
+    int ret;
+    int toggle = 1;
 
-	gpio_dev = device_get_binding(GPIO_DRV_NAME);
-	if (!gpio_dev) {
-		printk("Cannot find %s!\n", GPIO_DRV_NAME);
-		return;
-	}
+    gpio_dev = device_get_binding(GPIO_DRV_NAME);
+    if (!gpio_dev) {
+        printk("Cannot find %s!\n", GPIO_DRV_NAME);
+        return;
+    }
 
-	/* Setup GPIO output */
-	ret = gpio_pin_configure(gpio_dev, GPIO_OUT_PIN, (GPIO_DIR_OUT));
-	if (ret) {
-		printk("Error configuring " GPIO_NAME "%d!\n", GPIO_OUT_PIN);
-	}
+    /* Setup GPIO output */
+    ret = gpio_pin_configure(gpio_dev, GPIO_OUT_PIN, (GPIO_DIR_OUT));
+    if (ret) {
+        printk("Error configuring " GPIO_NAME "%d!\n", GPIO_OUT_PIN);
+    }
 
-	/* Setup GPIO input, and triggers on rising edge. */
+/* Setup GPIO input, and triggers on rising edge. */
 #ifdef CONFIG_SOC_CC2650
-	ret = gpio_pin_configure(gpio_dev, GPIO_INT_PIN,
-				 (GPIO_DIR_IN | GPIO_INT |
-				  GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH |
-				  GPIO_INT_DEBOUNCE | GPIO_PUD_PULL_UP));
+    ret = gpio_pin_configure(gpio_dev, GPIO_INT_PIN,
+        (GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE | GPIO_PUD_PULL_UP));
 #else
-	ret = gpio_pin_configure(gpio_dev, GPIO_INT_PIN,
-				 (GPIO_DIR_IN | GPIO_INT |
-				  GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH |
-				  GPIO_INT_DEBOUNCE));
+    ret = gpio_pin_configure(gpio_dev, GPIO_INT_PIN,
+        (GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE));
 #endif
-	if (ret) {
-		printk("Error configuring " GPIO_NAME "%d!\n", GPIO_INT_PIN);
-	}
+    if (ret) {
+        printk("Error configuring " GPIO_NAME "%d!\n", GPIO_INT_PIN);
+    }
 
-	gpio_init_callback(&gpio_cb, gpio_callback, BIT(GPIO_INT_PIN));
+    gpio_init_callback(&gpio_cb, gpio_callback, BIT(GPIO_INT_PIN));
 
-	ret = gpio_add_callback(gpio_dev, &gpio_cb);
-	if (ret) {
-		printk("Cannot setup callback!\n");
-	}
+    ret = gpio_add_callback(gpio_dev, &gpio_cb);
+    if (ret) {
+        printk("Cannot setup callback!\n");
+    }
 
-	ret = gpio_pin_enable_callback(gpio_dev, GPIO_INT_PIN);
-	if (ret) {
-		printk("Error enabling callback!\n");
-	}
+    ret = gpio_pin_enable_callback(gpio_dev, GPIO_INT_PIN);
+    if (ret) {
+        printk("Error enabling callback!\n");
+    }
 
-	while (1) {
-		printk("Toggling " GPIO_NAME "%d\n", GPIO_OUT_PIN);
+    while (1) {
+        printk("Toggling " GPIO_NAME "%d\n", GPIO_OUT_PIN);
 
-		ret = gpio_pin_write(gpio_dev, GPIO_OUT_PIN, toggle);
-		if (ret) {
-			printk("Error set " GPIO_NAME "%d!\n", GPIO_OUT_PIN);
-		}
+        ret = gpio_pin_write(gpio_dev, GPIO_OUT_PIN, toggle);
+        if (ret) {
+            printk("Error set " GPIO_NAME "%d!\n", GPIO_OUT_PIN);
+        }
 
-		if (toggle) {
-			toggle = 0;
-		} else {
-			toggle = 1;
-		}
+        if (toggle) {
+            toggle = 0;
+        } else {
+            toggle = 1;
+        }
 
-		k_sleep(MSEC_PER_SEC);
-	}
+        k_sleep(MSEC_PER_SEC);
+    }
 }

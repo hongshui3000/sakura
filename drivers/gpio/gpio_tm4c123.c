@@ -20,7 +20,7 @@
 #include <inc/hw_memmap.h>
 #include <inc/hw_types.h>
 
-//#undef __GPIO_H__ /* Zephyr and TM4C123xx SDK gpio.h conflict */
+#undef __GPIO_H__ /* Zephyr and TM4C123xx SDK gpio.h conflict */
 #include <driverlib/gpio.h>
 #include <driverlib/interrupt.h>
 #include <driverlib/rom.h>
