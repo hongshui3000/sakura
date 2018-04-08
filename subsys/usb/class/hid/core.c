@@ -16,11 +16,15 @@
 #include <usb_descriptor.h>
 #include <class/usb_hid.h>
 
+#ifdef CONFIG_USB_COMPOSITE_DEVICE
+#include <composite.h>
+#endif
+
 static struct hid_device_info {
 	const u8_t *report_desc;
 	size_t report_size;
 
-	struct hid_ops *ops;
+	const struct hid_ops *ops;
 } hid_device;
 
 static void hid_status_cb(enum usb_dc_status_code status, u8_t *param)
@@ -86,6 +90,12 @@ static int hid_class_handle_req(struct usb_setup_packet *setup,
 								data);
 			}
 			break;
+		case HID_SET_REPORT:
+			if (hid_device.ops->set_report == NULL) {
+				SYS_LOG_ERR("set_report not implemented");
+				return -EINVAL;
+			}
+			return hid_device.ops->set_report(setup, len, data);
 		default:
 			SYS_LOG_ERR("Unhandled request 0x%x", setup->bRequest);
 			break;
@@ -126,7 +136,11 @@ static int hid_custom_handle_req(struct usb_setup_packet *setup,
 
 static void hid_int_in(u8_t ep, enum usb_dc_ep_cb_status_code ep_status)
 {
-	SYS_LOG_DBG("ep %x status %d", ep, ep_status);
+	if (ep_status != USB_DC_EP_DATA_IN ||
+	    hid_device.ops->int_in_ready == NULL) {
+		return;
+	}
+	hid_device.ops->int_in_ready();
 }
 
 /* Describe Endpoints configuration */
@@ -159,6 +173,11 @@ int usb_hid_init(void)
 
 	SYS_LOG_DBG("Iinitializing HID Device");
 
+	/*
+	 * Modify Report Descriptor Size
+	 */
+	usb_set_hid_report_size(hid_device.report_size);
+
 #ifdef CONFIG_USB_COMPOSITE_DEVICE
 	ret = composite_add_function(&hid_config, FIRST_IFACE_HID);
 	if (ret < 0) {
@@ -168,11 +187,6 @@ int usb_hid_init(void)
 #else
 	hid_config.interface.payload_data = interface_data;
 	hid_config.usb_device_description = usb_get_device_descriptor();
-
-	/*
-	 * Modify Report Descriptor Size
-	 */
-	usb_set_hid_report_size(hid_device.report_size);
 
 	/* Initialize the USB driver with the right configuration */
 	ret = usb_set_config(&hid_config);
@@ -192,7 +206,8 @@ int usb_hid_init(void)
 	return 0;
 }
 
-void usb_hid_register_device(const u8_t *desc, size_t size, struct hid_ops *ops)
+void usb_hid_register_device(const u8_t *desc, size_t size,
+			     const struct hid_ops *ops)
 {
 	hid_device.report_desc = desc;
 	hid_device.report_size = size;

@@ -30,6 +30,7 @@
 #include <stdbool.h>
 #include <net/net_pkt.h>
 #include <net/net_if.h>
+#include <net/ethernet.h>
 #include <i2c.h>
 #include <soc.h>
 #include "phy_sam_gmac.h"
@@ -38,7 +39,8 @@
 /*
  * Verify Kconfig configuration
  */
-
+/* No need to verify things for unit tests */
+#if !defined(CONFIG_NET_TEST)
 #if CONFIG_NET_BUF_DATA_SIZE * CONFIG_ETH_SAM_GMAC_BUF_RX_COUNT \
 	< GMAC_FRAME_SIZE_MAX
 #error CONFIG_NET_BUF_DATA_SIZE * CONFIG_ETH_SAM_GMAC_BUF_RX_COUNT is \
@@ -63,6 +65,7 @@
 #pragma message "CONFIG_NET_BUF_DATA_SIZE should be a multiple of 64 bytes " \
 	"due to the granularity of RX DMA"
 #endif
+#endif /* !CONFIG_NET_TEST */
 
 /* RX descriptors list */
 static struct gmac_desc rx_desc_que0[MAIN_QUEUE_RX_DESC_COUNT]
@@ -577,10 +580,30 @@ static struct net_pkt *frame_get(struct gmac_queue *queue)
 	return rx_frame;
 }
 
+static inline struct net_if *get_iface(struct eth_sam_dev_data *ctx,
+				       u16_t vlan_tag)
+{
+#if defined(CONFIG_NET_VLAN)
+	struct net_if *iface;
+
+	iface = net_eth_get_vlan_iface(ctx->iface, vlan_tag);
+	if (!iface) {
+		return ctx->iface;
+	}
+
+	return iface;
+#else
+	ARG_UNUSED(vlan_tag);
+
+	return ctx->iface;
+#endif
+}
+
 static void eth_rx(struct gmac_queue *queue)
 {
 	struct eth_sam_dev_data *dev_data =
 		CONTAINER_OF(queue, struct eth_sam_dev_data, queue_list);
+	u16_t vlan_tag = NET_VLAN_TAG_UNSPEC;
 	struct net_pkt *rx_frame;
 
 	/* More than one frame could have been received by GMAC, get all
@@ -590,7 +613,36 @@ static void eth_rx(struct gmac_queue *queue)
 	while (rx_frame) {
 		SYS_LOG_DBG("ETH rx");
 
-		if (net_recv_data(dev_data->iface, rx_frame) < 0) {
+#if defined(CONFIG_NET_VLAN)
+		/* FIXME: Instead of this, use the GMAC register to get
+		 * the used VLAN tag.
+		 */
+		{
+			struct net_eth_hdr *hdr = NET_ETH_HDR(rx_frame);
+
+			if (ntohs(hdr->type) == NET_ETH_PTYPE_VLAN) {
+				struct net_eth_vlan_hdr *hdr_vlan =
+					(struct net_eth_vlan_hdr *)
+					NET_ETH_HDR(rx_frame);
+
+				net_pkt_set_vlan_tci(rx_frame,
+						    ntohs(hdr_vlan->vlan.tci));
+				vlan_tag = net_pkt_vlan_tag(rx_frame);
+
+#if CONFIG_NET_TC_RX_COUNT > 1
+				{
+					enum net_priority prio;
+
+					prio = net_vlan2priority(
+					      net_pkt_vlan_priority(rx_frame));
+					net_pkt_set_priority(rx_frame, prio);
+				}
+#endif
+			}
+		}
+#endif
+		if (net_recv_data(get_iface(dev_data, vlan_tag),
+				  rx_frame) < 0) {
 			net_pkt_unref(rx_frame);
 		}
 
@@ -773,11 +825,20 @@ static void eth0_iface_init(struct net_if *iface)
 	struct device *const dev = net_if_get_device(iface);
 	struct eth_sam_dev_data *const dev_data = DEV_DATA(dev);
 	const struct eth_sam_dev_cfg *const cfg = DEV_CFG(dev);
+	static bool init_done;
 	u32_t gmac_ncfgr_val;
 	u32_t link_status;
 	int result;
 
+	/* For VLAN, this value is only used to get the correct L2 driver */
 	dev_data->iface = iface;
+
+	ethernet_init(iface);
+
+	/* The rest of initialization should only be done once */
+	if (init_done) {
+		return;
+	}
 
 	/* Initialize GMAC driver, maximum frame length is 1518 bytes */
 	gmac_ncfgr_val =
@@ -834,11 +895,26 @@ static void eth0_iface_init(struct net_if *iface)
 
 	/* Set up link parameters */
 	link_configure(cfg->regs, link_status);
+
+	init_done = true;
 }
 
-static struct net_if_api eth0_api = {
-	.init	= eth0_iface_init,
-	.send	= eth_tx,
+#if defined(CONFIG_NET_VLAN)
+static enum eth_hw_caps eth_capabilities(struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return ETH_HW_VLAN;
+}
+#endif
+
+static const struct ethernet_api eth0_api = {
+	.iface_api.init = eth0_iface_init,
+	.iface_api.send = eth_tx,
+
+#if defined(CONFIG_NET_VLAN)
+	.get_capabilities = eth_capabilities,
+#endif
 };
 
 static struct device DEVICE_NAME_GET(eth0_sam_gmac);
@@ -914,6 +990,6 @@ static struct eth_sam_dev_data eth0_data = {
 	},
 };
 
-NET_DEVICE_INIT(eth0_sam_gmac, CONFIG_ETH_SAM_GMAC_NAME, eth_initialize,
-		&eth0_data, &eth0_config, CONFIG_ETH_INIT_PRIORITY, &eth0_api,
-		ETHERNET_L2, NET_L2_GET_CTX_TYPE(ETHERNET_L2), GMAC_MTU);
+ETH_NET_DEVICE_INIT(eth0_sam_gmac, CONFIG_ETH_SAM_GMAC_NAME, eth_initialize,
+		    &eth0_data, &eth0_config, CONFIG_ETH_INIT_PRIORITY,
+		    &eth0_api, GMAC_MTU);

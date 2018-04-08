@@ -26,8 +26,6 @@ source "dts/Kconfig"
 
 source "drivers/Kconfig"
 
-source "net/Kconfig"
-
 source "misc/Kconfig"
 
 source "lib/Kconfig"
@@ -37,6 +35,8 @@ source "subsys/Kconfig"
 source "ext/Kconfig"
 
 source "tests/Kconfig"
+
+source "framework/Kconfig"
 
 #
 # The following are for Kconfig files for default values only.

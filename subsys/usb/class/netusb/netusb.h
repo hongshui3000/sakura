@@ -8,6 +8,8 @@
  * USB definitions
  */
 
+#define NETUSB_MTU 1500
+
 struct netusb_function {
 	int num_ep;
 	struct usb_ep_cfg_data *ep;
@@ -28,6 +30,9 @@ struct netusb_function ecm_function;
 #elif defined(CONFIG_USB_DEVICE_NETWORK_RNDIS)
 #define NETUSB_IFACE_IDX FIRST_IFACE_RNDIS
 struct netusb_function rndis_function;
+#elif defined(CONFIG_USB_DEVICE_NETWORK_EEM)
+#define NETUSB_IFACE_IDX FIRST_IFACE_CDC_EEM
+struct netusb_function eem_function;
 #else
 #error Unknown USB Device Networking function
 #endif
