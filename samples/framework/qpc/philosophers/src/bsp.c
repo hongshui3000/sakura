@@ -46,14 +46,15 @@ Q_DEFINE_THIS_FILE
 static uint32_t l_rnd; /* random seed */
 
 #ifdef Q_SPY
-enum {
+enum
+{
     PHILO_STAT = QS_USER
 };
 static uint8_t const l_clock_tick = 0U;
 #endif
 
 /* BSP functions ===========================================================*/
-void BSP_init(int argc, char** argv)
+void BSP_init(int argc, char **argv)
 {
 
 #ifndef Q_SPY
@@ -66,11 +67,11 @@ void BSP_init(int argc, char** argv)
            "Press p to pause\n"
            "Press s to serve\n"
            "Press ESC to quit...\n",
-        QP_versionStr);
+           QP_versionStr);
 
     BSP_randomSeed(1234U);
 
-    Q_ALLEGE(QS_INIT(argc > 1 ? argv[1] : (void*)0));
+    Q_ALLEGE(QS_INIT(argc > 1 ? argv[1] : (void *)0));
     QS_OBJ_DICTIONARY(&l_clock_tick); /* must be called *after* QF_init() */
     QS_USR_DICTIONARY(PHILO_STAT);
 
@@ -87,13 +88,13 @@ void BSP_terminate(int16_t result)
     QF_stop();
 }
 /*..........................................................................*/
-void BSP_displayPhilStat(uint8_t n, char const* stat)
+void BSP_displayPhilStat(uint8_t n, char const *stat)
 {
     printf("Philosopher %2d is %s\n", (int)n, stat);
 
     QS_BEGIN(PHILO_STAT, AO_Philo[n]) /* application-specific record begin */
-    QS_U8(1, n); /* Philosopher number */
-    QS_STR(stat); /* Philosopher status */
+    QS_U8(1, n);                      /* Philosopher number */
+    QS_STR(stat);                     /* Philosopher status */
     QS_END()
 }
 /*..........................................................................*/
@@ -159,18 +160,14 @@ void QF_onClockTick(void)
     // }
 }
 /*..........................................................................*/
-void Q_onAssert(char const* module, int loc)
+void Q_onAssert(char const *module, int loc)
 {
     /*
     * NOTE: add here your application-specific error handling
     */
     printf("Assertion failed in %s:%d", module, loc);
     QS_ASSERTION(module, loc, (uint32_t)10000U); /* report assertion to QS */
-<<<<<<< HEAD
-    exit(-1);
-=======
     //exit(-1);
->>>>>>> local_dev
 }
 
 //============================================================================
@@ -210,61 +207,62 @@ void Q_onAssert(char const* module, int loc)
 #define INVALID_SOCKET -1
 
 /* local variables .........................................................*/
-static void* idleThread(void* par); // the expected P-Thread signature
+static void *idleThread(void *par); // the expected P-Thread signature
 static int l_sock = INVALID_SOCKET;
 static uint8_t l_running;
 
 /*..........................................................................*/
-uint8_t QS_onStartup(void const* arg)
+uint8_t QS_onStartup(void const *arg)
 {
-    static uint8_t qsBuf[QS_TX_SIZE]; // buffer for QS-TX channel
+    static uint8_t qsBuf[QS_TX_SIZE];   // buffer for QS-TX channel
     static uint8_t qsRxBuf[QS_RX_SIZE]; // buffer for QS-RX channel
     char hostName[64];
-    char const* src;
-    char* dst;
+    char const *src;
+    char *dst;
 
     uint16_t port_local = 51234; /* default local port */
     uint16_t port_remote = 6601; /* default QSPY server port */
     int sockopt_bool;
     struct sockaddr_in sa_local;
     struct sockaddr_in sa_remote;
-    struct hostent* host;
+    struct hostent *host;
 
     QS_initBuf(qsBuf, sizeof(qsBuf));
     QS_rxInitBuf(qsRxBuf, sizeof(qsRxBuf));
 
-    src = (arg != (void const*)0)
-        ? (char const*)arg
-        : "localhost";
+    src = (arg != (void const *)0)
+              ? (char const *)arg
+              : "localhost";
     dst = hostName;
-    while ((*src != '\0')
-        && (*src != ':')
-        && (dst < &hostName[sizeof(hostName)])) {
+    while ((*src != '\0') && (*src != ':') && (dst < &hostName[sizeof(hostName)]))
+    {
         *dst++ = *src++;
     }
     *dst = '\0';
-    if (*src == ':') {
+    if (*src == ':')
+    {
         port_remote = (uint16_t)strtoul(src + 1, NULL, 10);
     }
 
     printf("<TARGET> Connecting to QSPY on Host=%s:%d...\n",
-        hostName, port_remote);
+           hostName, port_remote);
 
     l_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP); /* TCP socket */
-    if (l_sock == INVALID_SOCKET) {
+    if (l_sock == INVALID_SOCKET)
+    {
         printf("<TARGET> ERROR   cannot create client socket, errno=%d\n",
-            errno);
+               errno);
         goto error;
     }
 
     /* configure the socket */
     sockopt_bool = 1;
     setsockopt(l_sock, SOL_SOCKET, SO_REUSEADDR,
-        &sockopt_bool, sizeof(sockopt_bool));
+               &sockopt_bool, sizeof(sockopt_bool));
 
     sockopt_bool = 0;
     setsockopt(l_sock, SOL_SOCKET, SO_LINGER,
-        &sockopt_bool, sizeof(sockopt_bool));
+               &sockopt_bool, sizeof(sockopt_bool));
 
     /* local address:port */
     memset(&sa_local, 0, sizeof(sa_local));
@@ -281,9 +279,10 @@ uint8_t QS_onStartup(void const* arg)
 
     /* remote hostName:port (QSPY server socket) */
     host = gethostbyname(hostName);
-    if (host == NULL) {
+    if (host == NULL)
+    {
         printf("<TARGET> ERROR   cannot resolve host Name=%s:%d,errno=%d\n",
-            hostName, port_remote, errno);
+               hostName, port_remote, errno);
         goto error;
     }
     memset(&sa_remote, 0, sizeof(sa_remote));
@@ -292,16 +291,16 @@ uint8_t QS_onStartup(void const* arg)
     sa_remote.sin_port = htons(port_remote);
 
     /* try to connect to the QSPY server */
-    if (connect(l_sock, (struct sockaddr*)&sa_remote, sizeof(sa_remote))
-        == -1) {
+    if (connect(l_sock, (struct sockaddr *)&sa_remote, sizeof(sa_remote)) == -1)
+    {
         printf("<TARGET> ERROR   cannot connect to QSPY on Host="
                "%s:%d,errno=%d\n",
-            hostName, port_remote, errno);
+               hostName, port_remote, errno);
         goto error;
     }
 
     printf("<TARGET> Connected  to QSPY on Host=%s:%d\n",
-        hostName, port_remote);
+           hostName, port_remote);
 
     pthread_attr_t attr;
     struct sched_param param;
@@ -318,7 +317,8 @@ uint8_t QS_onStartup(void const* arg)
     pthread_attr_setschedparam(&attr, &param);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-    if (pthread_create(&idle, &attr, &idleThread, 0) != 0) {
+    if (pthread_create(&idle, &attr, &idleThread, 0) != 0)
+    {
         // Creating the p-thread with the SCHED_FIFO policy failed.
         // Most probably this application has no superuser privileges,
         // so we just fall back to the default SCHED_OTHER policy
@@ -326,7 +326,8 @@ uint8_t QS_onStartup(void const* arg)
         pthread_attr_setschedpolicy(&attr, SCHED_OTHER);
         param.sched_priority = 0;
         pthread_attr_setschedparam(&attr, &param);
-        if (pthread_create(&idle, &attr, &idleThread, 0) == 0) {
+        if (pthread_create(&idle, &attr, &idleThread, 0) == 0)
+        {
             return false;
         }
     }
@@ -341,7 +342,8 @@ error:
 void QS_onCleanup(void)
 {
     l_running = (uint8_t)0;
-    if (l_sock != INVALID_SOCKET) {
+    if (l_sock != INVALID_SOCKET)
+    {
         close(l_sock);
         l_sock = INVALID_SOCKET;
     }
@@ -350,54 +352,63 @@ void QS_onCleanup(void)
 /*..........................................................................*/
 void QS_onFlush(void)
 {
-    if (l_sock != INVALID_SOCKET) { // socket initialized?
+    if (l_sock != INVALID_SOCKET)
+    { // socket initialized?
         uint16_t nBytes = QS_TX_SIZE;
-        uint8_t const* data;
-        while ((data = QS_getBlock(&nBytes)) != (uint8_t*)0) {
-            send(l_sock, (char const*)data, nBytes, 0);
+        uint8_t const *data;
+        while ((data = QS_getBlock(&nBytes)) != (uint8_t *)0)
+        {
+            send(l_sock, (char const *)data, nBytes, 0);
             nBytes = QS_TX_SIZE;
         }
     }
 }
 /*..........................................................................*/
-static void* idleThread(void* par)
+static void *idleThread(void *par)
 { // the expected P-Thread signature
     fd_set readSet;
     FD_ZERO(&readSet);
 
     (void)par; /* unused parameter */
     l_running = (uint8_t)1;
-    while (l_running) {
+    while (l_running)
+    {
         static struct timeval timeout = {
-            (long)0, (long)(QS_IMEOUT_MS * 1000)
-        };
+            (long)0, (long)(QS_IMEOUT_MS * 1000)};
         int nrec;
         uint16_t nBytes;
-        uint8_t const* block;
+        uint8_t const *block;
 
         FD_SET(l_sock, &readSet); /* the socket */
 
         /* selective, timed blocking on the TCP/IP socket... */
         timeout.tv_usec = (long)(QS_IMEOUT_MS * 1000);
         nrec = select(l_sock + 1, &readSet,
-            (fd_set*)0, (fd_set*)0, &timeout);
-        if (nrec < 0) {
+                      (fd_set *)0, (fd_set *)0, &timeout);
+        if (nrec < 0)
+        {
             printf("    <CONS> ERROR    select() errno=%d\n", errno);
             QS_onCleanup();
             exit(-2);
-        } else if (nrec > 0) {
-            if (FD_ISSET(l_sock, &readSet)) { /* socket ready to read? */
+        }
+        else if (nrec > 0)
+        {
+            if (FD_ISSET(l_sock, &readSet))
+            { /* socket ready to read? */
                 uint8_t buf[QS_RX_SIZE];
-                int status = recv(l_sock, (char*)buf, (int)sizeof(buf), 0);
-                while (status > 0) { /* any data received? */
-                    uint8_t* pb;
+                int status = recv(l_sock, (char *)buf, (int)sizeof(buf), 0);
+                while (status > 0)
+                { /* any data received? */
+                    uint8_t *pb;
                     int i = (int)QS_rxGetNfree();
-                    if (i > status) {
+                    if (i > status)
+                    {
                         i = status;
                     }
                     status -= i;
                     /* reorder the received bytes into QS-RX buffer */
-                    for (pb = &buf[0]; i > 0; --i, ++pb) {
+                    for (pb = &buf[0]; i > 0; --i, ++pb)
+                    {
                         QS_RX_PUT(*pb);
                     }
                     QS_rxParse(); /* parse all n-bytes of data */
@@ -410,8 +421,9 @@ static void* idleThread(void* par)
         block = QS_getBlock(&nBytes);
         //QF_CRIT_EXIT(dummy);
 
-        if (block != (uint8_t*)0) {
-            send(l_sock, (char const*)block, nBytes, 0);
+        if (block != (uint8_t *)0)
+        {
+            send(l_sock, (char const *)block, nBytes, 0);
         }
     }
 
@@ -429,28 +441,28 @@ static void* idleThread(void* par)
 #include "qspy.h"
 
 /*..........................................................................*/
-static void* idleThread(void* par); // the expected P-Thread signature
+static void *idleThread(void *par); // the expected P-Thread signature
 static uint8_t l_running;
 
 /*..........................................................................*/
-bool QS_onStartup(void const* /*arg*/)
+bool QS_onStartup(void const * /*arg*/)
 {
     static uint8_t qsBuf[4 * 1024]; // 4K buffer for Quantum Spy
     initBuf(qsBuf, sizeof(qsBuf));
 
-    QSPY_config(QP_VERSION, // version
-        QS_OBJ_PTR_SIZE, // objPtrSize
-        QS_FUN_PTR_SIZE, // funPtrSize
-        QS_TIME_SIZE, // tstampSize
-        Q_SIGNAL_SIZE, // sigSize,
-        QF_EVENT_SIZ_SIZE, // evtSize
-        QF_EQUEUE_CTR_SIZE, // queueCtrSize
-        QF_MPOOL_CTR_SIZE, // poolCtrSize
-        QF_MPOOL_SIZ_SIZE, // poolBlkSize
-        QF_TIMEEVT_CTR_SIZE, // tevtCtrSize
-        (void*)0, // matFile,
-        (void*)0,
-        (QSPY_CustParseFun)0); // customized parser function
+    QSPY_config(QP_VERSION,          // version
+                QS_OBJ_PTR_SIZE,     // objPtrSize
+                QS_FUN_PTR_SIZE,     // funPtrSize
+                QS_TIME_SIZE,        // tstampSize
+                Q_SIGNAL_SIZE,       // sigSize,
+                QF_EVENT_SIZ_SIZE,   // evtSize
+                QF_EQUEUE_CTR_SIZE,  // queueCtrSize
+                QF_MPOOL_CTR_SIZE,   // poolCtrSize
+                QF_MPOOL_SIZ_SIZE,   // poolBlkSize
+                QF_TIMEEVT_CTR_SIZE, // tevtCtrSize
+                (void *)0,           // matFile,
+                (void *)0,
+                (QSPY_CustParseFun)0); // customized parser function
 
     pthread_attr_t attr;
     struct sched_param param;
@@ -467,7 +479,8 @@ bool QS_onStartup(void const* /*arg*/)
     pthread_attr_setschedparam(&attr, &param);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
-    if (pthread_create(&idle, &attr, &idleThread, 0) != 0) {
+    if (pthread_create(&idle, &attr, &idleThread, 0) != 0)
+    {
         // Creating the p-thread with the SCHED_FIFO policy failed.
         // Most probably this application has no superuser privileges,
         // so we just fall back to the default SCHED_OTHER policy
@@ -475,7 +488,8 @@ bool QS_onStartup(void const* /*arg*/)
         pthread_attr_setschedpolicy(&attr, SCHED_OTHER);
         param.sched_priority = 0;
         pthread_attr_setschedparam(&attr, &param);
-        if (pthread_create(&idle, &attr, &idleThread, 0) == 0) {
+        if (pthread_create(&idle, &attr, &idleThread, 0) == 0)
+        {
             return false;
         }
     }
@@ -493,8 +507,9 @@ void QS_onCleanup(void)
 void QS_onFlush(void)
 {
     uint16_t nBytes = 1024U;
-    uint8_t const* block;
-    while ((block = QS_getBlock(&nBytes)) != (uint8_t*)0) {
+    uint8_t const *block;
+    while ((block = QS_getBlock(&nBytes)) != (uint8_t *)0)
+    {
         QSPY_parse(block, nBytes);
         nBytes = 1024U;
     }
@@ -506,21 +521,23 @@ void QSPY_onPrintLn(void)
     fputc('\n', stdout);
 }
 /*..........................................................................*/
-static void* idleThread(void* par)
+static void *idleThread(void *par)
 { // the expected P-Thread signature
     (void)par;
 
     l_running = (uint8_t)1;
-    while (l_running) {
+    while (l_running)
+    {
         uint16_t nBytes = 256U;
-        uint8_t const* block;
-        struct timeval timeout = { 0, 10000 }; // timeout for select()
+        uint8_t const *block;
+        struct timeval timeout = {0, 10000}; // timeout for select()
 
         QF_CRIT_ENTRY(dummy);
         block = QS_getBlock(&nBytes);
         QF_CRIT_EXIT(dummy);
 
-        if (block != (uint8_t*)0) {
+        if (block != (uint8_t *)0)
+        {
             QSPY_parse(block, nBytes);
         }
         select(0, 0, 0, 0, &timeout); // sleep for a while
@@ -546,21 +563,21 @@ void QS_onReset(void)
 //............................................................................
 //! callback function to execute a user command (to be implemented in BSP)
 void QS_onCommand(uint8_t cmdId, uint32_t param1,
-    uint32_t param2, uint32_t param3)
+                  uint32_t param2, uint32_t param3)
 {
-    (void)cmdId; // unused parameter
+    (void)cmdId;  // unused parameter
     (void)param1; // unused parameter
     (void)param2; // unused parameter
     (void)param3; // unused parameter
     //TBD
 }
 
-//****************************************************************************
-// NOTE01:
-// clock() is the most portable facility, but might not provide the desired
-// granularity. Other, less-portable alternatives are clock_gettime(),
-// rdtsc(), or gettimeofday().
-//
+    //****************************************************************************
+    // NOTE01:
+    // clock() is the most portable facility, but might not provide the desired
+    // granularity. Other, less-portable alternatives are clock_gettime(),
+    // rdtsc(), or gettimeofday().
+    //
 
 #endif // Q_SPY
 /*--------------------------------------------------------------------------*/

@@ -19,43 +19,38 @@ config QPC_QF
 	depends on QPC
 	default y
 	help
-	  This option enables support for the pseudo-random number
-	  generator in counter mode.
+	  This option chose the QF mode for the state machine.
 
 config QPC_QK
 	bool
-	prompt "SHA-256 Hash function support"
+	prompt "QK mode"
 	depends on QPC
 	default n
 	help
-	  This option enables support for SHA-256
-	  hash function primitive.
+	  This option chose the QK mode for the state machine.
 
 config QPC_QS
 	bool
-	prompt "HMAC (via SHA256) message auth support"
+	prompt "QS mode"
 	depends on QPC
 	default n
 	help
-	  This option enables support for HMAC using SHA-256
-	  message authentication code.
+	  This option chose the QS mode for the state machine.
 
 config QPC_QV
 	bool
-	prompt "PRNG (via HMAC-SHA256) support"
+	prompt "QV mode"
 	depends on QPC
 	default n
 	help
-	  This option enables support for pseudo-random number
-	  generator.
+	  This option chose the QV mode for the state machine.
 
-config QPC_QV
+config QPC_QXK
 	bool
-	prompt "PRNG (via HMAC-SHA256) support"
+	prompt "QXK mode"
 	depends on QPC
 	default n
 	help
-	  This option enables support for pseudo-random number
-	  generator.
+	  This option chose the QXK mode for the state machine.
 
 endmenu
