@@ -8,6 +8,7 @@
  */
 
 #include <misc/byteorder.h>
+#include <misc/__assert.h>
 #include <usb/usbstruct.h>
 #include <usb/usb_device.h>
 #include <usb/usb_common.h>
@@ -20,11 +21,13 @@
 #include <logging/sys_log.h>
 
 /*
- * The USB Unicode bString is twice as long as initializer_string
+ * The USB Unicode bString is encoded in UTF16LE, which means it takes up
+ * twice the amount of bytes than the same string encoded in ASCII7.
+ *
  * without null character:
- *   uc_length = (sizeof(initializer_string) - 1) * 2
+ *   utf16_length = (sizeof(initializer_string) - 1) * 2
  * or:
- *   uc_length = sizeof(initializer_string) * 2 - 2
+ *   utf16_length = sizeof(initializer_string) * 2 - 2
  * the last index of the bString is:
  *   idx_max = sizeof(initializer_string) * 2 - 2 - 1
  * and the last index of the initializer_string without null character is:
@@ -33,8 +36,8 @@
  *
  * The length of the string descriptor is calculated from the
  * size of the two octets bLength and bDescriptorType plus the
- * length of the Unicode string:
- *   descr_length = 2 + uc_length
+ * length of the UTF16LE string:
+ *   descr_length = 2 + utf16_length
  *   descr_length = 2 + sizeof(initializer-string) * 2 - 2
  *   descr_length = sizeof(initializer-string) * 2
  *
@@ -110,31 +113,41 @@ struct dev_common_descriptor {
 		struct usb_ep_descriptor if0_int_ep;
 	} __packed hid_cfg;
 #endif
+#ifdef CONFIG_USB_DEVICE_NETWORK_EEM
+	struct usb_cdc_eem_config {
+#ifdef CONFIG_USB_COMPOSITE_DEVICE
+		struct usb_association_descriptor iad;
+#endif
+		struct usb_if_descriptor if0;
+		struct usb_ep_descriptor if0_in_ep;
+		struct usb_ep_descriptor if0_out_ep;
+	} __packed cdc_eem_cfg;
+#endif
 	struct usb_string_desription {
 		struct usb_string_descriptor lang_descr;
 		struct usb_mfr_descriptor {
 			u8_t bLength;
 			u8_t bDescriptorType;
 			u8_t bString[MFR_DESC_LENGTH - 2];
-		} __packed unicode_mfr;
+		} __packed utf16le_mfr;
 
 		struct usb_product_descriptor {
 			u8_t bLength;
 			u8_t bDescriptorType;
 			u8_t bString[PRODUCT_DESC_LENGTH - 2];
-		} __packed unicode_product;
+		} __packed utf16le_product;
 
 		struct usb_sn_descriptor {
 			u8_t bLength;
 			u8_t bDescriptorType;
 			u8_t bString[SN_DESC_LENGTH - 2];
-		} __packed unicode_sn;
+		} __packed utf16le_sn;
 #ifdef CONFIG_USB_DEVICE_NETWORK_ECM
 		struct usb_cdc_ecm_mac_descriptor {
 			u8_t bLength;
 			u8_t bDescriptorType;
 			u8_t bString[ECM_MAC_DESC_LENGTH - 2];
-		} __packed unicode_mac;
+		} __packed utf16le_mac;
 #endif /* CONFIG_USB_DEVICE_NETWORK_ECM */
 	} __packed string_descr;
 	struct usb_desc_header term_descr;
@@ -408,7 +421,7 @@ static struct dev_common_descriptor common_desc = {
 			.bFirstInterface = FIRST_IFACE_CDC_ECM,
 			.bInterfaceCount = 0x02,
 			.bFunctionClass = COMMUNICATION_DEVICE_CLASS,
-			.bFunctionSubClass = CDC_ECM_SUBCLASS,
+			.bFunctionSubClass = ECM_SUBCLASS,
 			.bFunctionProtocol = 0,
 			.iFunction = 0,
 		},
@@ -423,7 +436,7 @@ static struct dev_common_descriptor common_desc = {
 			.bAlternateSetting = 0,
 			.bNumEndpoints = 1,
 			.bInterfaceClass = COMMUNICATION_DEVICE_CLASS,
-			.bInterfaceSubClass = CDC_ECM_SUBCLASS,
+			.bInterfaceSubClass = ECM_SUBCLASS,
 			.bInterfaceProtocol = 0,
 			.iInterface = 0,
 		},
@@ -488,7 +501,7 @@ static struct dev_common_descriptor common_desc = {
 			.bAlternateSetting = 1,
 			.bNumEndpoints = 2,
 			.bInterfaceClass = COMMUNICATION_DEVICE_CLASS_DATA,
-			.bInterfaceSubClass = CDC_ECM_SUBCLASS,
+			.bInterfaceSubClass = ECM_SUBCLASS,
 			.bInterfaceProtocol = 0,
 			.iInterface = 0,
 		},
@@ -595,6 +608,61 @@ static struct dev_common_descriptor common_desc = {
 		},
 	},
 #endif /* CONFIG_USB_DEVICE_HID */
+
+#ifdef CONFIG_USB_DEVICE_NETWORK_EEM
+	.cdc_eem_cfg = {
+#ifdef CONFIG_USB_COMPOSITE_DEVICE
+		.iad = {
+			.bLength = sizeof(struct usb_association_descriptor),
+			.bDescriptorType = USB_ASSOCIATION_DESC,
+			.bFirstInterface = FIRST_IFACE_CDC_EEM,
+			.bInterfaceCount = 0x01,
+			.bFunctionClass = COMMUNICATION_DEVICE_CLASS,
+			.bFunctionSubClass = EEM_SUBCLASS,
+			.bFunctionProtocol = 0,
+			.iFunction = 0,
+		},
+#endif
+
+		/* Interface descriptor 0 */
+		/* CDC Communication interface */
+		.if0 = {
+			.bLength = sizeof(struct usb_if_descriptor),
+			.bDescriptorType = USB_INTERFACE_DESC,
+			.bInterfaceNumber = FIRST_IFACE_CDC_EEM,
+			.bAlternateSetting = 0,
+			.bNumEndpoints = 2,
+			.bInterfaceClass = COMMUNICATION_DEVICE_CLASS,
+			.bInterfaceSubClass = EEM_SUBCLASS,
+			.bInterfaceProtocol = EEM_PROTOCOL,
+			.iInterface = 0,
+		},
+
+		/* Data Endpoint IN */
+		.if0_in_ep = {
+			.bLength = sizeof(struct usb_ep_descriptor),
+			.bDescriptorType = USB_ENDPOINT_DESC,
+			.bEndpointAddress = CONFIG_CDC_EEM_IN_EP_ADDR,
+			.bmAttributes = USB_DC_EP_BULK,
+			.wMaxPacketSize =
+				sys_cpu_to_le16(
+				CONFIG_CDC_EEM_BULK_EP_MPS),
+			.bInterval = 0x00,
+		},
+
+		/* Data Endpoint OUT */
+		.if0_out_ep = {
+			.bLength = sizeof(struct usb_ep_descriptor),
+			.bDescriptorType = USB_ENDPOINT_DESC,
+			.bEndpointAddress = CONFIG_CDC_EEM_OUT_EP_ADDR,
+			.bmAttributes = USB_DC_EP_BULK,
+			.wMaxPacketSize =
+				sys_cpu_to_le16(
+				CONFIG_CDC_EEM_BULK_EP_MPS),
+			.bInterval = 0x00,
+		},
+	},
+#endif /* CONFIG_USB_DEVICE_NETWORK_EEM */
 	.string_descr = {
 		.lang_descr = {
 			.bLength = sizeof(struct usb_string_descriptor),
@@ -602,25 +670,25 @@ static struct dev_common_descriptor common_desc = {
 			.bString = sys_cpu_to_le16(0x0409),
 		},
 		/* Manufacturer String Descriptor */
-		.unicode_mfr = {
+		.utf16le_mfr = {
 			.bLength = MFR_DESC_LENGTH,
 			.bDescriptorType = USB_STRING_DESC,
 			.bString = CONFIG_USB_DEVICE_MANUFACTURER,
 		},
 		/* Product String Descriptor */
-		.unicode_product = {
+		.utf16le_product = {
 			.bLength = PRODUCT_DESC_LENGTH,
 			.bDescriptorType = USB_STRING_DESC,
 			.bString = CONFIG_USB_DEVICE_PRODUCT,
 		},
 		/* Serial Number String Descriptor */
-		.unicode_sn = {
+		.utf16le_sn = {
 			.bLength = SN_DESC_LENGTH,
 			.bDescriptorType = USB_STRING_DESC,
 			.bString = CONFIG_USB_DEVICE_SN,
 		},
 #ifdef CONFIG_USB_DEVICE_NETWORK_ECM
-		.unicode_mac = {
+		.utf16le_mac = {
 			.bLength = ECM_MAC_DESC_LENGTH,
 			.bDescriptorType = USB_STRING_DESC,
 			.bString = CONFIG_USB_DEVICE_NETWORK_ECM_MAC
@@ -634,13 +702,20 @@ static struct dev_common_descriptor common_desc = {
 };
 
 
-void usb_fix_unicode_string(int idx_max, int asci_idx_max, u8_t *buf)
+/*
+ * Utility function: Inline conversion an ASCII-7 string of length asci_idx_max
+ * into a UTF16-LE string of idx_max bytes.
+ */
+void ascii7_to_utf16le(int idx_max, int asci_idx_max, u8_t *buf)
 {
 	for (int i = idx_max; i >= 0; i -= 2) {
 		SYS_LOG_DBG("char %c : %x, idx %d -> %d",
 			    buf[asci_idx_max],
 			    buf[asci_idx_max],
 			    asci_idx_max, i);
+		__ASSERT(buf[asci_idx_max] > 0x1F && buf[asci_idx_max] < 0x7F,
+			 "Only printable ascii-7 characters are allowed in USB "
+			 "string descriptors");
 		buf[i] = 0;
 		buf[i - 1] = buf[asci_idx_max--];
 	}
@@ -648,18 +723,18 @@ void usb_fix_unicode_string(int idx_max, int asci_idx_max, u8_t *buf)
 
 u8_t *usb_get_device_descriptor(void)
 {
-	usb_fix_unicode_string(MFR_UC_IDX_MAX, MFR_STRING_IDX_MAX,
-		(u8_t *)common_desc.string_descr.unicode_mfr.bString);
+	ascii7_to_utf16le(MFR_UC_IDX_MAX, MFR_STRING_IDX_MAX,
+		(u8_t *)common_desc.string_descr.utf16le_mfr.bString);
 
-	usb_fix_unicode_string(PRODUCT_UC_IDX_MAX, PRODUCT_STRING_IDX_MAX,
-		(u8_t *)common_desc.string_descr.unicode_product.bString);
+	ascii7_to_utf16le(PRODUCT_UC_IDX_MAX, PRODUCT_STRING_IDX_MAX,
+		(u8_t *)common_desc.string_descr.utf16le_product.bString);
 
-	usb_fix_unicode_string(SN_UC_IDX_MAX, SN_STRING_IDX_MAX,
-		(u8_t *)common_desc.string_descr.unicode_sn.bString);
+	ascii7_to_utf16le(SN_UC_IDX_MAX, SN_STRING_IDX_MAX,
+		(u8_t *)common_desc.string_descr.utf16le_sn.bString);
 
 #ifdef CONFIG_USB_DEVICE_NETWORK_ECM
-	usb_fix_unicode_string(ECM_MAC_UC_IDX_MAX, ECM_STRING_IDX_MAX,
-		(u8_t *)common_desc.string_descr.unicode_mac.bString);
+	ascii7_to_utf16le(ECM_MAC_UC_IDX_MAX, ECM_STRING_IDX_MAX,
+		(u8_t *)common_desc.string_descr.utf16le_mac.bString);
 #endif
 
 	return (u8_t *) &common_desc;
