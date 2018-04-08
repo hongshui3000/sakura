@@ -166,7 +166,11 @@ void Q_onAssert(char const* module, int loc)
     */
     printf("Assertion failed in %s:%d", module, loc);
     QS_ASSERTION(module, loc, (uint32_t)10000U); /* report assertion to QS */
+<<<<<<< HEAD
     exit(-1);
+=======
+    //exit(-1);
+>>>>>>> local_dev
 }
 
 //============================================================================

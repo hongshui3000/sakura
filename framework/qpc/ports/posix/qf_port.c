@@ -114,9 +114,12 @@ int_t QF_run(void)
 
     l_isRunning = true;
     while (l_isRunning) { /* the clock tick loop... */
+        uint16_t i = 0xffff;
         QF_onClockTick(); /* clock tick callback (must call QF_TICK_X()) */
 
-        nanosleep(&l_tick, NULL); /* sleep for the number of ticks, NOTE05 */
+        //nanosleep(&l_tick, NULL); /* sleep for the number of ticks, NOTE05 */
+        while (i--)
+            ;
     }
     QF_onCleanup(); /* invoke cleanup callback */
     pthread_mutex_destroy(&l_startupMutex);
@@ -194,7 +197,7 @@ void QActive_start_(QActive* const me, uint_fast8_t prio,
         /* set the allowed minimum */
         stkSize = (uint_fast16_t)128;
     }
-    pthread_attr_setstacksize(&attr, (size_t)stkSize);
+    //pthread_attr_setstacksize(&attr, (size_t)stkSize);
 
     if (pthread_create(&thread, &attr, &thread_routine, me) != 0) {
         /* Creating the p-thread with the SCHED_FIFO policy failed. Most
