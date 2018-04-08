@@ -18,6 +18,4 @@ source "ext/lib/mgmt/Kconfig"
 
 source "ext/debug/Kconfig"
 
-source "ext/qpc/Kconfig"
-
 endmenu

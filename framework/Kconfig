@@ -1,0 +1,13 @@
+# Kconfig - useful framework source code configuration options
+
+#
+# Copyright (c) 2018 hackin zhao.
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menu "Framework Sources"
+
+source "framework/qpc/Kconfig"
+
+endmenu
