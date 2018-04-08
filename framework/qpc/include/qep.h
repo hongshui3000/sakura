@@ -40,6 +40,8 @@
 #ifndef qep_h
 #define qep_h
 
+#include <stdbool.h>
+
 /****************************************************************************/
 /*! The current QP version as a decimal constant XYZ, where X is a 1-digit
 * major version number, Y is a 1-digit minor version number, and Z is

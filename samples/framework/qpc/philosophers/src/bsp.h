@@ -1,17 +1,13 @@
-/**
-* @file
-* @brief QEP/C port, generic C99 compiler
-* @ingroup ports
-* @cond
-******************************************************************************
-* Last Updated for Version: 5.4.0
-* Date of the Last Update:  2015-04-08
+/*****************************************************************************
+* Product: DPP example
+* Last updated for version 6.2.0
+* Last updated on  2016-11-30
 *
 *                    Q u a n t u m     L e a P s
 *                    ---------------------------
 *                    innovating embedded systems
 *
-* Copyright (C) 2005-2017 Quantum Leaps, LLC. All rights reserved.
+* Copyright (C) 2002-2018 Quantum Leaps, LLC. All rights reserved.
 *
 * This program is open source software: you can redistribute it and/or
 * modify it under the terms of the GNU General Public License as published
@@ -32,17 +28,22 @@
 * along with this program. If not, see <http://www.gnu.org/licenses/>.
 *
 * Contact information:
-* https://state-machine.com
+* https://www.state-machine.com
 * mailto:info@state-machine.com
-******************************************************************************
-* @endcond
-*/
-#ifndef qep_port_h
-#define qep_port_h
+*****************************************************************************/
+#ifndef bsp_h
+#define bsp_h
 
-#include <stdint.h>  /* Exact-width types. WG14/N843 C99 Standard */
-#include <stdbool.h> /* Boolean type.      WG14/N843 C99 Standard */
+#include <stdint.h>
 
-#include "qep.h"     /* QEP platform-independent public interface */
+#define BSP_TICKS_PER_SEC 100U
 
-#endif /* qep_port_h */
+void BSP_init(int argc, char** argv);
+void BSP_displayPhilStat(uint8_t n, char const* stat);
+void BSP_displayPaused(uint8_t paused);
+void BSP_terminate(int16_t result);
+
+void BSP_randomSeed(uint32_t seed); /* random seed */
+uint32_t BSP_random(void); /* pseudo-random generator */
+
+#endif /* bsp_h */

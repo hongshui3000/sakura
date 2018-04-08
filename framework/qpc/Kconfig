@@ -8,16 +8,16 @@ menu "Qpc state machine"
 
 config QPC
 	bool
-	prompt "TinyCrypt Support"
-	default n
+	prompt "Qpc state machine Support"
+	default y
 	help
-	  This option enables the TinyCrypt cryptography library.
+	  This option enables the Qpc state machine framework.
 
 config QPC_QF
 	bool
-	prompt "PRNG in counter mode"
+	prompt "QF mode"
 	depends on QPC
-	default n
+	default y
 	help
 	  This option enables support for the pseudo-random number
 	  generator in counter mode.
