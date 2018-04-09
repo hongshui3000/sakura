@@ -9,7 +9,7 @@ menu "Qpc state machine"
 config QPC
 	bool
 	prompt "Qpc state machine Support"
-	default y
+	default n
 	help
 	  This option enables the Qpc state machine framework.
 
@@ -17,7 +17,7 @@ config QPC_QF
 	bool
 	prompt "QF mode"
 	depends on QPC
-	default y
+	default n
 	help
 	  This option enables support for the pseudo-random number
 	  generator in counter mode.
