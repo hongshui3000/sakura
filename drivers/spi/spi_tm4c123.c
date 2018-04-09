@@ -28,66 +28,79 @@
 #include "spi_tm4c123.h"
 
 #define DEV_CFG(dev) \
-    ((const struct spi_tm4c123_config* const)(dev->config->config_info))
+    ((const struct spi_tm4c123_config *const)(dev->config->config_info))
 
 #define DEV_DATA(dev) \
-    ((struct spi_tm4c123_data * const)(dev->driver_data))
+    ((struct spi_tm4c123_data *const)(dev->driver_data))
 
 #ifdef CONFIG_SPI_TM4C123_INTERRUPT
-static void spi_tm4c123_isr(void* arg)
+static void spi_tm4c123_isr(void *arg)
 {
-    struct device* const dev = (struct device*)arg;
-    const struct spi_tm4c123_config* cfg = dev->config->config_info;
-    struct spi_tm4c123_data* data = dev->driver_data;
+    struct device *const dev = (struct device *)arg;
+    const struct spi_tm4c123_config *cfg = dev->config->config_info;
+    struct spi_tm4c123_data *data = dev->driver_data;
     int err;
 
     err = spi_tm4c123_get_err(spi);
-    if (err) {
+    if (err)
+    {
         spi_tm4c123_complete(data, spi, err);
         return;
     }
 
-    if (spi_tm4c123_transfer_ongoing(data)) {
+    if (spi_tm4c123_transfer_ongoing(data))
+    {
         err = spi_tm4c123_shift_frames(spi, data);
     }
 
-    if (err || !spi_tm4c123_transfer_ongoing(data)) {
+    if (err || !spi_tm4c123_transfer_ongoing(data))
+    {
         spi_tm4c123_complete(data, spi, err);
     }
 }
 #endif
 
-static int spi_tm4c123_release(struct device* dev,
-    const struct spi_config* config)
+static int spi_tm4c123_release(struct device *dev,
+                               const struct spi_config *config)
 {
-    struct spi_tm4c123_data* data = DEV_DATA(dev);
+    struct spi_tm4c123_data *data = DEV_DATA(dev);
 
     spi_context_unlock_unconditionally(&data->ctx);
 
     return 0;
 }
 
-static int spi_tm4c123_configure(struct device* dev, const struct spi_config* config)
+static int spi_tm4c123_configure(struct device *dev, const struct spi_config *config)
 {
-    const struct spi_tm4c123_config* cfg = DEV_CFG(dev);
-    struct spi_tm4c123_data* data = DEV_DATA(dev);
+    const struct spi_tm4c123_config *cfg = DEV_CFG(dev);
+    struct spi_tm4c123_data *data = DEV_DATA(dev);
     u32_t protocol, mode, bit_rate;
 
-    if (spi_context_configured(&data->ctx, config)) {
+    if (spi_context_configured(&data->ctx, config))
+    {
         /* Nothing to do */
         return 0;
     }
 
-    if (SPI_MODE_GET(config->operation) & SPI_MODE_CPOL) {
-        if (SPI_MODE_GET(config->operation) & SPI_MODE_CPHA) {
+    if (SPI_MODE_GET(config->operation) & SPI_MODE_CPOL)
+    {
+        if (SPI_MODE_GET(config->operation) & SPI_MODE_CPHA)
+        {
             protocol = SSI_FRF_MOTO_MODE_3;
-        } else {
+        }
+        else
+        {
             protocol = SSI_FRF_MOTO_MODE_1;
         }
-    } else {
-        if (SPI_MODE_GET(config->operation) & SPI_MODE_CPHA) {
+    }
+    else
+    {
+        if (SPI_MODE_GET(config->operation) & SPI_MODE_CPHA)
+        {
             protocol = SSI_FRF_MOTO_MODE_2;
-        } else {
+        }
+        else
+        {
             protocol = SSI_FRF_MOTO_MODE_0;
         }
     }
@@ -96,46 +109,51 @@ static int spi_tm4c123_configure(struct device* dev, const struct spi_config* co
     if ((cfg->spi_clk / bit_rate) <= (254 * 256))
         return -ENOTSUP;
 
-    if (SPI_OP_MODE_GET(config->operation) == SPI_OP_MODE_MASTER) {
+    if (SPI_OP_MODE_GET(config->operation) == SPI_OP_MODE_MASTER)
+    {
         mode = SSI_MODE_MASTER;
         if (bit_rate <= (cfg->spi_clk / 2))
             return -ENOTSUP;
-    } else {
+    }
+    else
+    {
         mode = SSI_MODE_SLAVE;
         if (bit_rate <= (cfg->spi_clk / 12))
             return -ENOTSUP;
     }
 
-    if ((SPI_WORD_SIZE_GET(config->operation) < 4)
-        || (SPI_WORD_SIZE_GET(config->operation) > 16)) {
+    if ((SPI_WORD_SIZE_GET(config->operation) < 4) || (SPI_WORD_SIZE_GET(config->operation) > 16))
+    {
         return -ENOTSUP;
     }
 
     MAP_SSIDisable(cfg->spi_base);
 
     MAP_SSIConfigSetExpClk(cfg->spi_base, cfg->spi_clk,
-        protocol, mode, bit_rate, (SPI_WORD_SIZE_GET(config->operation)));
+                           protocol, mode, bit_rate, (SPI_WORD_SIZE_GET(config->operation)));
 
     MAP_SSIEnable(cfg->spi_base);
 
     return 0;
 }
 
-static int transceive(struct device* dev,
-    const struct spi_config* config,
-    const struct spi_buf_set* tx_bufs,
-    const struct spi_buf_set* rx_bufs,
-    bool asynchronous, struct k_poll_signal* signal)
+static int transceive(struct device *dev,
+                      const struct spi_config *config,
+                      const struct spi_buf_set *tx_bufs,
+                      const struct spi_buf_set *rx_bufs,
+                      bool asynchronous, struct k_poll_signal *signal)
 {
-    struct spi_tm4c123_data* data = DEV_DATA(dev);
+    struct spi_tm4c123_data *data = DEV_DATA(dev);
     int ret;
 
-    if (!tx_bufs && !tx_bufs) {
+    if (!tx_bufs && !tx_bufs)
+    {
         return 0;
     }
 
 #ifndef CONFIG_SPI_TM4C123_INTERRUPT
-    if (asynchronous) {
+    if (asynchronous)
+    {
         return -ENOTSUP;
     }
 #endif
@@ -143,7 +161,8 @@ static int transceive(struct device* dev,
     spi_context_lock(&data->ctx, asynchronous, signal);
 
     ret = spi_tm4c123_configure(dev, config);
-    if (ret) {
+    if (ret)
+    {
         goto out;
     }
 
@@ -167,20 +186,20 @@ out:
     return ret ? -EIO : 0;
 }
 
-static int spi_tm4c123_transceive(struct device* dev,
-    const struct spi_config* config,
-    const struct spi_buf_set* tx_bufs,
-    const struct spi_buf_set* rx_bufs)
+static int spi_tm4c123_transceive(struct device *dev,
+                                  const struct spi_config *config,
+                                  const struct spi_buf_set *tx_bufs,
+                                  const struct spi_buf_set *rx_bufs)
 {
     return transceive(dev, config, tx_bufs, rx_bufs, false, NULL);
 }
 
 #ifdef CONFIG_SPI_ASYNC
-static int spi_tm4c123_transceive_async(struct device* dev,
-    const struct spi_config* config,
-    const struct spi_buf_set* tx_bufs,
-    const struct spi_buf_set* rx_bufs,
-    struct k_poll_signal* async)
+static int spi_tm4c123_transceive_async(struct device *dev,
+                                        const struct spi_config *config,
+                                        const struct spi_buf_set *tx_bufs,
+                                        const struct spi_buf_set *rx_bufs,
+                                        struct k_poll_signal *async)
 {
     return transceive(dev, config, tx_bufs, rx_bufs, true, async);
 }
@@ -194,15 +213,19 @@ static const struct spi_driver_api api_funcs = {
     .release = spi_tm4c123_release,
 };
 
-static int spi_tm4c123_init(struct device* dev)
+static int spi_tm4c123_init(struct device *dev)
 {
-    const struct spi_tm4c123_config* cfg = DEV_CFG(dev);
+    const struct spi_tm4c123_config *cfg = DEV_CFG(dev);
+    struct spi_tm4c123_data *data = DEV_DATA(dev);
 
-    if (!MAP_SysCtlPeripheralPresent(cfg->peripheral)) {
+    if (!MAP_SysCtlPeripheralPresent(cfg->peripheral))
+    {
         return -1;
     }
 
     MAP_SysCtlPeripheralEnable(cfg->peripheral);
+
+    spi_context_unlock_unconditionally(&data->ctx);
 
     return 0;
 }
@@ -210,12 +233,12 @@ static int spi_tm4c123_init(struct device* dev)
 #ifdef CONFIG_SPI_0
 
 #ifdef CONFIG_SPI_TM4C123_INTERRUPT
-static void spi_tm4c123_irq_config_func_0(struct device* port);
+static void spi_tm4c123_irq_config_func_0(struct device *port);
 #endif
 
 static const struct spi_tm4c123_config spi_tm4c123_cfg_0 = {
     .spi_clk = CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC,
-    .spi_base = SSI0_BASE,
+    .spi_base = CONFIG_SPI_0_TM4C123_BASE_ADDRESS,
     .peripheral = SYSCTL_PERIPH_SSI0,
 #ifdef CONFIG_SPI_TM4C123_INTERRUPT
     .irq_config = spi_tm4c123_irq_config_func_0,
@@ -227,17 +250,17 @@ static struct spi_tm4c123_data spi_tm4c123_dev_data_0 = {
     SPI_CONTEXT_INIT_SYNC(spi_tm4c123_dev_data_0, ctx),
 };
 
-DEVICE_AND_API_INIT(spi_tm4c123_0, CONFIG_SPI_0_NAME, &spi_tm4c123_init,
-    &spi_tm4c123_dev_data_0, &spi_tm4c123_cfg_0,
-    POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,
-    &api_funcs);
+DEVICE_AND_API_INIT(spi_tm4c123_0, CONFIG_SPI_0_TM4C123_NAME, &spi_tm4c123_init,
+                    &spi_tm4c123_dev_data_0, &spi_tm4c123_cfg_0,
+                    POST_KERNEL, CONFIG_SPI_INIT_PRIORITY,
+                    &api_funcs);
 
 #ifdef CONFIG_SPI_TM4C123_INTERRUPT
-static void spi_tm4c123_irq_config_func_0(struct device* dev)
+static void spi_tm4c123_irq_config_func_0(struct device *dev)
 {
-    IRQ_CONNECT(CONFIG_SPI_0_IRQ, CONFIG_SPI_0_IRQ_PRI,
-        spi_tm4c123_isr, DEVICE_GET(spi_tm4c123_0), 0);
-    irq_enable(CONFIG_SPI_0_IRQ);
+    IRQ_CONNECT(CONFIG_SPI_0_TM4C123_IRQ, CONFIG_SPI_0_TM4C123_IRQ_PRI,
+                spi_tm4c123_isr, DEVICE_GET(spi_tm4c123_0), 0);
+    irq_enable(CONFIG_SPI_0_TM4C123_IRQ);
 }
 #endif
 

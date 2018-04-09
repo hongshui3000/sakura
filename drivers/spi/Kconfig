@@ -83,6 +83,7 @@ config SPI_0_OP_MODES
 
 config SPI_0_IRQ_PRI
 	int "Port 0 interrupt priority"
+	depends on !HAS_DTS_SPI
 
 config SPI_0_CS_GPIO_PORT
 	string "The GPIO port which is used to control CS"
