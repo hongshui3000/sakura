@@ -5,7 +5,7 @@
 #
 ---
 title: TM4C123 SPI
-id: st,tm4c123-spi
+id: ti,tm4c123-spi
 version: 0.1
 
 description: >
@@ -19,7 +19,7 @@ properties:
       type: string
       category: required
       description: compatible strings
-      constraint: "st,tm4c123-spi"
+      constraint: "ti,tm4c123-spi"
 
     reg:
       type: array

@@ -1,0 +1,26 @@
+# Kconfig - TM4C123 SPI driver configuration options
+
+#
+# Copyright (c) 2018 hackin zhao
+#
+# SPDX-License-Identifier: Apache-2.0
+#
+
+menuconfig SPI_TM4C123
+	bool "TM4C123 MCU SPI controller driver"
+	depends on SPI && SOC_SERIES_TM4C123
+	select SERIAL_HAS_DRIVER
+    depends on SOC_FAMILY_TIVAWARE
+	default n
+	help
+	  Enable SPI support on the TM4C123 family of processors.
+
+if SPI_TM4C123
+
+config SPI_TM4C123_INTERRUPT
+	bool "TM4C123 MCU SPI Interrupt Support"
+	default n
+	help
+	  Enable Interrupt support for the SPI Driver of TM4C123 family.
+
+endif # SPI_TM4C123

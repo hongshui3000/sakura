@@ -1,5 +1,5 @@
 #define SYS_LOG_LEVEL CONFIG_SYS_LOG_IEEE802154_DRIVER_LEVEL
-#define SYS_LOG_DOMAIN "dev/cc2520"
+#define SYS_LOG_DOMAIN "dev/dw1000"
 #include <logging/sys_log.h>
 
 #include <errno.h>
@@ -21,18 +21,18 @@
 
 #include "ieee802154_dw1000.h"
 
-static int cc1200_init(struct device* dev)
+static int dw1000_init(struct device* dev)
 {
-    struct cc1200_context* cc1200 = dev->driver_data;
+    struct dw1000_context* dw1000 = dev->driver_data;
 
-    atomic_set(&cc1200->tx, 0);
-    atomic_set(&cc1200->tx_start, 0);
-    atomic_set(&cc1200->rx, 0);
-    k_sem_init(&cc1200->rx_lock, 0, 1);
-    k_sem_init(&cc1200->tx_sync, 0, 1);
+    atomic_set(&dw1000->tx, 0);
+    atomic_set(&dw1000->tx_start, 0);
+    atomic_set(&dw1000->rx, 0);
+    k_sem_init(&dw1000->rx_lock, 0, 1);
+    k_sem_init(&dw1000->tx_sync, 0, 1);
 
-    cc1200->gpios = cc1200_configure_gpios();
-    if (!cc1200->gpios) {
+    dw1000->gpios = cc1200_configure_gpios();
+    if (!dw1000->gpios) {
         SYS_LOG_ERR("Configuring GPIOS failed");
         return -EIO;
     }

@@ -37,18 +37,18 @@
 ******************************************************************************
 * @endcond
 */
-#define QP_IMPL           /* this is QP implementation */
-#include "qf_port.h"      /* QF port */
-#include "qf_pkg.h"
+#define QP_IMPL /* this is QP implementation */
+#include "qf_port.h" /* QF port */
 #include "qassert.h"
-#ifdef Q_SPY              /* QS software tracing enabled? */
-    #include "qs_port.h"  /* include QS port */
+#include "qf_pkg.h"
+#ifdef Q_SPY /* QS software tracing enabled? */
+#include "qs_port.h" /* include QS port */
 #else
-    #include "qs_dummy.h" /* disable the QS software tracing */
+#include "qs_dummy.h" /* disable the QS software tracing */
 #endif /* Q_SPY */
 
-#include <limits.h>       /* for PTHREAD_STACK_MIN */
-#include <sys/mman.h>     /* for mlockall() */
+#include <limits.h> /* for PTHREAD_STACK_MIN */
+//#include <sys/mman.h>     /* for mlockall() */
 
 Q_DEFINE_THIS_MODULE("qf_port")
 
@@ -62,7 +62,8 @@ static struct timespec l_tick;
 enum { NANOSLEEP_NSEC_PER_SEC = 1000000000 }; /* see NOTE05 */
 
 /*..........................................................................*/
-void QF_init(void) {
+void QF_init(void)
+{
     extern uint_fast8_t QF_maxPool_;
     extern QTimeEvt QF_timeEvtHead_[QF_MAX_TICK_RATE];
 
@@ -86,23 +87,23 @@ void QF_init(void) {
     */
     QF_maxPool_ = (uint_fast8_t)0;
     QF_bzero(&QF_timeEvtHead_[0], (uint_fast16_t)sizeof(QF_timeEvtHead_));
-    QF_bzero(&QF_active_[0],      (uint_fast16_t)sizeof(QF_active_));
+    QF_bzero(&QF_active_[0], (uint_fast16_t)sizeof(QF_active_));
 
     l_tick.tv_sec = 0;
-    l_tick.tv_nsec = NANOSLEEP_NSEC_PER_SEC/100L; /* default clock tick */
+    l_tick.tv_nsec = NANOSLEEP_NSEC_PER_SEC / 100L; /* default clock tick */
 }
 /*..........................................................................*/
-int_t QF_run(void) {
+int_t QF_run(void)
+{
     struct sched_param sparam;
 
-    QF_onStartup();  /* invoke startup callback */
+    QF_onStartup(); /* invoke startup callback */
 
     /* try to maximize the priority of the ticker thread, see NOTE01 */
-    sparam.sched_priority = sched_get_priority_max(SCHED_FIFO);
+    sparam.priority = sched_get_priority_max(SCHED_FIFO);
     if (pthread_setschedparam(pthread_self(), SCHED_FIFO, &sparam) == 0) {
         /* success, this application has sufficient privileges */
-    }
-    else {
+    } else {
         /* setting priority failed, probably due to insufficient privieges */
     }
 
@@ -113,9 +114,12 @@ int_t QF_run(void) {
 
     l_isRunning = true;
     while (l_isRunning) { /* the clock tick loop... */
+        uint16_t i = 0xffff;
         QF_onClockTick(); /* clock tick callback (must call QF_TICK_X()) */
 
-        nanosleep(&l_tick, NULL); /* sleep for the number of ticks, NOTE05 */
+        //nanosleep(&l_tick, NULL); /* sleep for the number of ticks, NOTE05 */
+        while (i--)
+            ;
     }
     QF_onCleanup(); /* invoke cleanup callback */
     pthread_mutex_destroy(&l_startupMutex);
@@ -124,16 +128,19 @@ int_t QF_run(void) {
     return (int_t)0; /* return success */
 }
 /*..........................................................................*/
-void QF_setTickRate(uint32_t ticksPerSec) {
+void QF_setTickRate(uint32_t ticksPerSec)
+{
     l_tick.tv_nsec = NANOSLEEP_NSEC_PER_SEC / ticksPerSec;
 }
 /*..........................................................................*/
-void QF_stop(void) {
+void QF_stop(void)
+{
     l_isRunning = false; /* stop the loop in QF_run() */
 }
 /*..........................................................................*/
-static void *thread_routine(void *arg) { /* the expected POSIX signature */
-    QActive *act = (QActive *)arg;
+static void* thread_routine(void* arg)
+{ /* the expected POSIX signature */
+    QActive* act = (QActive*)arg;
 
     /* block this thread until the startup mutex is unlocked from QF_run() */
     pthread_mutex_lock(&l_startupMutex);
@@ -141,26 +148,26 @@ static void *thread_routine(void *arg) { /* the expected POSIX signature */
 
     /* loop until m_thread is cleared in QActive_stop() */
     do {
-        QEvt const *e = QActive_get_(act); /* wait for the event */
-        QHSM_DISPATCH(&act->super, e);     /* dispatch to the HSM */
-        QF_gc(e);    /* check if the event is garbage, and collect it if so */
+        QEvt const* e = QActive_get_(act); /* wait for the event */
+        QHSM_DISPATCH(&act->super, e); /* dispatch to the HSM */
+        QF_gc(e); /* check if the event is garbage, and collect it if so */
     } while (act->thread != (uint8_t)0);
     QF_remove_(act); /* remove this object from the framework */
     pthread_cond_destroy(&act->osObject); /* cleanup the condition variable */
-    return (void *)0; /* return success */
+    return (void*)0; /* return success */
 }
 /*..........................................................................*/
-void QActive_start_(QActive * const me, uint_fast8_t prio,
-                    QEvt const *qSto[], uint_fast16_t qLen,
-                    void *stkSto, uint_fast16_t stkSize,
-                    QEvt const *ie)
+void QActive_start_(QActive* const me, uint_fast8_t prio,
+    QEvt const* qSto[], uint_fast16_t qLen,
+    void* stkSto, uint_fast16_t stkSize,
+    QEvt const* ie)
 {
     pthread_t thread;
     pthread_attr_t attr;
     struct sched_param param;
 
     /* p-threads allocate stack internally */
-    Q_REQUIRE_ID(600, stkSto == (void *)0);
+    Q_REQUIRE_ID(600, stkSto == (void*)0);
 
     QEQueue_init(&me->eQueue, qSto, qLen);
     pthread_cond_init(&me->osObject, 0);
@@ -179,34 +186,35 @@ void QActive_start_(QActive * const me, uint_fast8_t prio,
     pthread_attr_setschedpolicy(&attr, SCHED_FIFO);
 
     /* see NOTE04 */
-    param.sched_priority = prio
-                           + (sched_get_priority_max(SCHED_FIFO)
-                              - QF_MAX_ACTIVE - 3);
+    param.priority = prio
+        + (sched_get_priority_max(SCHED_FIFO)
+              - QF_MAX_ACTIVE - 3);
 
     pthread_attr_setschedparam(&attr, &param);
     pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 
     if (stkSize == 0U) {
         /* set the allowed minimum */
-        stkSize = (uint_fast16_t)PTHREAD_STACK_MIN;
+        stkSize = (uint_fast16_t)128;
     }
-    pthread_attr_setstacksize(&attr, (size_t)stkSize);
+    //pthread_attr_setstacksize(&attr, (size_t)stkSize);
 
     if (pthread_create(&thread, &attr, &thread_routine, me) != 0) {
         /* Creating the p-thread with the SCHED_FIFO policy failed. Most
         * probably this application has no superuser privileges, so we just
         * fall back to the default SCHED_OTHER policy and priority 0.
         */
-        pthread_attr_setschedpolicy(&attr, SCHED_OTHER);
-        param.sched_priority = 0;
+        pthread_attr_setschedpolicy(&attr, SCHED_RR);
+        param.priority = 0;
         pthread_attr_setschedparam(&attr, &param);
-        Q_ALLEGE(pthread_create(&thread, &attr, &thread_routine, me)== 0);
+        Q_ALLEGE(pthread_create(&thread, &attr, &thread_routine, me) == 0);
     }
     pthread_attr_destroy(&attr);
     me->thread = (uint8_t)1;
 }
 /*..........................................................................*/
-void QActive_stop(QActive * const me) {
+void QActive_stop(QActive* const me)
+{
     me->thread = (uint8_t)0; /* stop the QActive thread loop */
 }
 
@@ -252,4 +260,3 @@ void QActive_stop(QActive * const me) {
 * deliver only 2*actual-system-tick granularity. To compensate for this,
 * you would need to reduce (by 2) the constant NANOSLEEP_NSEC_PER_SEC.
 */
-
