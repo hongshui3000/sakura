@@ -15,7 +15,7 @@ extern "C" {
 
 #define DW1000_OFFSET(x) x
 
-/* resgister base address */
+/* register base address */
 #define DW1000_DEV_ID_ID 0x00
 #define DW1000_EUI_64_ID 0x01
 #define DW1000_PANADR_ID 0x03
@@ -56,7 +56,7 @@ extern "C" {
 #define DW1000_DIG_DIAG_ID 0x2F
 #define DW1000_PMSC_ID 0x36
 
-/* reserved resgister */
+/* reserved register */
 #define DW1000_REG_02_ID_RESERVED 0x02
 #define DW1000_REG_05_ID_RESERVED 0x05
 #define DW1000_REG_07_ID_RESERVED 0x07
@@ -83,7 +83,7 @@ extern "C" {
 #define DW1000_REG_3E_ID_RESERVED 0x3E
 #define DW1000_REG_3F_ID_RESERVED 0x3F
 
-/* regsiter offset */
+/* register offset */
 /* TODO: for test api */
 #define DW1000_DEV_ID_REV (BIT(0) | BIT(1) | BIT(2) | BIT(3))
 #define DW1000_DEV_ID_VER (BIT(4) | BIT(5) | BIT(6) | BIT(7))
