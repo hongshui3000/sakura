@@ -18,8 +18,64 @@
 #include <string.h>
 
 #include <gpio.h>
+#include <ieee802154/dw1000.h>
 
 #include "ieee802154_dw1000.h"
+
+static struct dw1000_gpio_configuration dw1000_gpios[DW1000_GPIO_IDX_MAX] = {
+    {
+        .dev = NULL, .pin = DW1000_GPIO_IDX_ISR,
+    },
+    {
+        .dev = NULL, .pin = DW1000_GPIO_IDX_WAKEUP,
+    },
+    {
+        .dev = NULL, .pin = DW1000_GPIO_IDX_RST,
+    },
+    {
+        .dev = NULL, .pin = DW1000_GPIO_IDX_EXTON,
+    },
+    {
+        .dev = NULL, .pin = DW1000_GPIO_IDX_GPIO_5, /* SPI POL */
+    },
+    {
+        .dev = NULL, .pin = DW1000_GPIO_IDX_GPIO_6, /* SPI PHA */
+    },
+};
+
+struct dw1000_gpio_configuration* dw1000_configure_gpios(void)
+{
+    const int flags_noint_out = GPIO_DIR_OUT;
+    const int flags_noint_in = GPIO_DIR_IN;
+    const int flags_int_in = (GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE);
+    struct device* gpio;
+
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_1_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_VREG_EN].pin,
+        flags_noint_out);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_RESET].pin,
+        flags_noint_out);
+
+    dw1000_gpios[DW1000_GPIO_IDX_VREG_EN].dev = gpio;
+    dw1000_gpios[DW1000_GPIO_IDX_RESET].dev = gpio;
+
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_0_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_SFD].pin,
+        flags_int_in);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_FIFOP].pin,
+        flags_int_in);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_FIFO].pin,
+        flags_noint_in);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_CCA].pin,
+        flags_noint_in);
+
+    dw1000_gpios[DW1000_GPIO_IDX_FIFOP].dev = gpio;
+    dw1000_gpios[DW1000_GPIO_IDX_FIFO].dev = gpio;
+    dw1000_gpios[DW1000_GPIO_IDX_SFD].dev = gpio;
+    dw1000_gpios[DW1000_GPIO_IDX_CCA].dev = gpio;
+
+    return dw1000_gpios;
+}
 
 static int dw1000_init(struct device* dev)
 {
@@ -31,7 +87,7 @@ static int dw1000_init(struct device* dev)
     k_sem_init(&dw1000->rx_lock, 0, 1);
     k_sem_init(&dw1000->tx_sync, 0, 1);
 
-    dw1000->gpios = cc1200_configure_gpios();
+    dw1000->gpios = dw1000_configure_gpios();
     if (!dw1000->gpios) {
         SYS_LOG_ERR("Configuring GPIOS failed");
         return -EIO;

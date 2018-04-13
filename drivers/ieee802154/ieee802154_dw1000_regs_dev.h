@@ -13,6 +13,8 @@
 extern "C" {
 #endif
 
+#define DW1000_OFFSET(x) x
+
 /* resgister base address */
 #define DW1000_DEV_ID_ID 0x00
 #define DW1000_EUI_64_ID 0x01
@@ -81,8 +83,25 @@ extern "C" {
 #define DW1000_REG_3E_ID_RESERVED 0x3E
 #define DW1000_REG_3F_ID_RESERVED 0x3F
 
+/* regsiter offset */
+/* TODO: for test api */
+#define DW1000_DEV_ID_REV (BIT(0) | BIT(1) | BIT(2) | BIT(3))
+#define DW1000_DEV_ID_VER (BIT(4) | BIT(5) | BIT(6) | BIT(7))
+#define DW1000_DEV_ID_MODEL 0xff
+#define DW1000_DEV_ID_RIDTAG 0xffff
+
 #ifdef __cplusplus
 }
 #endif
 
 #endif
+
+/*
+ ***********************************************************************
+ * note:
+ * 
+ * 1. 所有的寄存器的访问方式均以字节(byte)为单位访问，所有的偏移计算也均以字节
+ *    为单位进行计算
+ * 
+ ************************************************************************
+ */

@@ -15,6 +15,48 @@ config IEEE802154_DW1000_DRV_NAME
 	help
 	  This option sets the driver name
 
+config IEEE802154_DW1000_GPIO_ISR_DRV_NAME
+	string "the interrupt pin driver's name to use to access DW1000"
+	default ""
+	help
+	  This option is mandatory to set which gpio pin to use in order
+	  to receive dw1000 interrupt.
+
+config IEEE802154_DW1000_GPIO_RST_DRV_NAME
+	string "the reset pin driver's name to use to access DW1000"
+	default ""
+	help
+	  This option is mandatory to set which gpio pin to use in order
+	  to reset the dw1000 device.
+
+config IEEE802154_DW1000_GPIO_WAKEUP_DRV_NAME
+	string "the wakeup pin driver's name to use to access DW1000"
+	default ""
+	help
+	  This option is mandatory to set which gpio pin to use in order
+	  to wakeup dw1000 device.
+
+config IEEE802154_DW1000_GPIO_EXTON_DRV_NAME
+	string "the exton pin driver's name to use to access DW1000"
+	default ""
+	help
+	  This option is mandatory to set which gpio pin to use in order
+	  to receive dw1000 interrupt.
+
+config IEEE802154_DW1000_GPIO_GPIO_5_DRV_NAME
+	string "the spi mode set pin driver's name to use to access DW1000"
+	default ""
+	help
+	  This option is mandatory to set which gpio pin to use in order
+	  to set the dw1000 SPI mode(POL).
+
+config IEEE802154_DW1000_GPIO_GPIO_6_DRV_NAME
+	string "the spi mode set pin driver's name to use to access DW1000"
+	default ""
+	help
+	  This option is mandatory to set which gpio pin to use in order
+	  to set the dw1000 SPI mode(PHA).
+
 config IEEE802154_DW1000_SPI_DRV_NAME
 	string "SPI driver's name to use to access DW1000"
 	default ""
@@ -114,74 +156,3 @@ config IEEE802154_DW1000_MAC7
 	  This is the byte 7 of the MAC address.
 
 endif # IEEE802154_DW1000_RANDOM_MAC
-
-config IEEE802154_DW1000_XOSC
-	int "Value of the Crystal oscillator in kHz"
-	default 40000
-	help
-	  This sets the XOSC value, it must be between 38400 and 40000.
-	  This value should follow what has been set in the RF settings via
-	  SmartRF tool. Do not touch this unless you know what you are doing.
-
-config IEEE802154_DW1000_RF_PRESET
-	bool "Use DECAWAVE DW1000 RF pre-sets"
-	default y
-
-choice
-	prompt "DECAWAVE DW1000 RF preset"
-	default IEEE802154_DW1000_RF_SET_0
-	depends on IEEE802154_DW1000_RF_PRESET
-	help
-	  Set the RF preset you want to use.
-
-config IEEE802154_DW1000_RF_SET_0
-	bool "868MHz - 50Kbps - 2-GFSK - IEEE 802.15.4g compliant - ETSI"
-
-config IEEE802154_DW1000_RF_SET_1
-	bool "920MHz - 50Kbps - 2-GFSK - IEEE 802.15.4g compliant - ARIB"
-
-config IEEE802154_DW1000_RF_SET_2
-	bool "434MHz - 50Kbps - 2-GFSK - IEEE 802.15.4g compliant - ETSI"
-
-endchoice
-
-config IEEE802154_DW1000_CCA_THRESHOLD
-	int "Value in dbm of the CCA threshold"
-	default -91
-	help
-	  Set the CCA threshold. See datasheet's AGC_CS_THR register for
-	  more information. Do not touch this unless you know what you are doing.
-
-config IEEE802154_DW1000_RSSI_OFFSET
-	int "Value in dbm of the RSSI offset"
-	default -81
-	help
-	  Set the gain adjustment. See datasheet's AGC_GAIN_ADJUST register for
-	  more information. Do not touch this unless you know what you are doing.
-
-# Do no touch below settings unless you know what you are doing
-config IEEE802154_DW1000_SETTLING_CFG
-	hex
-	default 0x03
-
-config IEEE802154_DW1000_PKTCFG0
-	hex
-	default 0x20
-
-config IEEE802154_DW1000_PKTCFG1
-	hex
-	default 0x03
-
-config IEEE802154_DW1000_PKTCFG2
-	hex
-	default 0x00
-
-config IEEE802154_DW1000_RFEND_CFG1
-	hex
-	default 0x3F
-
-config IEEE802154_DW1000_RFEND_CFG0
-	hex
-	default 0x00
-
-endif # IEEE802154_DW1000
