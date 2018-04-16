@@ -65,7 +65,8 @@ int pinmux_initialize(struct device* port)
     /* Enable Peripheral Clocks */
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA);
 #endif
-#if defined(CONFIG_GPIO_TM4C123_F0) || defined(CONFIG_GPIO_TM4C123_F1) || defined(CONFIG_GPIO_TM4C123_F2) || defined(CONFIG_GPIO_TM4C123_F3) || defined(CONFIG_GPIO_TM4C123_F4)
+
+#if defined(CONFIG_GPIO_TM4C123_PORT_F)
 
     MAP_SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOF);
 
@@ -73,7 +74,6 @@ int pinmux_initialize(struct device* port)
     HWREG(GPIO_PORTF_BASE + GPIO_O_LOCK) = GPIO_LOCK_KEY;
     HWREG(GPIO_PORTF_BASE + GPIO_O_CR) |= GPIO_PIN_0;
     HWREG(GPIO_PORTF_BASE + GPIO_O_LOCK) = 0x0;
-#endif
 #ifdef CONFIG_GPIO_TM4C123_F4
     /* Configure the GPIO Pin Mux for PF4 for GPIO_PF4 */
     MAP_GPIOPinTypeGPIOInput(GPIO_PORTF_BASE, GPIO_PIN_4);
@@ -96,6 +96,8 @@ int pinmux_initialize(struct device* port)
     /* Configure the GPIO Pin Mux for PF2 for GPIO_PF2 */
     MAP_GPIOPinTypeGPIOOutput(GPIO_PORTF_BASE, GPIO_PIN_2);
 #endif
+#endif /* CONFIG_GPIO_TM4C123_PORT_F */
+
 #ifdef CONFIG_UART_TM4C123
 
     /* Configure the GPIO Pin Mux for PA0 for U0RX */

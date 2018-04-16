@@ -24,22 +24,22 @@
 
 static struct dw1000_gpio_configuration dw1000_gpios[DW1000_GPIO_IDX_MAX] = {
     {
-        .dev = NULL, .pin = DW1000_GPIO_IDX_ISR,
+        .dev = NULL, .pin = CONFIG_DW1000_GPIO_IDX_ISR_PIN,
     },
     {
-        .dev = NULL, .pin = DW1000_GPIO_IDX_WAKEUP,
+        .dev = NULL, .pin = CONFIG_DW1000_GPIO_IDX_WAKEUP_PIN,
     },
     {
-        .dev = NULL, .pin = DW1000_GPIO_IDX_RST,
+        .dev = NULL, .pin = CONFIG_DW1000_GPIO_IDX_RST_PIN,
     },
     {
-        .dev = NULL, .pin = DW1000_GPIO_IDX_EXTON,
+        .dev = NULL, .pin = CONFIG_DW1000_GPIO_IDX_EXTON_PIN,
     },
     {
-        .dev = NULL, .pin = DW1000_GPIO_IDX_GPIO_5, /* SPI POL */
+        .dev = NULL, .pin = CONFIG_DW1000_GPIO_IDX_GPIO_5_PIN, /* SPI POL */
     },
     {
-        .dev = NULL, .pin = DW1000_GPIO_IDX_GPIO_6, /* SPI PHA */
+        .dev = NULL, .pin = CONFIG_DW1000_GPIO_IDX_GPIO_6_PIN, /* SPI PHA */
     },
 };
 
@@ -50,31 +50,71 @@ struct dw1000_gpio_configuration* dw1000_configure_gpios(void)
     const int flags_int_in = (GPIO_DIR_IN | GPIO_INT | GPIO_INT_EDGE | GPIO_INT_ACTIVE_HIGH | GPIO_INT_DEBOUNCE);
     struct device* gpio;
 
-    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_1_NAME);
-    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_VREG_EN].pin,
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_ISR_PORT_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_ISR].pin,
         flags_noint_out);
-    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_RESET].pin,
+    dw1000_gpios[DW1000_GPIO_IDX_ISR].dev = gpio;
+
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_WAKEUP_PORT_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_WAKEUP].pin,
         flags_noint_out);
+    dw1000_gpios[DW1000_GPIO_IDX_WAKEUP].dev = gpio;
 
-    dw1000_gpios[DW1000_GPIO_IDX_VREG_EN].dev = gpio;
-    dw1000_gpios[DW1000_GPIO_IDX_RESET].dev = gpio;
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_RST_PORT_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_RST].pin,
+        flags_noint_out);
+    dw1000_gpios[DW1000_GPIO_IDX_RST].dev = gpio;
 
-    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_0_NAME);
-    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_SFD].pin,
-        flags_int_in);
-    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_FIFOP].pin,
-        flags_int_in);
-    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_FIFO].pin,
-        flags_noint_in);
-    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_CCA].pin,
-        flags_noint_in);
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_EXTON_PORT_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_EXTON].pin,
+        flags_noint_out);
+    dw1000_gpios[DW1000_GPIO_IDX_EXTON].dev = gpio;
 
-    dw1000_gpios[DW1000_GPIO_IDX_FIFOP].dev = gpio;
-    dw1000_gpios[DW1000_GPIO_IDX_FIFO].dev = gpio;
-    dw1000_gpios[DW1000_GPIO_IDX_SFD].dev = gpio;
-    dw1000_gpios[DW1000_GPIO_IDX_CCA].dev = gpio;
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_GPIO_5_PORT_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_GPIO_5].pin,
+        flags_noint_out);
+    dw1000_gpios[DW1000_GPIO_IDX_GPIO_5].dev = gpio;
+
+    gpio = device_get_binding(CONFIG_IEEE802154_DW1000_GPIO_GPIO_6_PORT_NAME);
+    gpio_pin_configure(gpio, dw1000_gpios[DW1000_GPIO_IDX_GPIO_6].pin,
+        flags_noint_out);
+    dw1000_gpios[DW1000_GPIO_IDX_GPIO_6].dev = gpio;
 
     return dw1000_gpios;
+}
+
+static inline int configure_spi(struct device* dev)
+{
+    struct dw1000_context* dw1000 = dev->driver_data;
+
+    dw1000->spi = device_get_binding(
+        CONFIG_IEEE802154_DW1000_SPI_DRV_NAME);
+    if (!dw1000->spi) {
+        SYS_LOG_ERR("Unable to get SPI device");
+        return -ENODEV;
+    }
+
+#if defined(CONFIG_IEEE802154_DW1000_GPIO_SPI_CS)
+    cs_ctrl.gpio_dev = device_get_binding(
+        CONFIG_IEEE802154_DW1000_GPIO_SPI_CS_DRV_NAME);
+    if (!cs_ctrl.gpio_dev) {
+        SYS_LOG_ERR("Unable to get GPIO SPI CS device");
+        return -ENODEV;
+    }
+
+    cs_ctrl.gpio_pin = CONFIG_IEEE802154_DW1000_GPIO_SPI_CS_PIN;
+    cs_ctrl.delay = 0;
+
+    dw1000->spi_cfg.cs = &cs_ctrl;
+
+    SYS_LOG_DBG("SPI GPIO CS configured on %s:%u",
+        CONFIG_IEEE802154_DW1000_GPIO_SPI_CS_DRV_NAME,
+        CONFIG_IEEE802154_DW1000_GPIO_SPI_CS_PIN);
+#endif /* CONFIG_IEEE802154_DW1000_GPIO_SPI_CS */
+
+    dw1000->spi_cfg.frequency = CONFIG_IEEE802154_DW1000_SPI_FREQ;
+    dw1000->spi_cfg.operation = SPI_WORD_SET(8);
+    dw1000->spi_cfg.slave = CONFIG_IEEE802154_DW1000_SPI_SLAVE;
 }
 
 static int dw1000_init(struct device* dev)
@@ -101,16 +141,16 @@ static int dw1000_init(struct device* dev)
     SYS_LOG_DBG("GPIO and SPI configured");
 
     if (power_on_and_setup(dev) != 0) {
-        SYS_LOG_ERR("Configuring CC1200 failed");
+        SYS_LOG_ERR("Configuring DW1000 failed");
         return -EIO;
     }
 
-    k_thread_create(&cc1200->rx_thread, cc1200->rx_stack,
-        CONFIG_IEEE802154_CC1200_RX_STACK_SIZE,
-        (k_thread_entry_t)cc1200_rx,
+    k_thread_create(&dw1000->rx_thread, dw1000->rx_stack,
+        CONFIG_IEEE802154_DW1000_RX_STACK_SIZE,
+        (k_thread_entry_t)dw1000_rx,
         dev, NULL, NULL, K_PRIO_COOP(2), 0, 0);
 
-    SYS_LOG_INF("CC1200 initialized");
+    SYS_LOG_INF("DW1000 initialized");
 
     return 0;
 }
