@@ -1,16 +1,11 @@
 add_library(QPC INTERFACE)
 
 target_include_directories(QPC INTERFACE include)
-target_include_directories(QPC INTERFACE ports/posix src)
+target_include_directories(QPC INTERFACE ports)
 target_include_directories(QPC INTERFACE src)
-target_include_directories(QPC INTERFACE ${PROJECT_SOURCE_DIR}/include/posix)
 
 zephyr_library()
-if(CONFIG_PTHREAD_IPC)
-    zephyr_library_sources(ports/posix/qf_port.c)
-elseif(CONFIG_PTHREAD_IPC)
-    zephyr_library_sources(ports/k_thread/qf_port.c)
-endif()
+zephyr_library_sources(ports/qf_port.c)
 zephyr_library_sources_ifdef(CONFIG_QPC_QF src/qf/qep_hsm.c)
 zephyr_library_sources_ifdef(CONFIG_QPC_QF src/qf/qep_msm.c)
 zephyr_library_sources_ifdef(CONFIG_QPC_QF src/qf/qf_act.c)
@@ -37,8 +32,4 @@ zephyr_library_sources_ifdef(CONFIG_QPC_QXK src/qxk/qxk.c)
 
 zephyr_library_link_libraries(QPC)
 
-if(CONFIG_PTHREAD_IPC)
-    target_link_libraries(QPC INTERFACE zephyr_interface)
-elseif(CONFIG_PTHREAD_IPC)
-    target_link_libraries(QPC INTERFACE zephyr_interface)
-endif()
+target_link_libraries(QPC INTERFACE zephyr_interface)
