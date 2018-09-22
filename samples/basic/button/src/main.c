@@ -12,11 +12,14 @@
 #include <misc/printk.h>
 
 /* change this to use another GPIO port */
+#ifndef SW0_GPIO_CONTROLLER
 #ifdef SW0_GPIO_NAME
-#define PORT	SW0_GPIO_NAME
+#define SW0_GPIO_CONTROLLER SW0_GPIO_NAME
 #else
-#error SW0_GPIO_NAME needs to be set in board.h
+#error SW0_GPIO_NAME or SW0_GPIO_CONTROLLER needs to be set in board.h
 #endif
+#endif
+#define PORT	SW0_GPIO_CONTROLLER
 
 /* change this to use another GPIO pin */
 #ifdef SW0_GPIO_PIN
@@ -26,11 +29,11 @@
 #endif
 
 /* change to use another GPIO pin interrupt config */
-#ifdef SW0_GPIO_INT_CONF
-#define EDGE    SW0_GPIO_INT_CONF
+#ifdef SW0_GPIO_FLAGS
+#define EDGE    SW0_GPIO_FLAGS
 #else
 /*
- * If SW0_GPIO_INT_CONF not defined used default EDGE value.
+ * If SW0_GPIO_FLAGS not defined used default EDGE value.
  * Change this to use a different interrupt trigger
  */
 #define EDGE    (GPIO_INT_EDGE | GPIO_INT_ACTIVE_LOW)

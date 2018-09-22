@@ -233,8 +233,7 @@ static void set_ipv4_header(struct net_pkt *pkt)
 	length = sizeof(offer) + sizeof(struct net_ipv4_hdr) +
 		 sizeof(struct net_udp_hdr);
 
-	ipv4->len[1] = length;
-	ipv4->len[0] = length >> 8;
+	ipv4->len = htons(length);
 
 	memset(ipv4->id, 0, 4); /* id and offset */
 
@@ -523,6 +522,11 @@ static struct net_mgmt_event_callback rx_cb;
 static void receiver_cb(struct net_mgmt_event_callback *cb,
 			u32_t nm_event, struct net_if *iface)
 {
+	if (nm_event != NET_EVENT_IPV4_ADDR_ADD) {
+		/* Spurious callback. */
+		return;
+	}
+
 	test_result(true);
 }
 

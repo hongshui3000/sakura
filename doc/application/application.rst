@@ -47,11 +47,14 @@ These contents are:
   such as board-specific kernel configuration files, the ability to run and
   debug compiled binaries on real or emulated hardware, and more.
 
-* **Kernel configuration files**: An application typically provides
-  a configuration file (ending in :file:`.conf`) that specifies values for one
-  or more kernel configuration options. If omitted, the application's existing
-  kernel configuration option values are used; if no existing values are
-  provided, the kernel's default configuration values are used.
+* **Kernel configuration files**: An application typically provides a
+  configuration file (usually called :file:`prj.conf`) that specifies
+  application-specific values for one or more kernel configuration options.
+  These application settings are merged with board-specific settings to produce
+  a kernel configuration.
+
+  The :ref:`application_kconfig` section below goes over application
+  configuration in detail.
 
 * **Application source code files**: An application typically provides one
   or more application-specific files, written in C or assembly language. These
@@ -100,12 +103,19 @@ Follow these steps to create a new application directory. (Refer to
 
 #. Create an empty :file:`CMakeLists.txt` file in your application directory.
 
-#. Include the :file:`boilerplate.cmake` to pull in the Zephyr build system:
+#. Add boilerplate code that sets the minimum CMake version and pulls
+   in the Zephyr build system:
 
    .. code-block:: cmake
 
+      cmake_minimum_required(VERSION 3.8.2)
       include($ENV{ZEPHYR_BASE}/cmake/app/boilerplate.cmake NO_POLICY_SCOPE)
       project(NONE)
+
+   .. note:: cmake_minimum_required is also invoked from
+             :file:`boilerplate.cmake`. The most recent of the two
+             versions will be enforced by CMake.
+
 
 #. Place your application source code in the :file:`src` sub-directory. For
    this example, we'll assume you created a file named :file:`src/main.c`.
@@ -143,7 +153,8 @@ configure the Zephyr build system:
   application's :file:`CMakeLists.txt` file, or in the ``cmake`` command line.
 
 * :makevar:`CONF_FILE`: Indicates the name of one or more configuration
-  fragment files.  Each file includes kconfig configuration values that
+  fragment files.  Multiple filenames can either be separated by a single space
+  or a single semicolon.  Each file includes Kconfig configuration values that
   override the default configuration values.  Like :makevar:`BOARD`, this can
   also be defined in the environment, in your application's
   :file:`CMakeLists.txt` file, or in the ``cmake`` command line.
@@ -367,6 +378,12 @@ hardware. Follow these instructions to run an application via QEMU:
 Each time you execute the run command, your application is rebuilt and run
 again.
 
+
+.. note:: The ``run`` target will use the QEMU binary available from the Zephyr
+          SDK by default. To use an alternate version of QEMU, for example the
+          version installed on your host or a custom version, set the
+          environment variable ``QEMU_BIN_PATH`` to the alternate path.
+
 .. _application_debugging:
 .. _custom_board_definition:
 
@@ -398,11 +415,11 @@ where the ``boards`` directory hosts the board you are building for:
 
    .
    ├── boards
-   │   └── x86
-   │       └── my_custom_board
-   │           ├── doc
-   │           │   └── img
-   │           └── support
+   │   └── x86
+   │       └── my_custom_board
+   │           ├── doc
+   │           │   └── img
+   │           └── support
    └── src
 
 
@@ -670,9 +687,8 @@ Create a Debugger Configuration
 RTOS Awareness
 ==============
 
-Experimental support for Zephyr RTOS awareness is implemented in `pyOCD PR
-#333`_. It is compatible with GDB PyOCD Debugging in Eclipse, but you must
-download this pull request and build pyOCD from source. You must also enable
+Support for Zephyr RTOS awareness is implemented in `pyOCD v0.11.0`_ and later.
+It is compatible with GDB PyOCD Debugging in Eclipse, but you must enable
 CONFIG_OPENOCD_SUPPORT=y in your application.
 
 CMake Details
@@ -759,6 +775,15 @@ Make sure to follow these steps in order.
    the usual :file:`prj.conf` (or :file:`prj_YOUR_BOARD.conf`, where
    ``YOUR_BOARD`` is a board name), add lines setting the
    :makevar:`CONF_FILE` variable to these files appropriately.
+   If multiple filenames are given, separate them by a single space or
+   semicolon.  CMake lists can be used to build up configuration fragment
+   files in a modular way when you want to avoid setting :makevar:`CONF_FILE`
+   in a single place. For example:
+
+   .. code-block:: cmake
+
+     set(CONF_FILE "fragment_file1.conf")
+     list(APPEND CONF_FILE "fragment_file2.conf")
 
    More details are available below in :ref:`application_kconfig`.
 
@@ -785,14 +810,19 @@ Make sure to follow these steps in order.
 
       set(KCONFIG_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/Kconfig)
 
-   Make sure to include the following lines in your :file:`Kconfig` file before
-   any application-specific configuration options:
+   Structure your :file:`Kconfig` file like this:
 
    .. literalinclude:: application-kconfig.include
 
-   .. important::
+   .. note::
 
-      The indented lines above must use tabs, not spaces.
+       Environment variables in ``source`` statements are expanded directly,
+       so you do not need to define an ``option env="ZEPHYR_BASE"`` Kconfig
+       "bounce" symbol. If you use such a symbol, it must have the same name as
+       the environment variable.
+
+       See the :ref:`kconfig_extensions` section in the
+       :ref:`board_porting_guide` for more information.
 
 #. Now include the mandatory boilerplate that integrates the
    application with the Zephyr build system on a new line, **after any
@@ -821,6 +851,19 @@ Below is a simple example :file:`CMakeList.txt`:
 
    target_sources(app PRIVATE src/main.c)
 
+CMakeCache.txt
+==============
+
+CMake uses a CMakeCache.txt file as persistent key/value string
+storage used to cache values between runs, including compile and build
+options and paths to library dependencies. This cache file is created
+when CMake is run in an empty build folder.
+
+For more details about the CMakeCache.txt file see the official CMake
+documentation `runningcmake`_ .
+
+.. _runningcmake: http://cmake.org/runningcmake/
+
 .. _application_configuration:
 
 Application Configuration
@@ -831,47 +874,64 @@ Application Configuration
 Kconfig Configuration
 =====================
 
-The application is configured using a set of options that can be customized for
-application-specific purposes. The Zephyr build system takes a configuration
-option's value from the first source in which it is specified, taken from the
-following available sources, in order:
+The initial configuration for an application is produced by merging
+configuration settings from three sources:
 
-#. An application's current configuration (i.e. the file
-   :file:`zephyr/.config` in the build directory). This can be used
-   during development as described below in :ref:`override_kernel_conf`.
+1. A :makevar:`BOARD`-specific configuration file, stored in
+   :file:`boards/ARCHITECTURE/BOARD/BOARD_defconfig` in the Zephyr base
+   directory.
 
-#. The application's configuration file(s) given by the
-   :makevar:`CONF_FILE` variable, either as set explicitly by the user
-   or using one of the default values detailed below.
+2. Any CMakeCache entries entries that are prefixed with :makevar:`CONFIG_`.
 
-#. The board's default configuration for the current :makevar:`BOARD`
-   setting (i.e. the :file:`boards/ARCHITECTURE/BOARD/BOARD_defconfig`
-   file in the Zephyr base directory).
+3. One or more application-specific configuration files.
 
-#. The kernel's default configuration settings (i.e. the default value given to
-   the option in one of Zephyr's :file:`Kconfig` files).
+The application-specific configuration file(s) can be specified in any of the
+following ways. The simplest option is to just have a single :file:`prj.conf`
+file.
 
-The Zephyr build system determines a value for :makevar:`CONF_FILE` by
-checking the following until one is found, in order:
+1. If :makevar:`CONF_FILE` is set in :file:`CMakeLists.txt` (**before including
+   the boilerplate.cmake file**), or is present in the CMake variable cache,
+   the configuration files specified in it are merged and used as the
+   application-specific settings.
 
-- Any value given to :makevar:`CONF_FILE` in your application
-  :file:`CMakeLists.txt` (**before including the boilerplate.cmake file**),
-  passed to the the CMake command line, or present in the CMake variable cache,
-  takes precedence.
+   Alternatively, an application may define a CMake command, macro, or function
+   called ``set_conf_file``, which is invoked and is expected to set
+   :makevar:`CONF_FILE`.
 
-- If a CMake command, macro, or function ``set_conf_file`` is defined, it
-  will be invoked and must set :makevar:`CONF_FILE`.
+2. Otherwise (if (1.) does not apply), if a file :file:`prj_BOARD.conf` exists
+   in the application directory, where :makevar:`BOARD` is the BOARD value set
+   earlier, the settings in it are used.
 
-- If the file :file:`prj_BOARD.conf` exists in your application directory,
-  where ``BOARD`` is the BOARD value set earlier, it will be used.
+3. Otherwise, if a file :file:`prj.conf` exists in the application directory,
+   the settings in it are used.
 
-- Finally, if :file:`prj.conf` exists in your application directory, it will
-  be used.
+Configuration settings that have not been specified fall back on their
+default value, as given in the :file:`Kconfig` files.
 
-If :makevar:`CONF_FILE` specifies multiple files, they will be merged in order.
+The merged configuration is saved in :file:`zephyr/.config` in the build
+directory.
+
+As long as :file:`zephyr/.config` exists and is up-to-date (is newer than the
+:makevar:`BOARD` and application configuration files), it will be used in
+preference to producing a new merged configuration. This can be used during
+development, as described below in :ref:`override_kernel_conf`.
+
+For more information on Zephyr's Kconfig configuration scheme, see the
+:ref:`setting_configuration_values` section in the :ref:`board_porting_guide`.
 
 For information on available kernel configuration options, including
 inter-dependencies between options, see the :ref:`configuration`.
+
+.. note::
+
+    Dependencies between options can also be viewed in the interactive
+    configuration interface, which is explained in the
+    :ref:`override_kernel_conf` section. It will have the most up-to-date
+    dependencies, and also shows which dependencies are currently unsatisfied.
+
+    To view the dependencies of an option in the configuration interface, jump
+    to it with :kbd:`/` and press :kbd:`?`. For each unsatisfied dependency,
+    jump to it in turn to check its dependencies.
 
 .. _application_set_conf:
 
@@ -922,163 +982,120 @@ The example below shows a comment line and an override setting
 
 .. _override_kernel_conf:
 
-Overriding Default Configuration
---------------------------------
+Overriding the Default Configuration
+------------------------------------
 
-Follow these steps to override an application's configuration
-temporarily, perhaps to test the effect of a change.
+An interactive configuration interface is available for making temporary
+changes to the configuration. This can be handy during development.
 
 .. note::
 
-   If you want to permanently alter the configuration you should set
-   the new value in a :file:`.conf` file, as described above in
-   :ref:`application_set_conf`.
+   The configuration can also be changed by editing :file:`zephyr/.config` in
+   the application build directory by hand. Using the configuration interface
+   is safer, as it correctly handles dependencies between configurations
+   symbols.
 
-The steps below describe how to configure your application using a
-menu-driven configurator interface. While you can edit your
-application's :file:`.config` manually, using a configurator tool is
-preferred, since it correctly handles dependencies between options.
+To make a setting permanent, you should set it in a :file:`.conf` file, as
+described above in :ref:`application_set_conf`.
 
+The steps below will run the interactive configuration interface:
 
-#. Generate a Make build system, and use it to run ``ninja
-   menuconfig`` as follows.
+#. Create a build directory :file:`<home>/app/build` inside your application
+   directory and generate build files inside it with CMake, as follows:
 
-   a) Using CMake, create a build directory (:file:`<home>/app/build`) from
-      your application directory (:file:`<home>/app`).
+   .. code-block:: bash
 
-      For example, on a shell or command prompt:
+      # On Linux/macOS
+      cd ~/app
+      # On Windows
+      cd %userprofile%\app
 
-      .. code-block:: bash
+      mkdir build && cd build
+      cmake -GNinja ..
 
-         # On Linux/macOS
-         cd ~/app
-         # On Windows
-         cd %userprofile%\app
+#. Run the following command from the build directory (:file:`<home>/app/build`)
+   to start the configuration interface:
 
-         mkdir build && cd build
-         cmake -GNinja ..
+   .. code-block:: bash
 
-   b) Run ``ninja menuconfig`` from the build directory
-      (:file:`<home>/app/build`).
+       ninja menuconfig
 
-      Continuing the above Unix shell example:
+   The configuration interface is shown below:
 
-      .. code-block:: bash
+   .. image:: figures/app_kernel_conf_1.png
+        :align: center
+        :alt: Main Configuration Menu
 
-          ninja menuconfig
+#. Change configuration symbols to their desired values as follows:
 
-      A question-based menu opens that allows you to set individual
-      configuration options.
-
-      .. image:: figures/app_kernel_conf_1.png
-           :width: 600px
-           :align: center
-           :alt: Main Configuration Menu
-
-#. Set kernel configuration values using the following
-   key commands:
-
-   * Use the arrow keys to navigate within any menu or list.
-
-   * Press :kbd:`Enter` to select a menu item.
-
-   * Type an upper case :kbd:`Y` or :kbd:`N` in the
-      square brackets :guilabel:`[ ]` to
-      enable or disable a kernel configuration option.
-
-   * Type a numerical value in the parentheses :guilabel:`( )`.
-
-   * Press :kbd:`Tab` to navigate the command menu at the bottom of the
-     display.
+   * Use the arrow keys to navigate the menu.
 
      .. note::
 
-       When a non-default entry is selected for options that are non-numerical,
-       an asterisk :kbd:`*` appears between the square brackets in the display.
-       There is nothing added added the display when you select the option's
-       default.
+        Common `Vim <https://www.vim.org>`_ key bindings are supported as well.
 
-#. For information about any option, select the option and tab to
-   :guilabel:`<Help >` and press :kbd:`Enter`.
+   * Press :kbd:`Enter` or :kbd:`Space` to enter submenus and choices, which
+     appear with ``--->`` next to them. Press :kbd:`ESC` returns to the parent
+     menu.
 
-   Press :kbd:`Enter` to return to the menu.
+   * Press :kbd:`Space` to toggle or configure a symbol value. Boolean
+     configuration symbols are shown with :guilabel:`[ ]` brackets, while
+     numeric and string-valued configuration symbols are shown with
+     :guilabel:`( )` brackets.
 
-#. Press :kbd:`/` to bring up a search menu to look for a particular option.
+     .. note::
 
-#. After configuring the kernel options for your application, tab to
-   :guilabel:`< Save >` and press :kbd:`Enter`.
+        You can also press :kbd:`Y` or :kbd:`N` to set a boolean configuration
+        symbol, to the corresponding value.
 
-   The following dialog opens with the :guilabel:`< Ok >` command selected:
+   * Press :kbd:`?` to display information about the currently selected symbol.
+     Press :kbd:`ESC` or :kbd:`Q` to return from the information display to the
+     menu.
+
+#. After configuring the kernel options for your application, press
+   :kbd:`Q` to bring up the save-and-quit dialog:
 
    .. image:: figures/app_kernel_conf_2.png
-      :width: 400px
       :align: center
-      :height: 100px
-      :alt: Save Configuration Dialog
+      :alt: Save and Quit Dialog
 
+#. Press :kbd:`Y` to save the kernel configuration options to the default
+   filename (:file:`zephyr/.config`).
 
-#. Press :kbd:`Enter` to save the kernel configuration options to the default
-   file name; alternatively, type a file name and press :kbd:`Enter`.
-
-   Typically, you will save to the default file name unless you are
+   Typically, you will save to the default filename unless you are
    experimenting with various configuration scenarios.
-
-   A :file:`zephyr` directory will have been created in the build
-    directory.
 
    .. note::
 
-      At present, only a :file:`.config` file can be built. If you have saved
-      files with different file names and want to build with one of these,
-      change the file name to :file:`.config`. To keep your original
-      :file:`.config`, rename it to something other than :file:`.config`.
+      At present, the configuration file used during building is always
+      :file:`zephyr/.config`. If you have another saved configuration that you
+      want to build with, copy it to :file:`zephyr/.config`. Make sure to back
+      up your original configuration file.
 
-   Kernel configuration files, such as the :file:`.config` file, are saved
-   as hidden files in :file:`zephyr`. To list all your kernel configuration
-   files, enter :command:`ls -a` at the terminal prompt.
+      Also note that filenames starting with ``.`` are not listed by ``ls`` by
+      default on Linux and macOS. Use the ``-a`` flag to see them.
 
-   The following dialog opens, displaying the file name the configuration
-   was saved to.
+Finding a symbol in the menu tree and navigating to it can be tedious. To jump
+directly to a symbol, press the :kbd:`/` key. This brings up the following
+dialog, where you can search for symbols by name and jump to them:
 
-   .. image:: figures/app_kernel_conf_3.png
-         :width: 400px
-         :align: center
-         :height: 150px
-         :alt: Saved Configuration Name Dialog
+.. image:: figures/app_kernel_conf_3.png
+    :align: center
+    :alt: Menuconfig Search Dialog
 
-#. Press :kbd:`Enter` to return to the options menu.
+If you jump to a symbol that isn't currently visible (e.g., due to having
+unsatisfied dependencies) then *show-all mode* will be enabled. In show-all
+mode, all symbols are displayed, including currently invisible symbols. To
+disable show-all mode, press :kbd:`A`.
 
-#. To load any saved kernel configuration file, tab to :guilabel:`< Load >` and
-   press :kbd:`Enter`.
+.. note::
 
-   The following dialog opens with the :guilabel:`< Ok >` command selected:
+    Show-all mode can't be disabled if there are no visible items in the menu.
 
-   .. image:: figures/app_kernel_conf_4.png
-      :width: 400px
-      :align: center
-      :height: 175px
-      :alt: Configuration File Load Dialog
-
-#. To load the last saved kernel configuration file, press :guilabel:`< Ok >`,
-   or to load another saved configuration file, type the file name, then select
-   :guilabel:`< Ok >`.
-
-#. Press :kbd:`Enter` to load the file and return to the main menu.
-
-#. To exit the menu configuration, tab to :guilabel:`< Exit >` and press
-   :kbd:`Enter`.
-
-   The following confirmation dialog opens with the :guilabel:`< Yes >`
-   command selected.
-
-   .. image:: figures/app_kernel_conf_5.png
-      :width: 400px
-      :align: center
-      :height: 100px
-      :alt: Exit Dialog
-
-#. Press :kbd:`Enter` to retire the menu display and return to the console
-   command line.
+To figure out why a symbol you jumped to isn't visible, inspect its
+dependencies by pressing :kbd:`?`. If you discover that the symbol depends on
+another symbol that isn't enabled, you can jump to that symbol, in turn, to see
+if it can be enabled.
 
 .. _application_dt:
 
@@ -1087,7 +1104,9 @@ Device Tree Overlays
 
 As described in :ref:`device-tree`, Zephyr uses Device Tree to
 describe the hardware it runs on. This section describes how you can
-modify an application build's device tree using overlay files.
+modify an application build's device tree using overlay files. For additional
+information regarding the relationship between Device Tree and Kconfig see
+:ref:`dt_vs_kconfig`.
 
 Overlay files, which customarily have the :file:`.overlay` extension,
 contain device tree fragments which add to or modify the device tree
@@ -1183,4 +1202,4 @@ project that demonstrates some of these features.
 
 .. _Eclipse IDE for C/C++ Developers: https://www.eclipse.org/downloads/packages/eclipse-ide-cc-developers/oxygen2
 .. _GNU MCU Eclipse plug-ins: https://gnu-mcu-eclipse.github.io/plugins/install/
-.. _pyOCD PR #333: https://github.com/mbedmicro/pyOCD/pull/333
+.. _pyOCD v0.11.0: https://github.com/mbedmicro/pyOCD/releases/tag/v0.11.0

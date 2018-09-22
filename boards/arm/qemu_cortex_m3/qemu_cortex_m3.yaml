@@ -5,10 +5,13 @@ simulation: qemu
 arch: arm
 toolchain:
   - zephyr
-  - gccarmemb
+  - gnuarmemb
+  - xtools
 supported:
   - netif:slip
 ram: 64
 flash: 256
 testing:
-        default: true
+  default: true
+  ignore_tags:
+    - net

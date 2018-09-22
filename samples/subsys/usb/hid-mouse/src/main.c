@@ -12,11 +12,14 @@
 #include <usb/class/usb_hid.h>
 
 /* change this to use another GPIO port */
+#ifndef SW0_GPIO_CONTROLLER
 #ifdef SW0_GPIO_NAME
-#define PORT	SW0_GPIO_NAME
+#define SW0_GPIO_CONTROLLER SW0_GPIO_NAME
 #else
-#error SW0_GPIO_NAME needs to be set in board.h
+#error SW0_GPIO_NAME or SW0_GPIO_CONTROLLER needs to be set in board.h
 #endif
+#endif
+#define PORT SW0_GPIO_CONTROLLER
 
 /* change this to use another GPIO pin */
 #ifdef SW0_GPIO_PIN
@@ -150,7 +153,6 @@ void main(void)
 		k_sem_take(&sem, K_FOREVER);
 
 		report[0] = status;
-		usb_write(CONFIG_HID_INT_EP_ADDR, report,
-			  sizeof(report), NULL);
+		hid_int_ep_write(report, sizeof(report), NULL);
 	}
 }

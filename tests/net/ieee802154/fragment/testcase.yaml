@@ -1,4 +1,6 @@
+common:
+  platform_whitelist: native_posix qemu_x86 qemu_cortex_m3
 tests:
-  test:
-    arch_whitelist: x86
-    tags: net
+  net.ieee802154.fragment:
+    tags: net ieee802154 fragment
+    depends_on: ieee802154

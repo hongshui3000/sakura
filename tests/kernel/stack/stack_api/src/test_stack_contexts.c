@@ -4,26 +4,14 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @addtogroup t_stack_api
- * @{
- * @defgroup t_stack_api_basic test_stack_api_basic
- * @brief TestPurpose: verify zephyr stack apis under different context
- * - API coverage
- *   -# k_stack_init K_STACK_DEFINE
- *   -# k_stack_push
- *   -# k_stack_pop
- * @}
- */
-
 #include <ztest.h>
 #include <irq_offload.h>
-
 #define STACK_SIZE 512
 #define STACK_LEN 2
 
 /**TESTPOINT: init via K_STACK_DEFINE*/
 K_STACK_DEFINE(kstack, STACK_LEN);
+K_STACK_DEFINE(kstack_test_alloc, STACK_LEN);
 __kernel struct k_stack stack;
 
 K_THREAD_STACK_DEFINE(threadstack, STACK_SIZE);
@@ -98,23 +86,87 @@ static void tstack_thread_isr(struct k_stack *pstack)
 	irq_offload(tIsr_entry_pop, pstack);
 }
 
-/*test cases*/
+/**
+ * @addtogroup kernel_stack_tests
+ * @{
+ */
+
+/**
+ * @brief Test to verify data passing between threads via stack
+ * @see k_stack_init(), k_stack_push(), #K_STACK_DEFINE(x), k_stack_pop()
+ */
 void test_stack_thread2thread(void)
 {
 	/**TESTPOINT: test k_stack_init stack*/
 	k_stack_init(&stack, data, STACK_LEN);
 	tstack_thread_thread(&stack);
 
-	/**TESTPOINT: test K_STACK_INIT stack*/
+	/**TESTPOINT: test K_STACK_DEFINE stack*/
 	tstack_thread_thread(&kstack);
 }
 
+#ifdef CONFIG_USERSPACE
+/**
+ * @brief Verifies data passing between user threads via stack
+ * @see k_stack_init(), k_stack_push(), #K_STACK_DEFINE(x), k_stack_pop()
+ */
+void test_stack_user_thread2thread(void)
+{
+	struct k_stack *stack = k_object_alloc(K_OBJ_STACK);
+
+	zassert_not_null(stack, "couldn't allocate stack object");
+	zassert_false(k_stack_alloc_init(stack, STACK_LEN),
+		      "stack init failed");
+
+	tstack_thread_thread(stack);
+}
+#endif
+
+/**
+ * @brief Verifies data passing between thread and ISR via stack
+ * @see k_stack_init(), k_stack_push(), #K_STACK_DEFINE(x), k_stack_pop()
+ */
 void test_stack_thread2isr(void)
 {
 	/**TESTPOINT: test k_stack_init stack*/
 	k_stack_init(&stack, data, STACK_LEN);
 	tstack_thread_isr(&stack);
 
-	/**TESTPOINT: test K_STACK_INIT stack*/
+	/**TESTPOINT: test K_STACK_DEFINE stack*/
 	tstack_thread_isr(&kstack);
 }
+
+/**
+ * @see k_stack_alloc_init(), k_stack_push(), #K_STACK_DEFINE(x), k_stack_pop(),
+ * k_stack_cleanup()
+ */
+void test_stack_alloc_thread2thread(void)
+{
+	int ret;
+
+	k_stack_alloc_init(&kstack_test_alloc, STACK_LEN);
+
+	k_sem_init(&end_sema, 0, 1);
+	/**TESTPOINT: thread-thread data passing via stack*/
+	k_tid_t tid = k_thread_create(&thread_data, threadstack, STACK_SIZE,
+					tThread_entry, &kstack_test_alloc,
+					NULL, NULL, K_PRIO_PREEMPT(0), 0, 0);
+	tstack_push(&kstack_test_alloc);
+	k_sem_take(&end_sema, K_FOREVER);
+
+	k_sem_take(&end_sema, K_FOREVER);
+	tstack_pop(&kstack_test_alloc);
+
+	/* clear the spawn thread to avoid side effect */
+	k_thread_abort(tid);
+	k_stack_cleanup(&kstack_test_alloc);
+
+	/** Requested buffer allocation from the test pool.*/
+	ret = k_stack_alloc_init(&kstack_test_alloc, (STACK_SIZE/2)+1);
+	zassert_true(ret == -ENOMEM,
+			"resource pool is smaller then requested buffer");
+}
+
+/**
+ * @}
+ */

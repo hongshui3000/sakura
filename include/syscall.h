@@ -1,16 +1,18 @@
 /*
  * Copyright (c) 2017, Intel Corporation
  *
- * SPDX-License-Identifier: Apache 2.0
+ * SPDX-License-Identifier: Apache-2.0
  */
 
 
 #ifndef _ZEPHYR_SYSCALL_H_
 #define _ZEPHYR_SYSCALL_H_
 
+#include <syscall_list.h>
+#include <arch/syscall.h>
+
 #ifndef _ASMLANGUAGE
 #include <zephyr/types.h>
-#include <syscall_list.h>
 #include <syscall_macros.h>
 
 #ifdef __cplusplus
@@ -258,6 +260,16 @@ static inline u64_t _syscall_ret64_invoke1(u32_t arg1, u32_t call_id)
 	_arch_syscall_invoke2(arg1, (u32_t)&ret, call_id);
 	return ret;
 }
+
+static inline u64_t _syscall_ret64_invoke2(u32_t arg1, u32_t arg2,
+					   u32_t call_id)
+{
+	u64_t ret;
+
+	_arch_syscall_invoke3(arg1, arg2, (u32_t)&ret, call_id);
+	return ret;
+}
+
 #endif /* CONFIG_USERSPACE */
 
 #ifdef __cplusplus

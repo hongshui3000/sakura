@@ -11,7 +11,6 @@
 #
 menuconfig IEEE802154
 	bool "IEEE 802.15.4 drivers options"
-	default n
 	default y if NET_L2_IEEE802154 || NET_L2_OPENTHREAD
 
 if IEEE802154
@@ -37,7 +36,6 @@ config SYS_LOG_IEEE802154_DRIVER_LEVEL
 
 config IEEE802154_RAW_MODE
 	bool "Use IEEE 802.15.4 driver without the MAC stack"
-	default n if NET_L2_IEEE802154
 	select NET_RAW_MODE
 	help
 	  This option enables using the drivers in a so-called "raw" mode,
@@ -61,7 +59,6 @@ menuconfig IEEE802154_UPIPE
 	bool "UART PIPE fake radio driver support for QEMU"
 	depends on (BOARD_QEMU_X86 || BOARD_QEMU_CORTEX_M3) && NETWORKING
 	select UART_PIPE
-	default n
 
 config IEEE802154_UPIPE_DRV_NAME
 	string "UART PIPE Driver name"
@@ -85,28 +82,28 @@ if ! IEEE802154_UPIPE_RANDOM_MAC
 config IEEE802154_UPIPE_MAC4
 	hex "MAC Address Byte 4"
 	default 0
-	range 0 ff
+	range 0 0xff
 	help
 	  This is the byte 4 of the MAC address.
 
 config IEEE802154_UPIPE_MAC5
 	hex "MAC Address Byte 5"
 	default 0
-	range 0 ff
+	range 0 0xff
 	help
 	  This is the byte 5 of the MAC address.
 
 config IEEE802154_UPIPE_MAC6
 	hex "MAC Address Byte 6"
 	default 0
-	range 0 ff
+	range 0 0xff
 	help
 	  This is the byte 6 of the MAC address.
 
 config IEEE802154_UPIPE_MAC7
 	hex "MAC Address Byte 7"
 	default 0
-	range 0 ff
+	range 0 0xff
 	help
 	  This is the byte 7 of the MAC address.
 

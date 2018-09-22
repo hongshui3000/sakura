@@ -79,10 +79,10 @@ u32_t _impl_k_uptime_get_32(void)
 }
 
 #ifdef CONFIG_USERSPACE
-_SYSCALL_HANDLER(k_uptime_get_32)
+Z_SYSCALL_HANDLER(k_uptime_get_32)
 {
 #ifdef CONFIG_TICKLESS_KERNEL
-	_SYSCALL_VERIFY(_sys_clock_always_on);
+	Z_OOPS(Z_SYSCALL_VERIFY(_sys_clock_always_on));
 #endif
 	return _impl_k_uptime_get_32();
 }
@@ -126,11 +126,11 @@ s64_t _impl_k_uptime_get(void)
 }
 
 #ifdef CONFIG_USERSPACE
-_SYSCALL_HANDLER(k_uptime_get, ret_p)
+Z_SYSCALL_HANDLER(k_uptime_get, ret_p)
 {
 	u64_t *ret = (u64_t *)ret_p;
 
-	_SYSCALL_MEMORY_WRITE(ret, sizeof(*ret));
+	Z_OOPS(Z_SYSCALL_MEMORY_WRITE(ret, sizeof(*ret)));
 	*ret = _impl_k_uptime_get();
 	return 0;
 }
@@ -167,8 +167,6 @@ u32_t k_uptime_delta_32(s64_t *reftime)
  * interrupt.
  */
 
-volatile int _handling_timeouts;
-
 static inline void handle_timeouts(s32_t ticks)
 {
 	sys_dlist_t expired;
@@ -197,8 +195,6 @@ static inline void handle_timeouts(s32_t ticks)
 	 * of a timeout which delta is 0, since timeouts of 0 ticks are
 	 * prohibited.
 	 */
-
-	_handling_timeouts = 1;
 
 	while (next) {
 
@@ -254,8 +250,6 @@ static inline void handle_timeouts(s32_t ticks)
 	irq_unlock(key);
 
 	_handle_expired_timeouts(&expired);
-
-	_handling_timeouts = 0;
 }
 #else
 	#define handle_timeouts(ticks) do { } while ((0))
@@ -263,8 +257,8 @@ static inline void handle_timeouts(s32_t ticks)
 
 #ifdef CONFIG_TIMESLICING
 s32_t _time_slice_elapsed;
-s32_t _time_slice_duration = CONFIG_TIMESLICE_SIZE;
-int  _time_slice_prio_ceiling = CONFIG_TIMESLICE_PRIORITY;
+s32_t _time_slice_duration;
+int  _time_slice_prio_ceiling;
 
 /*
  * Always called from interrupt level, and always only from the system clock
@@ -285,7 +279,7 @@ static void handle_time_slicing(s32_t ticks)
 		return;
 	}
 
-	_time_slice_elapsed += __ticks_to_ms(ticks);
+	_time_slice_elapsed += ticks;
 	if (_time_slice_elapsed >= _time_slice_duration) {
 
 		unsigned int key;
@@ -297,8 +291,7 @@ static void handle_time_slicing(s32_t ticks)
 		irq_unlock(key);
 	}
 #ifdef CONFIG_TICKLESS_KERNEL
-	next_ts =
-	    _ms_to_ticks(_time_slice_duration - _time_slice_elapsed);
+	next_ts = _time_slice_duration - _time_slice_elapsed;
 #endif
 }
 #else

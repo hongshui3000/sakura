@@ -101,7 +101,7 @@ const u8_t ciphertext[80] = {
 /*
  * NIST SP 800-38a CBC Test for encryption and decryption.
  */
-void test_1_and_2(void)
+void test_sp_800_38a_encrypt_decrypt(void)
 {
 
 	TC_START("Performing AES128 tests:");
@@ -140,7 +140,7 @@ void test_1_and_2(void)
 
 	/**TESTPOINT: Check test 2*/
 	zassert_true(tc_cbc_mode_decrypt(decrypted,
-		length - TC_AES_BLOCK_SIZE, p, length, encrypted,
+		length, p, length, encrypted,
 		&a), "CBC test #2 (decryption SP 800-38a tests) failed");
 
 	result = check_result(2, plaintext, sizeof(decrypted),

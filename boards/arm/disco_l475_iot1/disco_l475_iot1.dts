@@ -16,6 +16,33 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 	};
+
+	leds {
+		compatible = "gpio-leds";
+		green_led_1: led@0 {
+			gpios = <&gpioa 5 GPIO_INT_ACTIVE_HIGH>;
+			label = "User LD1";
+		};
+		green_led_2: led@1 {
+			gpios = <&gpiob 14 GPIO_INT_ACTIVE_HIGH>;
+			label = "User LD2";
+		};
+	};
+
+	gpio_keys {
+		compatible = "gpio-keys";
+		user_button: button@0 {
+			label = "User";
+			gpios = <&gpioc 13 GPIO_INT_ACTIVE_LOW>;
+		};
+	};
+
+	aliases {
+		led0 = &green_led_2;
+		led1 = &green_led_1;
+		sw0 = &user_button;
+		bt = &bt0;
+	};
 };
 
 &usart1 {
@@ -79,10 +106,14 @@
 &spi3 {
 	status = "ok";
 
-	spbtle-rf@0 {
+	cs-gpios = <&gpiod 13 0>;
+
+	bt0: spbtle-rf@0 {
 		compatible = "st,spbtle-rf";
 		reg = <0>;
-		spi-max-frequency = <8000000>;
+		reset-gpios = <&gpioa 8 0>;
+		irq-gpios = <&gpioe 6 0>;
+		spi-max-frequency = <2000000>;
 		label = "SPBTLE-RF";
 	};
 };
@@ -123,4 +154,16 @@
 	};
 
 
+};
+
+&timers2 {
+	status = "ok";
+
+	pwm {
+		status = "ok";
+	};
+};
+
+&rtc {
+	status = "ok";
 };

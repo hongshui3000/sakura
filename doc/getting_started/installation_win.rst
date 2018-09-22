@@ -28,7 +28,7 @@ requirement for a UNIX tool that is not available on Windows, we strongly
 recommend you use the Windows Command Prompt for performance and minimal
 dependency set.
 
-Using Windows Command Prompt (Recommended, fastest)
+Option 1: Windows Command Prompt
 ===================================================
 
 The easiest way to install the dependencies natively on Microsoft Windows is
@@ -69,7 +69,7 @@ packages from their respective websites.
 
    .. code-block:: console
 
-      choco install git python ninja dtc-msys2 gperf
+      choco install git python ninja dtc-msys2 gperf doxygen.install
 
 #. Close the Command Prompt window.
 
@@ -85,12 +85,12 @@ packages from their respective websites.
 #. Install the required Python modules::
 
       cd %userprofile%\zephyr
-      pip install --user -r scripts/requirements.txt
+      pip3 install -r scripts/requirements.txt
 
-#. If you require pyocd, an open source python2 library for programming and
-   debugging ARM Cortex-M microcontrollers, use this command::
-
-      pip2 install --user -r scripts/py2-requirements.txt
+.. note::
+      Although pip can install packages in the user's directory by means
+      of the ``--user`` flag, this makes it harder for the Command Prompt
+      to find the executables in Python modules installed by ``pip3``.
 
 #. The build system should now be ready to work with any toolchain installed in
    your system. In the next step you'll find instructions for installing
@@ -113,7 +113,7 @@ packages from their respective websites.
 
 
    * For ARM, install GNU ARM Embedded from the ARM developer website:
-     `GNU ARM Embedded`_ (install to :file:`c:\\gccarmemb`).
+     `GNU ARM Embedded`_ (install to :file:`c:\\gnuarmemb`).
 
 #. Within the Command Prompt, set up environment variables for the installed
    tools and for the Zephyr environment:
@@ -131,8 +131,8 @@ packages from their respective websites.
 
    .. code-block:: console
 
-      set ZEPHYR_TOOLCHAIN_VARIANT=gccarmemb
-      set GCCARMEMB_TOOLCHAIN_PATH=c:\gccarmemb
+      set ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+      set GNUARMEMB_TOOLCHAIN_PATH=c:\gnuarmemb
 
    To use the same toolchain in new sessions in the future you can set the
    variables in the file :file:`%userprofile%\\zephyrrc.cmd`.
@@ -143,6 +143,9 @@ packages from their respective websites.
    .. code-block:: console
 
       zephyr-env.cmd
+
+.. note:: In previous releases of Zephyr, the ``ZEPHYR_TOOLCHAIN_VARIANT``
+          variable was called ``ZEPHYR_GCC_VARIANT``.
 
 #. Finally, you can try building the :ref:`hello_world` sample to check things
    out.
@@ -168,11 +171,12 @@ packages from their respective websites.
 This should check that all the tools and toolchain are set up correctly for
 your own Zephyr development.
 
-Using MSYS2
-===========
+Option 2: MSYS2
+===============
 
-The Zephyr development environment on Windows relies on MSYS2, a modern UNIX
-environment for Windows. Follow the steps below to set it up:
+Alternatively, one can set up the Zephyr development environment with
+MSYS2, a modern UNIX environment for Windows. Follow the steps below
+to set it up:
 
 #. Download and install :program:`MSYS2`. Download the appropriate (32 or
    64-bit) MSYS2 installer from the `MSYS2 website`_ and execute it. On the
@@ -271,7 +275,7 @@ environment for Windows. Follow the steps below to set it up:
 
 
    * For ARM, install GNU ARM Embedded from the ARM developer website:
-     `GNU ARM Embedded`_ (install to :file:`c:\\gccarmemb`).
+     `GNU ARM Embedded`_ (install to :file:`c:\\gnuarmemb`).
 
 #. Within the MSYS console, set up environment variables for the installed
    tools and for the Zephyr environment (using the provided shell script):
@@ -289,8 +293,8 @@ environment for Windows. Follow the steps below to set it up:
 
    .. code-block:: console
 
-      export ZEPHYR_TOOLCHAIN_VARIANT=gccarmemb
-      export GCCARMEMB_TOOLCHAIN_PATH=/c/gccarmemb
+      export ZEPHYR_TOOLCHAIN_VARIANT=gnuarmemb
+      export GNUARMEMB_TOOLCHAIN_PATH=/c/gnuarmemb
 
    And for either, run the provided script to set up zephyr project specific
    variables:
@@ -300,22 +304,6 @@ environment for Windows. Follow the steps below to set it up:
       unset ZEPHYR_SDK_INSTALL_DIR
       cd <zephyr git clone location>
       source zephyr-env.sh
-
-#. Within the MSYS console, build Kconfig in :file:`$ZEPHYR_BASE/build` and
-    add it to path
-
-   .. code-block:: console
-
-      cd $ZEPHYR_BASE
-      mkdir build && cd build
-      cmake $ZEPHYR_BASE/scripts
-      make
-      echo "export PATH=$PWD/kconfig:\$PATH" >> $HOME/.zephyrrc
-      source $ZEPHYR_BASE/zephyr-env.sh
-
-    .. note::
-
-        You only need to do this once after cloning the git repository.
 
 #. Finally, you can try building the :ref:`hello_world` sample to check things
    out.
@@ -339,8 +327,8 @@ To build for the ARM-based Nordic nRF52 Development Kit:
 This should check that all the tools and toolchain are set up correctly for
 your own Zephyr development.
 
-Using Windows 10 WSL (Windows Subsystem for Linux)
-==================================================
+Option 3: Windows 10 WSL (Windows Subsystem for Linux)
+======================================================
 
 If you are running a recent version of Windows 10 you can make use of the
 built-in functionality to natively run Ubuntu binaries directly on a standard

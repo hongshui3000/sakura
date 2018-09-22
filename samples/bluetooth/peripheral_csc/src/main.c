@@ -24,8 +24,6 @@
 #include <gatt/dis.h>
 #include <gatt/bas.h>
 
-#define DEVICE_NAME			CONFIG_BT_DEVICE_NAME
-#define DEVICE_NAME_LEN			(sizeof(DEVICE_NAME) - 1)
 #define CSC_SUPPORTED_LOCATIONS		{ CSC_LOC_OTHER, \
 					  CSC_LOC_FRONT_WHEEL, \
 					  CSC_LOC_REAR_WHEEL, \
@@ -206,19 +204,18 @@ static ssize_t write_ctrl_point(struct bt_conn *conn,
 
 static struct bt_gatt_attr csc_attrs[] = {
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_CSC),
-	BT_GATT_CHARACTERISTIC(BT_UUID_CSC_MEASUREMENT, BT_GATT_CHRC_NOTIFY),
-	BT_GATT_DESCRIPTOR(BT_UUID_CSC_MEASUREMENT, 0x00, NULL, NULL, NULL),
+	BT_GATT_CHARACTERISTIC(BT_UUID_CSC_MEASUREMENT, BT_GATT_CHRC_NOTIFY,
+			       0x00, NULL, NULL, NULL),
 	BT_GATT_CCC(csc_meas_ccc_cfg, csc_meas_ccc_cfg_changed),
-	BT_GATT_CHARACTERISTIC(BT_UUID_SENSOR_LOCATION, BT_GATT_CHRC_READ),
-	BT_GATT_DESCRIPTOR(BT_UUID_SENSOR_LOCATION, BT_GATT_PERM_READ,
-			   read_location, NULL, &sensor_location),
-	BT_GATT_CHARACTERISTIC(BT_UUID_CSC_FEATURE, BT_GATT_CHRC_READ),
-	BT_GATT_DESCRIPTOR(BT_UUID_CSC_FEATURE, BT_GATT_PERM_READ,
-			   read_csc_feature, NULL, NULL),
+	BT_GATT_CHARACTERISTIC(BT_UUID_SENSOR_LOCATION, BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ, read_location, NULL,
+			       &sensor_location),
+	BT_GATT_CHARACTERISTIC(BT_UUID_CSC_FEATURE, BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ, read_csc_feature, NULL, NULL),
 	BT_GATT_CHARACTERISTIC(BT_UUID_SC_CONTROL_POINT,
-			       BT_GATT_CHRC_WRITE | BT_GATT_CHRC_INDICATE),
-	BT_GATT_DESCRIPTOR(BT_UUID_SC_CONTROL_POINT, BT_GATT_PERM_WRITE, NULL,
-			   write_ctrl_point, &sensor_location),
+			       BT_GATT_CHRC_WRITE | BT_GATT_CHRC_INDICATE,
+			       BT_GATT_PERM_WRITE, NULL, write_ctrl_point,
+			       &sensor_location),
 	BT_GATT_CCC(ctrl_point_ccc_cfg, ctrl_point_ccc_cfg_changed),
 };
 
@@ -247,7 +244,7 @@ static void ctrl_point_ind(struct bt_conn *conn, u8_t req_op, u8_t status,
 		memcpy(ind->data, data, data_len);
 	}
 
-	bt_gatt_notify(conn, &csc_attrs[9], buf, sizeof(buf));
+	bt_gatt_notify(conn, &csc_attrs[8], buf, sizeof(buf));
 }
 
 struct csc_measurement_nfy {
@@ -300,7 +297,7 @@ static void measurement_nfy(struct bt_conn *conn, u32_t cwr, u16_t lwet,
 		memcpy(nfy->data + len, &data, sizeof(data));
 	}
 
-	bt_gatt_notify(NULL, &csc_attrs[2], buf, sizeof(buf));
+	bt_gatt_notify(NULL, &csc_attrs[1], buf, sizeof(buf));
 }
 
 static u16_t lwet; /* Last Wheel Event Time */
@@ -372,10 +369,6 @@ static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_UUID16_ALL, 0x16, 0x18, 0x0f, 0x18),
 };
 
-static const struct bt_data sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
-};
-
 static void bt_ready(int err)
 {
 	if (err) {
@@ -389,8 +382,7 @@ static void bt_ready(int err)
 	dis_init(CONFIG_SOC, "ACME");
 	bt_gatt_service_register(&csc_svc);
 
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
-			      sd, ARRAY_SIZE(sd));
+	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
 		return;

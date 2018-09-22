@@ -16,6 +16,7 @@
 #include <offsets_short.h>
 #include <toolchain.h>
 #include <arch/cpu.h>
+#include <syscall.h>
 
 _ASM_FILE_PROLOGUE
 
@@ -42,17 +43,27 @@ GDATA(_kernel)
 
 SECTION_FUNC(TEXT, __pendsv)
 
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_CONTEXT_SWITCH
+#ifdef CONFIG_TRACING
     /* Register the context switch */
     push {lr}
-    bl _sys_k_event_logger_context_switch
+    bl z_sys_trace_thread_switched_in
 #if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     pop {r0}
     mov lr, r0
 #else
     pop {lr}
 #endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
-#endif /* CONFIG_KERNEL_EVENT_LOGGER_CONTEXT_SWITCH  */
+#endif /* CONFIG_TRACING */
+
+    /* protect the kernel state while we play with the thread lists */
+#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
+    cpsid i
+#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
+    movs.n r0, #_EXC_IRQ_DEFAULT_PRIO
+    msr BASEPRI, r0
+#else
+#error Unknown ARM architecture
+#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
 
     /* load _kernel into r1 and current k_thread into r2 */
     ldr r1, =_kernel
@@ -96,16 +107,6 @@ SECTION_FUNC(TEXT, __pendsv)
     ldr v4, =_SCS_ICSR
     ldr v3, =_SCS_ICSR_UNPENDSV
 
-    /* protect the kernel state while we play with the thread lists */
-#if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
-    cpsid i
-#elif defined(CONFIG_ARMV7_M_ARMV8_M_MAINLINE)
-    movs.n r0, #_EXC_IRQ_DEFAULT_PRIO
-    msr BASEPRI, r0
-#else
-#error Unknown ARM architecture
-#endif /* CONFIG_ARMV6_M_ARMV8_M_BASELINE */
-
     /* _kernel is still in r1 */
 
     /* fetch the thread to run from the ready queue cache */
@@ -126,9 +127,23 @@ SECTION_FUNC(TEXT, __pendsv)
     str v3, [v4, #0]
 
     /* Restore previous interrupt disable state (irq_lock key) */
+#if (defined(CONFIG_CPU_CORTEX_M0PLUS) || defined(CONFIG_CPU_CORTEX_M0)) && \
+	    _thread_offset_to_basepri > 124
+    /* Doing it this way since the offset to thread->arch.basepri can in
+     * some configurations be larger than the maximum of 124 for ldr/str
+     * immediate offsets.
+     */
+    ldr r4, =_thread_offset_to_basepri
+    adds r4, r2, r4
+
+    ldr r0, [r4]
+    movs.n r3, #0
+    str r3, [r4]
+#else
     ldr r0, [r2, #_thread_offset_to_basepri]
     movs.n r3, #0
     str r3, [r2, #_thread_offset_to_basepri]
+#endif
 
 #if defined(CONFIG_ARMV6_M_ARMV8_M_BASELINE)
     /* BASEPRI not available, previous interrupt disable state
@@ -175,6 +190,14 @@ _thread_irq_disabled:
     pop {r2, lr}
 #endif /* CONFIG_MPU_STACK_GUARD */
 
+#ifdef CONFIG_BUILTIN_STACK_GUARD
+    /* r2 contains k_thread */
+    add r0, r2, #0
+    push {r2, lr}
+    blx configure_builtin_stack_guard
+    pop {r2, lr}
+#endif /* CONFIG_BUILTIN_STACK_GUARD */
+
 #ifdef CONFIG_USERSPACE
     /* restore mode */
     ldr r0, [r2, #_thread_offset_to_mode]
@@ -182,6 +205,12 @@ _thread_irq_disabled:
     bic r3, #1
     orr r3, r0
     msr CONTROL, r3
+
+    /* ISB is not strictly necessary here (stack pointer is not being
+     * touched), but it's recommended to avoid executing pre-fetched
+     * instructions with the previous privilege.
+     */
+    isb
 
     /* r2 contains k_thread */
     add r0, r2, #0
@@ -291,7 +320,7 @@ SECTION_FUNC(TEXT, __svc)
 
    /*
     * grab service call number:
-    * 0: context switch
+    * 0: Unused
     * 1: irq_offload (if configured)
     * 2: kernel panic or oops (software generated fatal exception)
     * 3: System call
@@ -312,9 +341,7 @@ SECTION_FUNC(TEXT, __svc)
     tst r2, #0x1
     bne _oops
 
-    cmp r1, #0
 #endif
-    beq _context_switch
 
     cmp r1, #2
     beq _oops
@@ -327,24 +354,6 @@ SECTION_FUNC(TEXT, __svc)
     /* exception return is done in _IntExit() */
     b _IntExit
 #endif
-
-_context_switch:
-
-    /*
-     * Unlock interrupts:
-     * - in a SVC call, so protected against context switches
-     * - allow PendSV, since it's running at prio 0xff
-     */
-    eors.n r0, r0
-    msr BASEPRI, r0
-
-     /* set PENDSV bit, pending the PendSV exception */
-    ldr r1, =_SCS_ICSR
-    ldr r2, =_SCS_ICSR_PENDSV
-    str r2, [r1, #0]
-
-    /* handler mode exit, to PendSV */
-    bx lr
 
 _oops:
     push {lr}
@@ -362,30 +371,41 @@ _oops:
      *
      * On SVC exeption, the stack looks like the following:
      * r0 - r1 - r2 - r3 - r12 - LR - PC - PSR
-     * r5 - r6 - call id - saved LR
      *
+     * Registers look like:
+     * r0 - arg1
+     * r1 - arg2
+     * r2 - arg3
+     * r3 - arg4
+     * r4 - arg5
+     * r5 - arg6
+     * r6 - call_id
+     * r8 - saved link register
      */
 _do_syscall:
-    ldr r1, [r0, #24]   /* grab address of PC from stack frame */
-    str r1, [r0, #44]   /* store address to use for LR after syscall */
+    ldr r8, [r0, #24]   /* grab address of PC from stack frame */
     ldr r1, =_arm_do_syscall
     str r1, [r0, #24]   /* overwrite the LR to point to _arm_do_syscall */
 
     /* validate syscall limit, only set priv mode if valid */
-    ldr ip, =_SYSCALL_LIMIT
-    ldr r1, [r0, #40]
-    cmp r1, ip
+    ldr ip, =K_SYSCALL_LIMIT
+    cmp r6, ip
     blt valid_syscall_id
 
     /* bad syscall id.  Set arg0 to bad id and set call_id to SYSCALL_BAD */
-    str r1, [r0, #0]
-    ldr r1, =_SYSCALL_BAD
-    str r1, [r0, #40]
+    str r6, [r0, #0]
+    ldr r6, =K_SYSCALL_BAD
 
 valid_syscall_id:
     /* set mode to privileged, r2 still contains value from CONTROL */
     bic r2, #1
     msr CONTROL, r2
+
+    /* ISB is not strictly necessary here (stack pointer is not being
+     * touched), but it's recommended to avoid executing pre-fetched
+     * instructions with the previous privilege.
+     */
+    isb
 
     /* return from SVC to the modified LR - _arm_do_syscall */
     bx lr

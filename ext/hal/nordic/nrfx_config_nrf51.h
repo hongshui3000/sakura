@@ -38,8 +38,8 @@
 
 // <e> NRFX_ADC_ENABLED - nrfx_adc - ADC peripheral driver
 //==========================================================
-#ifndef NRFX_ADC_ENABLED
-#define NRFX_ADC_ENABLED 0
+#ifdef CONFIG_NRFX_ADC
+#define NRFX_ADC_ENABLED 1
 #endif
 // <o> NRFX_ADC_CONFIG_IRQ_PRIORITY  - Interrupt priority
 
@@ -1287,21 +1287,21 @@
 
 // <e> NRFX_TWI_ENABLED - nrfx_twi - TWI peripheral driver
 //==========================================================
-#ifndef NRFX_TWI_ENABLED
-#define NRFX_TWI_ENABLED 0
+#ifdef CONFIG_NRFX_TWI
+#define NRFX_TWI_ENABLED 1
 #endif
 // <q> NRFX_TWI0_ENABLED  - Enable TWI0 instance
 
 
-#ifndef NRFX_TWI0_ENABLED
-#define NRFX_TWI0_ENABLED 0
+#ifdef CONFIG_I2C_0_NRF_TWI
+#define NRFX_TWI0_ENABLED 1
 #endif
 
 // <q> NRFX_TWI1_ENABLED  - Enable TWI1 instance
 
 
-#ifndef NRFX_TWI1_ENABLED
-#define NRFX_TWI1_ENABLED 0
+#ifdef CONFIG_I2C_1_NRF_TWI
+#define NRFX_TWI1_ENABLED 1
 #endif
 
 // <o> NRFX_TWI_DEFAULT_CONFIG_FREQUENCY  - Frequency
@@ -1504,8 +1504,8 @@
 
 // <e> NRFX_WDT_ENABLED - nrfx_wdt - WDT peripheral driver
 //==========================================================
-#ifndef NRFX_WDT_ENABLED
-#define NRFX_WDT_ENABLED 0
+#ifdef CONFIG_NRFX_WDT
+#define NRFX_WDT_ENABLED 1
 #endif
 // <o> NRFX_WDT_CONFIG_BEHAVIOUR  - WDT behavior in CPU SLEEP or HALT mode
 

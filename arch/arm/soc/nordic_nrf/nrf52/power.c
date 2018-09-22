@@ -11,7 +11,6 @@
 #include <soc_power.h>
 #include <nrf_power.h>
 
-extern void nrf_gpiote_clear_port_event(void);
 #if defined(CONFIG_SYS_POWER_DEEP_SLEEP)
 /* System_OFF is deepest Power state available, On exiting from this
  * state CPU including all peripherals reset
@@ -55,8 +54,6 @@ static void _low_power_mode(enum power_states state)
 
 	/* Issue __WFE*/
 	_issue_low_power_command();
-	/* Clear the Port Event */
-	nrf_gpiote_clear_port_event();
 }
 
 /* Invoke Low Power/System Off specific Tasks */
@@ -84,13 +81,11 @@ void _sys_soc_set_power_state(enum power_states state)
 /* Handle SOC specific activity after Low Power Mode Exit */
 void _sys_soc_power_state_post_ops(enum power_states state)
 {
-	/* This is placeholder for nrf52 SOC specific task.
-	 * Currently there is no nrf52 SOC specific activity to perform.
-	 */
 	switch (state) {
 	case SYS_POWER_STATE_CPU_LPS:
-		break;
 	case SYS_POWER_STATE_CPU_LPS_1:
+		/* Enable interrupts */
+		__set_BASEPRI(0);
 		break;
 #if defined(CONFIG_SYS_POWER_DEEP_SLEEP)
 	case SYS_POWER_STATE_DEEP_SLEEP:
@@ -101,4 +96,22 @@ void _sys_soc_power_state_post_ops(enum power_states state)
 		SYS_LOG_ERR("Unsupported State\n");
 		break;
 	}
+}
+
+bool _sys_soc_is_valid_power_state(enum power_states state)
+{
+	switch (state) {
+	case SYS_POWER_STATE_CPU_LPS:
+	case SYS_POWER_STATE_CPU_LPS_1:
+#if defined(CONFIG_SYS_POWER_DEEP_SLEEP)
+	case SYS_POWER_STATE_DEEP_SLEEP:
+#endif
+		return true;
+		break;
+	default:
+		SYS_LOG_DBG("Unsupported State\n");
+		break;
+	}
+
+	return false;
 }

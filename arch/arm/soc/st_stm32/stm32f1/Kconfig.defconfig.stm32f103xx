@@ -9,11 +9,11 @@ if SOC_STM32F103XB || SOC_STM32F103X8
 
 config SOC
 	string
-	default stm32f103xb
+	default "stm32f103xb"
 
 config NUM_IRQS
 	int
-	default 59
+	default 43
 
 if GPIO_STM32
 
@@ -28,11 +28,11 @@ if SOC_STM32F103XE
 
 config SOC
 	string
-	default stm32f103xe
+	default "stm32f103xe"
 
 config NUM_IRQS
 	int
-	default 68
+	default 60
 
 if GPIO_STM32
 

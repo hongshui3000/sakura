@@ -12,7 +12,6 @@
 extern void test_byteorder_memcpy_swap(void);
 extern void test_byteorder_mem_swap(void);
 extern void test_atomic(void);
-extern void test_bitfield(void);
 extern void test_intmath(void);
 extern void test_printk(void);
 extern void test_slist(void);
@@ -22,7 +21,37 @@ extern void test_clock_cycle(void);
 extern void test_clock_uptime(void);
 extern void test_multilib(void);
 
+/**
+ * @defgroup kernel_common_tests Common Tests
+ * @ingroup all_tests
+ * @{
+ * @}
+ *
+ */
 
+#ifdef CONFIG_ARM
+void test_bitfield(void)
+{
+	ztest_test_skip();
+}
+#else
+extern void test_bitfield(void);
+#endif
+
+#ifndef CONFIG_PRINTK
+void test_printk(void)
+{
+	ztest_test_skip();
+}
+#endif
+
+/**
+ * @brief Test sys_kernel_version_get() functionality
+ *
+ * @ingroup kernel_common_tests
+ *
+ * @see sys_kernel_version_get()
+ */
 static void test_version(void)
 {
 	u32_t version = sys_kernel_version_get();
@@ -38,16 +67,12 @@ static void test_version(void)
 
 void test_main(void)
 {
-	ztest_test_suite(common_test,
+	ztest_test_suite(common,
 			 ztest_unit_test(test_byteorder_memcpy_swap),
 			 ztest_unit_test(test_byteorder_mem_swap),
 			 ztest_unit_test(test_atomic),
-#ifndef CONFIG_ARM
 			 ztest_unit_test(test_bitfield),
-#endif
-#ifdef CONFIG_PRINTK
 			 ztest_unit_test(test_printk),
-#endif
 			 ztest_unit_test(test_slist),
 			 ztest_unit_test(test_dlist),
 			 ztest_unit_test(test_intmath),
@@ -58,5 +83,5 @@ void test_main(void)
 			 ztest_unit_test(test_multilib)
 			 );
 
-	ztest_run_test_suite(common_test);
+	ztest_run_test_suite(common);
 }

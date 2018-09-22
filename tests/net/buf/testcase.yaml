@@ -1,5 +1,6 @@
+common:
+  platform_whitelist: native_posix qemu_x86 qemu_cortex_m3
 tests:
-  test:
-    filter: not CONFIG_BT
+  net.buf:
     min_ram: 16
-    tags: buf
+    tags: net buf

@@ -306,7 +306,7 @@ static void generate_mac(u8_t *mac_addr)
 }
 #endif
 
-static void eth0_iface_init(struct net_if *iface)
+static void eth_iface_init(struct net_if *iface)
 {
 	struct device *dev;
 	struct eth_stm32_hal_dev_data *dev_data;
@@ -333,7 +333,12 @@ static void eth0_iface_init(struct net_if *iface)
 
 	hal_ret = HAL_ETH_Init(heth);
 
-	if (hal_ret != HAL_OK) {
+	if (hal_ret == HAL_TIMEOUT) {
+		/* HAL Init time out. This could be linked to */
+		/* a recoverable error. Log the issue and continue */
+		/* dirver initialisation */
+		SYS_LOG_ERR("HAL_ETH_Init Timed out\n");
+	} else if (hal_ret != HAL_OK) {
 		SYS_LOG_ERR("HAL_ETH_Init failed: %d\n", hal_ret);
 		return;
 	}
@@ -359,7 +364,7 @@ static void eth0_iface_init(struct net_if *iface)
 	disable_mcast_filter(heth);
 
 	SYS_LOG_DBG("MAC %02x:%02x:%02x:%02x:%02x:%02x",
-		    dev_data->mac_addr[0], contdev_dataext->mac_addr[1],
+		    dev_data->mac_addr[0], dev_data->mac_addr[1],
 		    dev_data->mac_addr[2], dev_data->mac_addr[3],
 		    dev_data->mac_addr[4], dev_data->mac_addr[5]);
 
@@ -367,11 +372,22 @@ static void eth0_iface_init(struct net_if *iface)
 	net_if_set_link_addr(iface, dev_data->mac_addr,
 			     sizeof(dev_data->mac_addr),
 			     NET_LINK_ETHERNET);
+
+	ethernet_init(iface);
 }
 
-static const struct ethernet_api eth0_api = {
-	.iface_api.init = eth0_iface_init,
+static enum ethernet_hw_caps eth_stm32_hal_get_capabilities(struct device *dev)
+{
+	ARG_UNUSED(dev);
+
+	return ETHERNET_LINK_10BASE_T | ETHERNET_LINK_100BASE_T;
+}
+
+static const struct ethernet_api eth_api = {
+	.iface_api.init = eth_iface_init,
 	.iface_api.send = eth_tx,
+
+	.get_capabilities = eth_stm32_hal_get_capabilities,
 };
 
 static struct device DEVICE_NAME_GET(eth0_stm32_hal);
@@ -420,5 +436,5 @@ static struct eth_stm32_hal_dev_data eth0_data = {
 };
 
 NET_DEVICE_INIT(eth0_stm32_hal, CONFIG_ETH_STM32_HAL_NAME, eth_initialize,
-	&eth0_data, &eth0_config, CONFIG_ETH_INIT_PRIORITY, &eth0_api,
+	&eth0_data, &eth0_config, CONFIG_ETH_INIT_PRIORITY, &eth_api,
 	ETHERNET_L2, NET_L2_GET_CTX_TYPE(ETHERNET_L2), ETH_STM32_HAL_MTU);

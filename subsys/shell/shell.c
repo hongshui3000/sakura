@@ -14,25 +14,17 @@
 #include <string.h>
 #include <version.h>
 
-#include <console/console.h>
+#include <console.h>
+#include <drivers/console/console.h>
 #include <misc/printk.h>
 #include <misc/util.h>
 #include "mgmt/serial.h"
 
-#ifdef CONFIG_UART_CONSOLE
-#include <console/uart_console.h>
-#endif
-#ifdef CONFIG_TELNET_CONSOLE
-#include <console/telnet_console.h>
-#endif
-#ifdef CONFIG_NATIVE_POSIX_CONSOLE
-#include <console/native_posix_console.h>
-#endif
-#ifdef CONFIG_WEBSOCKET_CONSOLE
-#include <console/websocket_console.h>
-#endif
-
 #include <shell/shell.h>
+
+#if defined(CONFIG_NATIVE_POSIX_CONSOLE)
+#include "drivers/console/native_posix_console.h"
+#endif
 
 #define ARGC_MAX 10
 #define COMMAND_MAX_LEN 50
@@ -506,7 +498,7 @@ static struct shell_module *get_completion_module(char *str,
 	 */
 	str = strchr(str, ' ');
 	if (default_module) {
-		return str ? dest : NULL;
+		return str ? NULL : dest;
 	}
 
 	if (!str) {
@@ -531,7 +523,7 @@ static struct shell_module *get_completion_module(char *str,
 	str = strchr(str, ' ');
 
 	/* only two parameters are possibles in case of no default module */
-	return str ? dest : NULL;
+	return str ? NULL : dest;
 }
 
 static u8_t completion(char *line, u8_t len)
@@ -631,19 +623,8 @@ void shell_init(const char *str)
 	k_thread_create(&shell_thread, stack, STACKSIZE, shell, NULL, NULL,
 			NULL, K_PRIO_COOP(7), 0, K_NO_WAIT);
 
-	/* Register serial console handler */
-#ifdef CONFIG_UART_CONSOLE
-	uart_register_input(&avail_queue, &cmds_queue, completion);
-#endif
-#ifdef CONFIG_TELNET_CONSOLE
-	telnet_register_input(&avail_queue, &cmds_queue, completion);
-#endif
-#ifdef CONFIG_NATIVE_POSIX_STDIN_CONSOLE
-	native_stdin_register_input(&avail_queue, &cmds_queue, completion);
-#endif
-#ifdef CONFIG_WEBSOCKET_CONSOLE
-	ws_register_input(&avail_queue, &cmds_queue, completion);
-#endif
+	/* Register console handler */
+	console_register_line_input(&avail_queue, &cmds_queue, completion);
 }
 
 /** @brief Optionally register an app default cmd handler.

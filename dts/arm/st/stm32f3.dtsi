@@ -9,6 +9,7 @@
 #include <st/mem.h>
 #include <dt-bindings/clock/stm32_clock.h>
 #include <dt-bindings/i2c/i2c.h>
+#include <dt-bindings/gpio/gpio.h>
 
 / {
 	cpus {
@@ -48,16 +49,61 @@
 		rcc: rcc@40021000 {
 			compatible = "st,stm32-rcc";
 			clocks-controller;
-			#clocks-cells = <2>;
+			#clock-cells = <2>;
 			reg = <0x40021000 0x400>;
 			label = "STM32_CLK_RCC";
 		};
 
-		pinctrl: pin-controller {
+		pinctrl: pin-controller@48000000 {
 			compatible = "st,stm32-pinmux";
 			#address-cells = <1>;
 			#size-cells = <1>;
 			reg = <0x48000000 0x1800>;
+
+			gpioa: gpio@48000000 {
+				compatible = "st,stm32-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x48000000 0x400>;
+				clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00020000>;
+				label = "GPIOA";
+			};
+
+			gpiob: gpio@48000400 {
+				compatible = "st,stm32-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x48000400 0x400>;
+				clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00040000>;
+				label = "GPIOB";
+			};
+
+			gpioc: gpio@48000800 {
+				compatible = "st,stm32-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x48000800 0x400>;
+				clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00080000>;
+				label = "GPIOC";
+			};
+
+			gpiod: gpio@48000c00 {
+				compatible = "st,stm32-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x48000c00 0x400>;
+				clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00100000>;
+				label = "GPIOD";
+			};
+
+			gpiof: gpio@480014000 {
+				compatible = "st,stm32-gpio";
+				gpio-controller;
+				#gpio-cells = <2>;
+				reg = <0x48001400 0x400>;
+				clocks = <&rcc STM32_CLOCK_BUS_AHB2 0x00400000>;
+				label = "GPIOF";
+			};
 		};
 
 		usart1: serial@40013800 {
@@ -93,6 +139,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x40005400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00200000>;
 			interrupts = <31 0>, <32 0>;
 			interrupt-names = "event", "error";
 			status = "disabled";
@@ -104,9 +151,126 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x40013000 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00001000>;
 			interrupts = <35 5>;
 			status = "disabled";
 			label = "SPI_1";
+		};
+
+		usb: usb@40005c00 {
+			compatible = "st,stm32-usb";
+			reg = <0x40005c00 0x400>;
+			interrupts = <20 0>;
+			interrupt-names = "usb";
+			num-bidir-endpoints = <8>;
+			ram-size = <512>;
+			status = "disabled";
+			label= "USB";
+		};
+
+		timers2: timers@40000000 {
+			compatible = "st,stm32-timers";
+			reg = <0x40000000 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000001>;
+			status = "disabled";
+			label = "TIMERS_2";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <0>;
+				label = "PWM_2";
+			};
+		};
+
+		timers3: timers@40000400 {
+			compatible = "st,stm32-timers";
+			reg = <0x40000400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000002>;
+			status = "disabled";
+			label = "TIMERS_3";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <10000>;
+				label = "PWM_3";
+			};
+		};
+
+		timers6: timers@40001000 {
+			compatible = "st,stm32-timers";
+			reg = <0x40001000 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000010>;
+			status = "disabled";
+			label = "TIMERS_6";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <10000>;
+				label = "PWM_6";
+			};
+		};
+
+		timers7: timers@40001400 {
+			compatible = "st,stm32-timers";
+			reg = <0x40001400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB1 0x00000020>;
+			status = "disabled";
+			label = "TIMERS_7";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <10000>;
+				label = "PWM_7";
+			};
+		};
+
+		timers15: timers@40014000 {
+			compatible = "st,stm32-timers";
+			reg = <0x40014000 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00010000>;
+			status = "disabled";
+			label = "TIMERS_15";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <10000>;
+				label = "PWM_15";
+			};
+		};
+
+		timers16: timers@40014400 {
+			compatible = "st,stm32-timers";
+			reg = <0x40014400 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00020000>;
+			status = "disabled";
+			label = "TIMERS_16";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <10000>;
+				label = "PWM_16";
+			};
+		};
+
+		timers17: timers@40014800 {
+			compatible = "st,stm32-timers";
+			reg = <0x40014800 0x400>;
+			clocks = <&rcc STM32_CLOCK_BUS_APB2 0x00040000>;
+			status = "disabled";
+			label = "TIMERS_17";
+
+			pwm {
+				compatible = "st,stm32-pwm";
+				status = "disabled";
+				st,prescaler = <10000>;
+				label = "PWM_17";
+			};
 		};
 	};
 };

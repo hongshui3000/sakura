@@ -1,5 +1,6 @@
 ---
 title: Kinetis Pinmux
+id: nxp,kinetis-pinmux
 version: 0.1
 
 description: >
@@ -23,8 +24,6 @@ properties:
       description: clock gate information
       generation: define
       category: required
-
-cell_string: PINMUX
 
 "#cells":
   - pin

@@ -41,11 +41,16 @@
  *
  * @param reason the reason that the handler was called
  * @param pEsf pointer to the exception stack frame
+ *
+ * @return This function does not return.
  */
 void _NanoFatalErrorHandler(unsigned int reason,
 					  const NANO_ESF *pEsf)
 {
 	switch (reason) {
+	case _NANO_ERR_HW_EXCEPTION:
+		printk("***** Hardware exception *****\n");
+		break;
 #if defined(CONFIG_STACK_CANARIES) || defined(CONFIG_STACK_SENTINEL)
 	case _NANO_ERR_STACK_CHK_FAIL:
 		printk("***** Stack Check Fail! *****\n");

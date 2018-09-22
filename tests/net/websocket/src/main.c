@@ -100,7 +100,7 @@ static int total_data_len = sizeof(ws_unmasked_msg);
 #define WAIT_TIME K_SECONDS(1)
 
 void test_websocket_init_server(void);
-void test_websocket_cleanup_server(void);
+void websocket_cleanup_server(void);
 
 static void ws_mask_payload(u8_t *payload, size_t payload_len,
 			    u32_t masking_value)
@@ -330,15 +330,15 @@ void test_v6_init(void)
 {
 	int ret;
 
-	ret = net_ipaddr_parse(CONFIG_NET_APP_MY_IPV6_ADDR,
-			       strlen(CONFIG_NET_APP_MY_IPV6_ADDR),
+	ret = net_ipaddr_parse(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
+			       strlen(CONFIG_NET_CONFIG_MY_IPV6_ADDR),
 			       &server_addr);
 	zassert_equal(ret, 1, "cannot parse server address");
 
 	ret = net_app_init_tcp_client(&app_ctx_v6,
 				      NULL,
 				      NULL,
-				      CONFIG_NET_APP_MY_IPV6_ADDR,
+				      CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 				      80,
 				      0,
 				      NULL);
@@ -453,15 +453,15 @@ void test_v4_init(void)
 {
 	int ret;
 
-	ret = net_ipaddr_parse(CONFIG_NET_APP_MY_IPV4_ADDR,
-			       strlen(CONFIG_NET_APP_MY_IPV4_ADDR),
+	ret = net_ipaddr_parse(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
+			       strlen(CONFIG_NET_CONFIG_MY_IPV4_ADDR),
 			       &server_addr);
 	zassert_equal(ret, 1, "cannot parse server address");
 
 	ret = net_app_init_tcp_client(&app_ctx_v4,
 				      NULL,
 				      NULL,
-				      CONFIG_NET_APP_MY_IPV4_ADDR,
+				      CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 				      80,
 				      0,
 				      NULL);
@@ -585,7 +585,6 @@ void test_main(void)
 			 ztest_unit_test(test_v6_send_recv_7),
 			 ztest_unit_test(test_v6_send_multi_msg),
 			 ztest_unit_test(test_v6_close),
-			 ztest_unit_test(test_websocket_cleanup_server),
 			 ztest_unit_test(test_websocket_init_server),
 			 ztest_unit_test(test_v4_init),
 			 ztest_unit_test(test_v4_connect),
@@ -597,8 +596,8 @@ void test_main(void)
 			 ztest_unit_test(test_v4_send_recv_6),
 			 ztest_unit_test(test_v4_send_recv_7),
 			 ztest_unit_test(test_v4_send_multi_msg),
-			 ztest_unit_test(test_v4_close),
-			 ztest_unit_test(test_websocket_cleanup_server));
+			 ztest_unit_test(test_v4_close)
+			 );
 
 	ztest_run_test_suite(websocket);
 }

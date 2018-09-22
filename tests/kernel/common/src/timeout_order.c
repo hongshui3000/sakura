@@ -23,7 +23,8 @@ static void thread(void *p1, void *p2, void *p3)
 	uintptr_t id = (uintptr_t)p1;
 
 	k_timer_status_sync(&timer[id]);
-	printk("%s %d synced on timer %d\n", __func__, id, id);
+	printk("%s %" PRIxPTR " synced on timer %" PRIxPTR "\n",
+	       __func__, id, id);
 
 	/* no need to protect cur, all threads have the same prio */
 	results[cur++] = id;
@@ -36,6 +37,18 @@ static void thread(void *p1, void *p2, void *p3)
 static K_THREAD_STACK_ARRAY_DEFINE(stacks, NUM_TIMEOUTS, STACKSIZE);
 static struct k_thread threads[NUM_TIMEOUTS];
 
+/**
+ * @addtogroup kernel_common_tests
+ * @{
+ */
+
+/**
+ * @brief Test timer functionalities
+ *
+ * @details Test polling events with timers
+ *
+ * @see k_timer_start(), k_poll_event_init()
+ */
 void test_timeout_order(void)
 {
 	int ii, prio = k_thread_priority_get(k_current_get()) + 1;
@@ -85,3 +98,7 @@ void test_timeout_order(void)
 		zassert_equal(results[ii], ii, "");
 	}
 }
+
+/**
+ * @}
+ */

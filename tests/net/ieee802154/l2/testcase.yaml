@@ -1,5 +1,7 @@
+common:
+  platform_whitelist: native_posix qemu_x86 qemu_cortex_m3
 tests:
-  test:
+  net.ieee802154.l2:
     min_ram: 16
-    platform_exclude: qemu_xtensa
-    tags: net
+    tags: net ieee802154 l2
+    depends_on: ieee802154

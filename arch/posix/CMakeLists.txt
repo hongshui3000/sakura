@@ -1,16 +1,12 @@
 zephyr_cc_option_ifdef(CONFIG_LTO -flto)
 
 zephyr_compile_options(
-  -Wno-format-truncation
   -fno-freestanding
-  -Wno-undef
-  -Wno-implicit-function-declaration
   -m32
   -MMD
   -MP
-  ${TOOLCHAIN_C_FLAGS}
   ${ARCH_FLAG}
-  -include ${PROJECT_SOURCE_DIR}/arch/posix/include/posix_cheats.h
+  -include ${ZEPHYR_BASE}/arch/posix/include/posix_cheats.h
   )
 
 zephyr_compile_options_ifdef(CONFIG_COVERAGE
@@ -21,7 +17,13 @@ zephyr_link_libraries_ifdef(CONFIG_COVERAGE
 	-lgcov
 	)
 
-zephyr_compile_definitions(_POSIX_C_SOURCE=200809)
+if (CONFIG_ASAN)
+	zephyr_compile_options(-fsanitize=address)
+	zephyr_link_libraries(-lasan)
+	zephyr_ld_options(-fsanitize=address)
+endif ()
+
+zephyr_compile_definitions(_POSIX_C_SOURCE=200809 _XOPEN_SOURCE _XOPEN_SOURCE_EXTENDED)
 
 zephyr_ld_options(
   -ldl
@@ -40,7 +42,3 @@ zephyr_ld_options(
 
 add_subdirectory(soc)
 add_subdirectory(core)
-
-# Override the flag used with linker.cmd
-# "-Wl,--just-symbols linker.cmd" instead of "-T linker.cmd"
-set_property(GLOBAL PROPERTY TOPT -Wl,--just-symbols)

@@ -40,6 +40,8 @@ enum usb_dc_status_code {
 	USB_DC_SUSPEND,      /* USB connection suspended by the HOST */
 	USB_DC_RESUME,       /* USB connection resumed by the HOST */
 	USB_DC_INTERFACE,    /* USB interface selected */
+	USB_DC_SET_HALT,     /* Set Feature ENDPOINT_HALT received */
+	USB_DC_CLEAR_HALT,   /* Clear Feature ENDPOINT_HALT received */
 	USB_DC_UNKNOWN       /* Initial USB connection status */
 };
 
@@ -140,6 +142,21 @@ int usb_dc_set_address(const u8_t addr);
  * @return 0 on success, negative errno code on fail.
  */
 int usb_dc_set_status_callback(const usb_dc_status_callback cb);
+
+/**
+ * @brief check endpoint capabilities
+ *
+ * Function to check capabilities of an endpoint. usb_dc_ep_cfg_data structure
+ * provides the endpoint configuration parameters: endpoint address,
+ * endpoint maximum packet size and endpoint type.
+ * The driver should check endpoint capabilities and return 0 if the
+ * endpoint configuration is possible.
+ *
+ * @param[in] cfg Endpoint config
+ *
+ * @return 0 on success, negative errno code on fail.
+ */
+int usb_dc_ep_check_cap(const struct usb_dc_ep_cfg_data * const cfg);
 
 /**
  * @brief configure endpoint

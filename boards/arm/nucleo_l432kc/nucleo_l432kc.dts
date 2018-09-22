@@ -16,6 +16,18 @@
 		zephyr,sram = &sram0;
 		zephyr,flash = &flash0;
 	};
+
+	leds {
+		compatible = "gpio-leds";
+		green_led: led@0 {
+			gpios = <&gpiob 3 GPIO_INT_ACTIVE_HIGH>;
+			label = "User LD3";
+		};
+	};
+
+	aliases {
+		led0 = &green_led;
+	};
 };
 
 &usart1 {
@@ -33,4 +45,41 @@
 
 &spi1 {
 	status = "ok";
+};
+
+&timers2 {
+	status = "ok";
+
+	pwm {
+		status = "ok";
+	};
+};
+
+&can1 {
+	pinctrl-0 = <&can_pins_a>;
+	pinctrl-names = "default";
+	bus-speed = <250000>;
+	status = "ok";
+};
+
+&rtc {
+	status = "ok";
+};
+
+&flash0 {
+	partitions {
+		compatible = "fixed-partitions";
+		#address-cells = <1>;
+		#size-cells = <1>;
+
+#if defined(CONFIG_FS_FLASH_STORAGE_PARTITION)
+		/*
+		 * Reserve the final 16 KiB for the application.
+		 */
+		storage_partition: partition@3c000 {
+			label = "storage";
+			reg = <0x0003c000 0x00004000>;
+		};
+#endif
+	};
 };

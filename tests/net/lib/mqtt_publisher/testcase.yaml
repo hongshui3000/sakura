@@ -1,10 +1,10 @@
+common:
+  tags: net mqtt
+  harness: net
+  depends_on: netif
+  platform_whitelist: native_posix qemu_x86 qemu_cortex_m3
 tests:
-  test:
+  net.mqtt:
     min_ram: 16
-    tags: net mqtt
-    harness: net
-  test_tls:
+  net.mqtt.tls:
     extra_args: CONF_FILE="prj_tls.conf"
-    platform_whitelist: frdm_k64f qemu_x86
-    tags: net mqtt
-    harness: net

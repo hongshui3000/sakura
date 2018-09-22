@@ -24,8 +24,6 @@
 #include <gatt/dis.h>
 #include <gatt/bas.h>
 
-#define DEVICE_NAME				CONFIG_BT_DEVICE_NAME
-#define DEVICE_NAME_LEN				(sizeof(DEVICE_NAME) - 1)
 #define SENSOR_1_NAME				"Temperature Sensor 1"
 #define SENSOR_2_NAME				"Temperature Sensor 2"
 #define SENSOR_3_NAME				"Humidity Sensor"
@@ -292,9 +290,9 @@ static struct bt_gatt_attr ess_attrs[] = {
 
 	/* Temperature Sensor 1 */
 	BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE,
-			       BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY),
-	BT_GATT_DESCRIPTOR(BT_UUID_TEMPERATURE, BT_GATT_PERM_READ,
-			   read_u16, NULL, &sensor_1.temp_value),
+			       BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+			       BT_GATT_PERM_READ,
+			       read_u16, NULL, &sensor_1.temp_value),
 	BT_GATT_DESCRIPTOR(BT_UUID_ES_MEASUREMENT, BT_GATT_PERM_READ,
 			   read_es_measurement, NULL, &sensor_1.meas),
 	BT_GATT_CUD(SENSOR_1_NAME, BT_GATT_PERM_READ),
@@ -307,9 +305,9 @@ static struct bt_gatt_attr ess_attrs[] = {
 
 	/* Temperature Sensor 2 */
 	BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE,
-			       BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY),
-	BT_GATT_DESCRIPTOR(BT_UUID_TEMPERATURE, BT_GATT_PERM_READ,
-			   read_u16, NULL, &sensor_2.temp_value),
+			       BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY,
+			       BT_GATT_PERM_READ,
+			       read_u16, NULL, &sensor_2.temp_value),
 	BT_GATT_DESCRIPTOR(BT_UUID_ES_MEASUREMENT, BT_GATT_PERM_READ,
 			   read_es_measurement, NULL, &sensor_2.meas),
 	BT_GATT_CUD(SENSOR_2_NAME, BT_GATT_PERM_READ),
@@ -321,9 +319,9 @@ static struct bt_gatt_attr ess_attrs[] = {
 	BT_GATT_CCC(sensor_2.ccc_cfg, temp_ccc_cfg_changed),
 
 	/* Humidity Sensor */
-	BT_GATT_CHARACTERISTIC(BT_UUID_HUMIDITY, BT_GATT_CHRC_READ),
-	BT_GATT_DESCRIPTOR(BT_UUID_HUMIDITY, BT_GATT_PERM_READ,
-			   read_u16, NULL, &sensor_3.humid_value),
+	BT_GATT_CHARACTERISTIC(BT_UUID_HUMIDITY, BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ,
+			       read_u16, NULL, &sensor_3.humid_value),
 	BT_GATT_CUD(SENSOR_3_NAME, BT_GATT_PERM_READ),
 	BT_GATT_DESCRIPTOR(BT_UUID_ES_MEASUREMENT, BT_GATT_PERM_READ,
 			   read_es_measurement, NULL, &sensor_3.meas),
@@ -364,10 +362,6 @@ static const struct bt_data ad[] = {
 	/* TODO: Include Service Data AD */
 };
 
-static struct bt_data sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
-};
-
 static void connected(struct bt_conn *conn, u8_t err)
 {
 	if (err) {
@@ -400,8 +394,7 @@ static void bt_ready(int err)
 	bas_init();
 	dis_init(CONFIG_SOC, "ACME");
 
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
-			      sd, ARRAY_SIZE(sd));
+	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
 		return;

@@ -25,21 +25,23 @@
 
 #include <class/usb_cdc.h>
 
+#include <os_desc.h>
+
 #include "netusb.h"
 #include "function_rndis.h"
 
 /* RNDIS handling */
-#define CONFIG_RNDIS_TX_BUF_COUNT	5
-#define CONFIG_RNDIS_TX_BUF_SIZE	512
-NET_BUF_POOL_DEFINE(rndis_tx_pool, CONFIG_RNDIS_TX_BUF_COUNT,
-		    CONFIG_RNDIS_TX_BUF_SIZE, 0, NULL);
+#define CFG_RNDIS_TX_BUF_COUNT	5
+#define CFG_RNDIS_TX_BUF_SIZE	512
+NET_BUF_POOL_DEFINE(rndis_tx_pool, CFG_RNDIS_TX_BUF_COUNT,
+		    CFG_RNDIS_TX_BUF_SIZE, 0, NULL);
 static struct k_fifo rndis_tx_queue;
 
 /* Serialize RNDIS command queue for later processing */
-#define CONFIG_RNDIS_CMD_BUF_COUNT	2
-#define CONFIG_RNDIS_CMD_BUF_SIZE	512
-NET_BUF_POOL_DEFINE(rndis_cmd_pool, CONFIG_RNDIS_CMD_BUF_COUNT,
-		    CONFIG_RNDIS_CMD_BUF_SIZE, 0, NULL);
+#define CFG_RNDIS_CMD_BUF_COUNT	2
+#define CFG_RNDIS_CMD_BUF_SIZE	512
+NET_BUF_POOL_DEFINE(rndis_cmd_pool, CFG_RNDIS_CMD_BUF_COUNT,
+		    CFG_RNDIS_CMD_BUF_SIZE, 0, NULL);
 static struct k_fifo rndis_cmd_queue;
 
 static struct k_delayed_work notify_work;
@@ -84,7 +86,7 @@ static struct __rndis {
 	u8_t mac[6];
 	u8_t media_status;
 } rndis = {
-	.mac =  { 0x00, 0x11, 0x22, 0x33, 0x44, 0x66 },
+	.mac =  { 0x00, 0x00, 0x5E, 0x00, 0x53, 0x01 },
 	.mtu = 1500, /* Ethernet frame */
 	.media_status = RNDIS_OBJECT_ID_MEDIA_DISCONNECTED,
 	.state = UNINITIALIZED,
@@ -129,6 +131,29 @@ static u32_t object_id_supported[] = {
 	RNDIS_OBJECT_ID_802_3_MCAST_LIST,
 	RNDIS_OBJECT_ID_802_3_MAX_LIST_SIZE,
 	RNDIS_OBJECT_ID_802_3_MAC_OPTIONS,
+};
+
+#define RNDIS_INT_EP_IDX		0
+#define RNDIS_OUT_EP_IDX		1
+#define RNDIS_IN_EP_IDX			2
+
+static void rndis_int_in(u8_t ep, enum usb_dc_ep_cb_status_code ep_status);
+static void rndis_bulk_out(u8_t ep, enum usb_dc_ep_cb_status_code ep_status);
+static void rndis_bulk_in(u8_t ep, enum usb_dc_ep_cb_status_code ep_status);
+
+static struct usb_ep_cfg_data rndis_ep_data[] = {
+	{
+		.ep_cb = rndis_int_in,
+		.ep_addr = RNDIS_INT_EP_ADDR
+	},
+	{
+		.ep_cb = rndis_bulk_out,
+		.ep_addr = RNDIS_OUT_EP_ADDR
+	},
+	{
+		.ep_cb = rndis_bulk_in,
+		.ep_addr = RNDIS_IN_EP_ADDR
+	},
 };
 
 static int parse_rndis_header(const u8_t *buffer, u32_t buf_len)
@@ -331,7 +356,8 @@ static void rndis_notify(struct k_work *work)
 	buf[0] = sys_cpu_to_le32(0x01);
 	buf[1] = sys_cpu_to_le32(0x00);
 
-	try_write(CONFIG_RNDIS_INT_EP_ADDR, (u8_t *)buf, sizeof(buf));
+	try_write(rndis_ep_data[RNDIS_INT_EP_IDX].ep_addr,
+		  (u8_t *)buf, sizeof(buf));
 
 	/* Decrement notify_count here */
 	if (atomic_dec(&rndis.notify_count) != 1) {
@@ -348,7 +374,7 @@ static void rndis_send_zero_frame(void)
 
 	SYS_LOG_DBG("Last packet, send zero frame");
 
-	try_write(CONFIG_RNDIS_IN_EP_ADDR, zero, sizeof(zero));
+	try_write(rndis_ep_data[RNDIS_IN_EP_IDX].ep_addr, zero, sizeof(zero));
 }
 
 static void rndis_queue_rsp(struct net_buf *rsp)
@@ -940,7 +966,8 @@ static int append_bytes(u8_t *out_buf, u16_t buf_len, u8_t *data,
 			net_hexdump("fragment", out_buf, buf_len);
 #endif
 
-			ret = try_write(CONFIG_RNDIS_IN_EP_ADDR, out_buf,
+			ret = try_write(rndis_ep_data[RNDIS_IN_EP_IDX].ep_addr,
+					out_buf,
 					buf_len);
 			if (ret) {
 				SYS_LOG_ERR("Error sending data");
@@ -1002,7 +1029,7 @@ static int rndis_send(struct net_pkt *pkt)
 	}
 
 	if (remaining > 0 && remaining < sizeof(buf)) {
-		return try_write(CONFIG_RNDIS_IN_EP_ADDR, buf,
+		return try_write(rndis_ep_data[RNDIS_IN_EP_IDX].ep_addr, buf,
 				 sizeof(buf) - remaining);
 	} else {
 		rndis_send_zero_frame();
@@ -1010,6 +1037,79 @@ static int rndis_send(struct net_pkt *pkt)
 
 	return 0;
 }
+
+#if defined(CONFIG_USB_DEVICE_OS_DESC)
+/* This string descriptor would be read the first time device is plugged in.
+ * It is Microsoft extension called an OS String Descriptor
+ */
+#define MSOS_STRING_LENGTH	18
+static struct string_desc {
+	u8_t bLength;
+	u8_t bDescriptorType;
+	u8_t bString[MSOS_STRING_LENGTH - 4];
+	u8_t bMS_VendorCode;
+	u8_t bPad;
+} __packed msosv1_string_descriptor = {
+	.bLength = MSOS_STRING_LENGTH,
+	.bDescriptorType = USB_STRING_DESC,
+	/* Signature MSFT100 */
+	.bString = {
+		'M', 0x00, 'S', 0x00, 'F', 0x00, 'T', 0x00,
+		'1', 0x00, '0', 0x00, '0', 0x00
+	},
+	.bMS_VendorCode = 0x03,	/* Vendor Code, used for a control request */
+	.bPad = 0x00,		/* Padding byte for VendorCode look as UTF16 */
+};
+
+static struct compat_id_desc {
+	/* MS OS 1.0 Header Section */
+	u32_t dwLength;
+	u16_t bcdVersion;
+	u16_t wIndex;
+	u8_t bCount;
+	u8_t Reserved[7];
+	/* MS OS 1.0 Function Section */
+	struct compat_id_func {
+		u8_t bFirstInterfaceNumber;
+		u8_t Reserved1;
+		u8_t compatibleID[8];
+		u8_t subCompatibleID[8];
+		u8_t Reserved2[6];
+	} __packed func[1];
+} __packed msosv1_compatid_descriptor = {
+	.dwLength = sys_cpu_to_le32(40),
+	.bcdVersion = sys_cpu_to_le16(0x0100),
+	.wIndex = sys_cpu_to_le16(USB_OSDESC_EXTENDED_COMPAT_ID),
+	.bCount = 0x01, /* One function section */
+	.Reserved = {
+		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+	},
+
+	.func = {
+		{
+			.bFirstInterfaceNumber = 0x00,
+			.Reserved1 = 0x01,
+			.compatibleID = {
+				'R', 'N', 'D', 'I', 'S', 0x00, 0x00, 0x00
+			},
+			.subCompatibleID = {
+				'5', '1', '6', '2', '0', '0', '1', 0x00
+			},
+			.Reserved2 = {
+				0x00, 0x00, 0x00, 0x00, 0x00, 0x00
+			}
+		},
+	}
+};
+
+static struct usb_os_descriptor os_desc = {
+	.string = (u8_t *)&msosv1_string_descriptor,
+	.string_len = sizeof(msosv1_string_descriptor),
+	.vendor_code = 0x03,
+	.compat_id = (u8_t *)&msosv1_compatid_descriptor,
+	.compat_id_len = sizeof(msosv1_compatid_descriptor),
+};
+#endif /* CONFIG_USB_DEVICE_OS_DESC */
 
 static int rndis_init(void)
 {
@@ -1021,6 +1121,9 @@ static int rndis_init(void)
 	k_fifo_init(&rndis_cmd_queue);
 
 	k_delayed_work_init(&notify_work, rndis_notify);
+
+	/* Register MS OS Descriptor */
+	usb_register_os_desc(&os_desc);
 
 	k_thread_create(&cmd_thread_data, cmd_stack,
 			K_THREAD_STACK_SIZEOF(cmd_stack),
@@ -1045,25 +1148,41 @@ static int rndis_connect_media(bool status)
 #endif
 }
 
-static struct usb_ep_cfg_data rndis_ep_data[] = {
-	{
-		.ep_cb = rndis_int_in,
-		.ep_addr = CONFIG_RNDIS_INT_EP_ADDR
-	},
-	{
-		.ep_cb = rndis_bulk_out,
-		.ep_addr = CONFIG_RNDIS_OUT_EP_ADDR
-	},
-	{
-		.ep_cb = rndis_bulk_in,
-		.ep_addr = CONFIG_RNDIS_IN_EP_ADDR
-	},
-};
+static void rndis_status_cb(enum usb_dc_status_code status, u8_t *param)
+{
+	/* Check the USB status and do needed action if required */
+	switch (status) {
+	case USB_DC_CONFIGURED:
+		SYS_LOG_DBG("USB device configured");
+		netusb_enable();
+		break;
+
+	case USB_DC_DISCONNECTED:
+		SYS_LOG_DBG("USB device disconnected");
+		netusb_disable();
+		break;
+
+	case USB_DC_ERROR:
+	case USB_DC_RESET:
+	case USB_DC_CONNECTED:
+	case USB_DC_SUSPEND:
+	case USB_DC_RESUME:
+	case USB_DC_INTERFACE:
+		SYS_LOG_DBG("USB unhandlded state: %d", status);
+		break;
+
+	case USB_DC_UNKNOWN:
+	default:
+		SYS_LOG_DBG("USB unknown state %d", status);
+		break;
+	}
+}
 
 struct netusb_function rndis_function = {
 	.init = rndis_init,
 	.connect_media = rndis_connect_media,
 	.class_handler = rndis_class_handler,
+	.status_cb = rndis_status_cb,
 	.send_pkt = rndis_send,
 	.num_ep = ARRAY_SIZE(rndis_ep_data),
 	.ep = rndis_ep_data,

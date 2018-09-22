@@ -162,6 +162,10 @@ static ALWAYS_INLINE void clkInit(void)
 				      CONFIG_MCG_FCRDIV);
 
 	CLOCK_SetSimConfig(&simConfig);
+#if CONFIG_USB_KINETIS
+	CLOCK_EnableUsbfs0Clock(kCLOCK_UsbSrcPll0,
+				CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC);
+#endif
 }
 
 /**
@@ -177,7 +181,7 @@ static int kw2xd_init(struct device *arg)
 {
 	ARG_UNUSED(arg);
 
-	int oldLevel; /* old interrupt lock level */
+	unsigned int oldLevel; /* old interrupt lock level */
 
 	/* disable interrupts */
 	oldLevel = irq_lock();

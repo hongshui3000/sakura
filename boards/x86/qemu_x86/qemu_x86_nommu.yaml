@@ -4,8 +4,9 @@ type: qemu
 arch: x86
 toolchain:
   - zephyr
-supported:
-  - pci
-  - netif:slip
+  - xtools
 testing:
-        default: true
+  default: true
+  ignore_tags:
+     - net
+     - bluetooth

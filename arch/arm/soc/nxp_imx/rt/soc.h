@@ -16,8 +16,13 @@ extern "C" {
 #ifndef _ASMLANGUAGE
 
 #include <fsl_common.h>
-#include <device.h>
-#include <misc/util.h>
+
+/* ARM CMSIS definitions must be included before kernel_includes.h.
+ * Therefore, it is essential to include kernel_includes.h after including
+ * core SOC-specific headers.
+ */
+#include <kernel_includes.h>
+
 
 #endif /* !_ASMLANGUAGE */
 

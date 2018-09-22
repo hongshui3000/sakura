@@ -36,13 +36,17 @@ s32_t _sys_idle_threshold_ticks = CONFIG_TICKLESS_IDLE_THRESH;
  */
 unsigned char _sys_pm_idle_exit_notify;
 
+#if defined(CONFIG_SYS_POWER_LOW_POWER_STATE)
 void __attribute__((weak)) _sys_soc_resume(void)
 {
 }
+#endif
 
+#if defined(CONFIG_SYS_POWER_DEEP_SLEEP)
 void __attribute__((weak)) _sys_soc_resume_from_deep_sleep(void)
 {
 }
+#endif
 
 /**
  *
@@ -63,6 +67,7 @@ static void set_kernel_idle_time_in_ticks(s32_t ticks)
 #define set_kernel_idle_time_in_ticks(x) do { } while (0)
 #endif
 
+#ifndef CONFIG_SMP
 static void sys_power_save_idle(s32_t ticks)
 {
 #ifdef CONFIG_TICKLESS_KERNEL
@@ -122,6 +127,7 @@ static void sys_power_save_idle(s32_t ticks)
 	k_cpu_idle();
 #endif
 }
+#endif
 
 void _sys_power_save_idle_exit(s32_t ticks)
 {
@@ -165,23 +171,20 @@ void idle(void *unused1, void *unused2, void *unused3)
 #endif
 
 #ifdef CONFIG_SMP
-	/* Simplified idle for non-default SMP CPUs pending driver
-	 * support.  The busy waiting is needed to prevent lock
-	 * contention.  Long term we need to wake up idle CPUs with an
-	 * IPI.
+	/* Simplified idle for SMP CPUs pending driver support.  The
+	 * busy waiting is needed to prevent lock contention.  Long
+	 * term we need to wake up idle CPUs with an IPI.
 	 */
-	if (_arch_curr_cpu()->id > 0) {
-		while (1) {
-			k_busy_wait(100);
-			k_yield();
-		}
+	while (1) {
+		k_busy_wait(100);
+		k_yield();
 	}
-#endif
-
+#else
 	for (;;) {
 		(void)irq_lock();
 		sys_power_save_idle(_get_next_timeout_expiry());
 
 		IDLE_YIELD_IF_COOP();
 	}
+#endif
 }

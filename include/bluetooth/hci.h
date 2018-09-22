@@ -40,6 +40,8 @@ typedef struct {
 } bt_addr_le_t;
 
 #define BT_ADDR_ANY     (&(bt_addr_t) { { 0, 0, 0, 0, 0, 0 } })
+#define BT_ADDR_NONE    (&(bt_addr_t) { \
+			 { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } })
 #define BT_ADDR_LE_ANY  (&(bt_addr_le_t) { 0, { { 0, 0, 0, 0, 0, 0 } } })
 #define BT_ADDR_LE_NONE (&(bt_addr_le_t) { 0, \
 			 { { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff } } })
@@ -121,9 +123,16 @@ static inline bool bt_addr_le_is_identity(const bt_addr_le_t *addr)
 #define BT_HCI_ERR_UNSUPP_REMOTE_FEATURE        0x1a
 #define BT_HCI_ERR_INVALID_LL_PARAM             0x1e
 #define BT_HCI_ERR_UNSPECIFIED                  0x1f
+#define BT_HCI_ERR_UNSUPP_LL_PARAM_VAL          0x20
+#define BT_HCI_ERR_LL_RESP_TIMEOUT              0x22
+#define BT_HCI_ERR_LL_PROC_COLLISION            0x23
+#define BT_HCI_ERR_INSTANT_PASSED               0x28
 #define BT_HCI_ERR_PAIRING_NOT_SUPPORTED        0x29
+#define BT_HCI_ERR_DIFF_TRANS_COLLISION         0x2a
 #define BT_HCI_ERR_UNACCEPT_CONN_PARAM          0x3b
 #define BT_HCI_ERR_ADV_TIMEOUT                  0x3c
+#define BT_HCI_ERR_TERM_DUE_TO_MIC_FAIL         0x3d
+#define BT_HCI_ERR_CONN_FAIL_TO_ESTAB           0x3e
 
 /* EIR/AD data type definitions */
 #define BT_DATA_FLAGS                   0x01 /* AD flags */
@@ -1829,6 +1838,65 @@ struct bt_hci_evt_le_chan_sel_algo {
 #define BT_EVT_MASK_LE_ADV_SET_TERMINATED        BT_EVT_BIT(17)
 #define BT_EVT_MASK_LE_SCAN_REQ_RECEIVED         BT_EVT_BIT(18)
 #define BT_EVT_MASK_LE_CHAN_SEL_ALGO             BT_EVT_BIT(19)
+
+/** Allocate a HCI command buffer.
+  *
+  * This function allocates a new buffer for a HCI command. It is given
+  * the OpCode (encoded e.g. using the BT_OP macro) and the total length
+  * of the parameters. Upon successful return the buffer is ready to have
+  * the parameters encoded into it.
+  *
+  * @param opcode     Command OpCode.
+  * @param param_len  Length of command parameters.
+  *
+  * @return Newly allocated buffer.
+  */
+struct net_buf *bt_hci_cmd_create(u16_t opcode, u8_t param_len);
+
+/** Send a HCI command asynchronously.
+  *
+  * This function is used for sending a HCI command asynchronously. It can
+  * either be called for a buffer created using bt_hci_cmd_create(), or
+  * if the command has no parameters a NULL can be passed instead. The
+  * sending of the command will happen asynchronously, i.e. upon successful
+  * return from this function the caller only knows that it was queued
+  * successfully.
+  *
+  * If synchronous behavior, and retrieval of the Command Complete parameters
+  * is desired, the bt_hci_cmd_send_sync() API should be used instead.
+  *
+  * @param opcode Command OpCode.
+  * @param buf    Command buffer or NULL (if no parameters).
+  *
+  * @return 0 on success or negative error value on failure.
+  */
+int bt_hci_cmd_send(u16_t opcode, struct net_buf *buf);
+
+/** Send a HCI command synchronously.
+  *
+  * This function is used for sending a HCI command synchronously. It can
+  * either be called for a buffer created using bt_hci_cmd_create(), or
+  * if the command has no parameters a NULL can be passed instead.
+  *
+  * The function will block until a Command Status or a Command Complete
+  * event is returned. If either of these have a non-zero status the function
+  * will return a negative error code and the response reference will not
+  * be set. If the command completed successfully and a non-NULL rsp parameter
+  * was given, this parameter will be set to point to a buffer containing
+  * the response parameters.
+  *
+  * @param opcode Command OpCode.
+  * @param buf    Command buffer or NULL (if no parameters).
+  * @param rsp    Place to store a reference to the command response. May
+  *               be NULL if the caller is not interested in the response
+  *               parameters. If non-NULL is passed the caller is responsible
+  *               for calling net_buf_unref() on the buffer when done parsing
+  *               it.
+  *
+  * @return 0 on success or negative error value on failure.
+  */
+int bt_hci_cmd_send_sync(u16_t opcode, struct net_buf *buf,
+			 struct net_buf **rsp);
 
 #ifdef __cplusplus
 }

@@ -11,7 +11,6 @@
 #
 menuconfig SPI
 	bool "SPI hardware bus support"
-	default n
 	help
 	  Enable support for the SPI hardware bus.
 
@@ -19,14 +18,12 @@ if SPI
 
 config SPI_ASYNC
 	bool "Enable Asynchronous call support"
-	default n
 	select POLL
 	help
 	  This option enables the asynchronous API calls.
 
 config SPI_SLAVE
 	bool "Enable Slave support [EXPERIMENTAL]"
-	default n
 	help
 	  Enables Driver SPI slave operations. Slave support depends
 	  on the driver and the hardware it runs on.
@@ -59,7 +56,6 @@ config SYS_LOG_SPI_LEVEL
 
 config	SPI_0
 	bool "SPI port 0"
-	default n
 	help
 	  Enable SPI controller port 0.
 
@@ -99,7 +95,6 @@ endif # SPI_0
 
 config SPI_1
 	bool "SPI port 1"
-	default n
 	help
 	  Enable SPI controller port 1.
 
@@ -122,7 +117,7 @@ config SPI_1_OP_MODES
 	  3 is both modes are available.
 
 config SPI_1_IRQ_PRI
-	int "Port 0 interrupt priority"
+	int "Port 1 interrupt priority"
 	depends on !HAS_DTS_SPI
 
 config SPI_1_CS_GPIO_PORT
@@ -139,7 +134,6 @@ endif # SPI_1
 
 config SPI_2
 	bool "SPI port 2"
-	default n
 	help
 	  Enable SPI controller port 2.
 
@@ -179,7 +173,6 @@ endif # SPI_2
 
 config SPI_3
 	bool "SPI port 3"
-	default n
 	help
 	  Enable SPI controller port 3.
 
@@ -209,18 +202,18 @@ endif # SPI_3
 
 config SPI_4
 	bool "SPI port 4"
-	default n
 	help
 	  Enable SPI controller port 4.
 
+if SPI_4
+
 config SPI_4_NAME
 	string "SPI port 4 device name"
-	depends on SPI_4
+	depends on !HAS_DTS_SPI
 	default "SPI_4"
 
 config SPI_4_OP_MODES
 	int "Port 4 supported operation modes (master/slave/both)"
-	depends on SPI_4
 	default 1
 	range 1 3
 	help
@@ -230,20 +223,22 @@ config SPI_4_OP_MODES
 	  2 is SLAVE mode only
 	  3 is both modes are available.
 
+endif # SPI_4
+
 config SPI_5
 	bool "SPI port 5"
-	default n
 	help
 	  Enable SPI controller port 5.
 
+if SPI_5
+
 config SPI_5_NAME
 	string "SPI port 5 device name"
-	depends on SPI_5
+	depends on !HAS_DTS_SPI
 	default "SPI_5"
 
 config SPI_5_OP_MODES
 	int "Port 5 supported operation modes (master/slave/both)"
-	depends on SPI_5
 	default 1
 	range 1 3
 	help
@@ -253,10 +248,11 @@ config SPI_5_OP_MODES
 	  2 is SLAVE mode only
 	  3 is both modes are available.
 
+endif # SPI_5
+
 config SPI_INTEL
 	bool "Intel SPI controller driver"
 	depends on CPU_MINUTEIA
-	default n
 	help
 	  Enable support for Intel's SPI controllers. Such controller
 	  was formerly found on XScale chips. It can be found nowadays

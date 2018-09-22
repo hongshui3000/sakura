@@ -77,7 +77,7 @@ static void emit(struct lexer *lexer, enum json_tokens token)
 	lexer->start = lexer->pos;
 }
 
-static char next(struct lexer *lexer)
+static int next(struct lexer *lexer)
 {
 	if (lexer->pos >= lexer->end) {
 		lexer->pos = lexer->end + 1;
@@ -98,9 +98,9 @@ static void backup(struct lexer *lexer)
 	lexer->pos--;
 }
 
-static char peek(struct lexer *lexer)
+static int peek(struct lexer *lexer)
 {
-	char chr = next(lexer);
+	int chr = next(lexer);
 
 	backup(lexer);
 
@@ -112,7 +112,7 @@ static void *lexer_string(struct lexer *lexer)
 	ignore(lexer);
 
 	while (true) {
-		char chr = next(lexer);
+		int chr = next(lexer);
 
 		if (chr == '\0') {
 			emit(lexer, JSON_TOK_ERROR);
@@ -217,7 +217,7 @@ static void *lexer_null(struct lexer *lexer)
 static void *lexer_number(struct lexer *lexer)
 {
 	while (true) {
-		char chr = next(lexer);
+		int chr = next(lexer);
 
 		if (isdigit(chr) || chr == '.') {
 			continue;
@@ -233,7 +233,7 @@ static void *lexer_number(struct lexer *lexer)
 static void *lexer_json(struct lexer *lexer)
 {
 	while (true) {
-		char chr = next(lexer);
+		int chr = next(lexer);
 
 		switch (chr) {
 		case '\0':
@@ -476,8 +476,6 @@ static int decode_value(struct json_obj *obj,
 
 static ptrdiff_t get_elem_size(const struct json_obj_descr *descr)
 {
-	assert(descr->alignment);
-
 	switch (descr->type) {
 	case JSON_TOK_NUMBER:
 		return sizeof(s32_t);
@@ -495,7 +493,7 @@ static ptrdiff_t get_elem_size(const struct json_obj_descr *descr)
 		for (i = 0; i < descr->object.sub_descr_len; i++) {
 			ptrdiff_t s = get_elem_size(&descr->object.sub_descr[i]);
 
-			total += ROUND_UP(s, descr->alignment);
+			total += ROUND_UP(s, descr->alignment + 1);
 		}
 
 		return total;

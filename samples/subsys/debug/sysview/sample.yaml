@@ -1,6 +1,0 @@
-sample:
-  name: Systemview Demo
-tests:
-  test:
-    filter: CONFIG_HAS_SEGGER_RTT
-    tags: debug tracing

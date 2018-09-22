@@ -16,8 +16,6 @@
 #include <sensor.h>
 #include <zephyr.h>
 
-#define DEVICE_NAME			"Environmental Sensor"
-#define DEVICE_NAME_LEN			(sizeof(DEVICE_NAME) - 1)
 #define TEMPERATURE_CUD			"Temperature"
 #define HUMIDITY_CUD			"Humidity"
 #define PRESSURE_CUD			"Pressure"
@@ -51,19 +49,18 @@ static ssize_t read_u32(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 static struct bt_gatt_attr attrs[] = {
 	BT_GATT_PRIMARY_SERVICE(BT_UUID_ESS),
 
-	BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE, BT_GATT_CHRC_READ),
-	BT_GATT_DESCRIPTOR(BT_UUID_TEMPERATURE, BT_GATT_PERM_READ,
-			   read_u16, NULL, &temp_value),
+	BT_GATT_CHARACTERISTIC(BT_UUID_TEMPERATURE, BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ, read_u16, NULL, &temp_value),
 	BT_GATT_CUD(TEMPERATURE_CUD, BT_GATT_PERM_READ),
 
-	BT_GATT_CHARACTERISTIC(BT_UUID_HUMIDITY, BT_GATT_CHRC_READ),
-	BT_GATT_DESCRIPTOR(BT_UUID_HUMIDITY, BT_GATT_PERM_READ,
-			   read_u16, NULL, &humidity_value),
+	BT_GATT_CHARACTERISTIC(BT_UUID_HUMIDITY, BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ, read_u16, NULL,
+			       &humidity_value),
 	BT_GATT_CUD(HUMIDITY_CUD, BT_GATT_PERM_READ),
 
-	BT_GATT_CHARACTERISTIC(BT_UUID_PRESSURE, BT_GATT_CHRC_READ),
-	BT_GATT_DESCRIPTOR(BT_UUID_PRESSURE, BT_GATT_PERM_READ,
-			   read_u32, NULL, &pressure_value),
+	BT_GATT_CHARACTERISTIC(BT_UUID_PRESSURE, BT_GATT_CHRC_READ,
+			       BT_GATT_PERM_READ, read_u32, NULL,
+			       &pressure_value),
 	BT_GATT_CUD(PRESSURE_CUD, BT_GATT_PERM_READ),
 };
 
@@ -71,10 +68,6 @@ static struct bt_gatt_service env_svc = BT_GATT_SERVICE(attrs);
 
 static const struct bt_data ad[] = {
 	BT_DATA_BYTES(BT_DATA_FLAGS, (BT_LE_AD_GENERAL | BT_LE_AD_NO_BREDR)),
-};
-
-static struct bt_data sd[] = {
-	BT_DATA(BT_DATA_NAME_COMPLETE, DEVICE_NAME, DEVICE_NAME_LEN),
 };
 
 static void bt_ready(int err)
@@ -86,8 +79,7 @@ static void bt_ready(int err)
 
 	bt_gatt_service_register(&env_svc);
 
-	err = bt_le_adv_start(BT_LE_ADV_CONN, ad, ARRAY_SIZE(ad),
-			      sd, ARRAY_SIZE(sd));
+	err = bt_le_adv_start(BT_LE_ADV_CONN_NAME, ad, ARRAY_SIZE(ad), NULL, 0);
 	if (err) {
 		printk("Advertising failed to start (err %d)\n", err);
 		return;

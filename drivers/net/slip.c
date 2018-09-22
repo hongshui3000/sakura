@@ -22,10 +22,12 @@
 #include <errno.h>
 #include <stddef.h>
 #include <misc/util.h>
+#include <net/ethernet.h>
 #include <net/buf.h>
 #include <net/net_pkt.h>
 #include <net/net_if.h>
 #include <net/net_core.h>
+#include <net/lldp.h>
 #include <console/uart_pipe.h>
 #include <net/ethernet.h>
 
@@ -62,6 +64,35 @@ struct slip_context {
 #define SLIP_STATS(statement) statement
 #endif
 };
+
+#if defined(CONFIG_NET_LLDP)
+static const struct net_lldpdu lldpdu = {
+	.chassis_id = {
+		.type_length = htons((LLDP_TLV_CHASSIS_ID << 9) |
+			NET_LLDP_CHASSIS_ID_TLV_LEN),
+		.subtype = CONFIG_NET_LLDP_CHASSIS_ID_SUBTYPE,
+		.value = NET_LLDP_CHASSIS_ID_VALUE
+	},
+	.port_id = {
+		.type_length = htons((LLDP_TLV_PORT_ID << 9) |
+			NET_LLDP_PORT_ID_TLV_LEN),
+		.subtype = CONFIG_NET_LLDP_PORT_ID_SUBTYPE,
+		.value = NET_LLDP_PORT_ID_VALUE
+	},
+	.ttl = {
+		.type_length = htons((LLDP_TLV_TTL << 9) |
+			NET_LLDP_TTL_TLV_LEN),
+		.ttl = htons(NET_LLDP_TTL)
+	},
+#if defined(CONFIG_NET_LLDP_END_LLDPDU_TLV_ENABLED)
+	.end_lldpdu_tlv = NET_LLDP_END_LLDPDU_VALUE
+#endif /* CONFIG_NET_LLDP_END_LLDPDU_TLV_ENABLED */
+};
+
+#define lldpdu_ptr (&lldpdu)
+#else
+#define lldpdu_ptr NULL
+#endif /* CONFIG_NET_LLDP */
 
 #if SYS_LOG_LEVEL >= SYS_LOG_LEVEL_DEBUG
 #if defined(CONFIG_SYS_LOG_SHOW_COLOR)
@@ -479,11 +510,14 @@ static void slip_iface_init(struct net_if *iface)
 
 	ethernet_init(iface);
 
+	net_eth_set_lldpdu(iface, lldpdu_ptr);
+
 	if (slip->init_done) {
 		return;
 	}
 
 	ll_addr = slip_get_mac(slip);
+
 	slip->init_done = true;
 	slip->iface = iface;
 
@@ -508,23 +542,23 @@ use_random_mac:
 
 static struct slip_context slip_context_data;
 
-#if defined(CONFIG_NET_VLAN)
-static enum eth_hw_caps eth_capabilities(struct device *dev)
+static enum ethernet_hw_caps eth_capabilities(struct device *dev)
 {
 	ARG_UNUSED(dev);
 
-	return ETH_HW_VLAN;
-}
+	return ETHERNET_HW_VLAN
+#if defined(CONFIG_NET_LLDP)
+		| ETHERNET_LLDP
 #endif
+		;
+}
 
 #if defined(CONFIG_SLIP_TAP) && defined(CONFIG_NET_L2_ETHERNET)
 static const struct ethernet_api slip_if_api = {
 	.iface_api.init = slip_iface_init,
 	.iface_api.send = slip_send,
 
-#if defined(CONFIG_NET_VLAN)
 	.get_capabilities = eth_capabilities,
-#endif
 };
 
 #define _SLIP_L2_LAYER ETHERNET_L2

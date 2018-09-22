@@ -9,10 +9,10 @@ if SOC_STM32F411XE
 
 config SOC
 	string
-	default stm32f411xe
+	default "stm32f411xe"
 
 config NUM_IRQS
 	int
-	default 85
+	default 86
 
 endif # SOC_STM32F411XE

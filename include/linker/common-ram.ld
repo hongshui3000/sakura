@@ -15,6 +15,13 @@
 		SHELL_INIT_SECTIONS()
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 
+	SECTION_DATA_PROLOGUE(log_dynamic_sections, (OPTIONAL),)
+	{
+		__log_dynamic_start = .;
+		KEEP(*(SORT(.log_dynamic_*)));
+		__log_dynamic_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
 	SECTION_DATA_PROLOGUE(_static_thread_area, (OPTIONAL), SUBALIGN(4))
 	{
 		_static_thread_data_list_start = .;
@@ -187,6 +194,34 @@
 		KEEP(*(SORT_BY_NAME(".net_l2.data*")))
 		__net_l2_data_end = .;
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+#if defined(CONFIG_USB_DEVICE_STACK)
+	SECTION_DATA_PROLOGUE(usb_descriptor, (OPTIONAL), SUBALIGN(1))
+	{
+		__usb_descriptor_start = .;
+		*(".usb.descriptor")
+		KEEP(*(SORT_BY_NAME(".usb.descriptor*")))
+		__usb_descriptor_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_DATA_PROLOGUE(usb_data, (OPTIONAL), SUBALIGN(1))
+	{
+		__usb_data_start = .;
+		*(".usb.data")
+		KEEP(*(SORT_BY_NAME(".usb.data*")))
+		__usb_data_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+#endif /* CONFIG_USB_DEVICE_STACK */
+
+#if defined(CONFIG_USB_DEVICE_BOS)
+	SECTION_DATA_PROLOGUE(usb_bos_desc, (OPTIONAL), SUBALIGN(1))
+	{
+		__usb_bos_desc_start = .;
+		*(".usb.bos_desc")
+		KEEP(*(SORT_BY_NAME(".usb.bos_desc*")))
+		__usb_bos_desc_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+#endif /* CONFIG_USB_DEVICE_BOS */
 
 #ifdef CONFIG_USERSPACE
 	_static_kernel_objects_end = .;

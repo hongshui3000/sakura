@@ -13,6 +13,8 @@
 #ifndef __ZTEST_TEST_H__
 #define __ZTEST_TEST_H__
 
+#include <app_memory/app_memdomain.h>
+
 struct unit_test {
 	const char *name;
 	void (*test)(void);
@@ -50,6 +52,12 @@ void ztest_test_fail(void);
  * the test passed before aborting the thread.
  */
 void ztest_test_pass(void);
+
+/**
+ * @brief Skip the current test.
+ *
+ */
+void ztest_test_skip(void);
 
 /**
  * @brief Do nothing, successfully.
@@ -133,8 +141,17 @@ static inline void unit_test_noop(void)
  *
  * @param name Name of the testing suite
  */
+
+/* definitions for use with testing application shared memory   */
+#ifdef CONFIG_APP_SHARED_MEM
+#define APPDMEMP0 _app_dmem(part0)
+#define APPBMEMP0 _app_bmem(part0)
+#else
+#define APPDMEMP0
+#define APPBMEMP0
+#endif
 #define ztest_test_suite(name, ...) \
-	static struct unit_test _##name[] = { \
+	     APPDMEMP0  static struct unit_test _##name[] = { \
 		__VA_ARGS__, { 0 } \
 	}
 /**

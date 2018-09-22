@@ -4,9 +4,11 @@ type: mcu
 arch: arm
 toolchain:
   - zephyr
-  - gccarmemb
+  - gnuarmemb
 ram: 12
 testing:
   ignore_tags:
     - bluetooth
     - net
+supported:
+  - pwm

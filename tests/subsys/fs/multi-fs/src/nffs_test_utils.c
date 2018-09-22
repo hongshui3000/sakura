@@ -55,7 +55,7 @@ void nffs_test_util_assert_ent_name(struct fs_dirent *fs_dirent,
 
 void nffs_test_util_assert_file_len(struct nffs_file *file, u32_t expected)
 {
-	u32_t len;
+	uint32_t len;
 	int rc;
 
 	rc = nffs_inode_data_len(file->nf_inode_entry, &len);
@@ -69,15 +69,15 @@ void nffs_test_util_assert_cache_is_sane(const char *filename)
 	struct nffs_cache_block *cache_block;
 	struct nffs_file *file;
 	struct fs_file_t fs_file;
-	u32_t cache_start;
-	u32_t cache_end;
+	uint32_t cache_start;
+	uint32_t cache_end;
 	u32_t block_end;
 	int rc;
 
 	rc = fs_open(&fs_file, filename);
 	zassert_equal(rc, 0, NULL);
 
-	file = fs_file.nffs_fp;
+	file = fs_file.filep;
 	rc = nffs_cache_inode_ensure(&cache_inode, file->nf_inode_entry);
 	zassert_equal(rc, 0, NULL);
 
@@ -153,7 +153,7 @@ int nffs_test_util_block_count(const char *filename)
 	rc = fs_open(&fs_file, filename);
 	zassert_equal(rc, 0, NULL);
 
-	file = fs_file.nffs_fp;
+	file = fs_file.filep;
 	count = 0;
 	entry = file->nf_inode_entry->nie_last_block_entry;
 	while (entry != NULL) {
@@ -185,14 +185,14 @@ void nffs_test_util_assert_cache_range(const char *filename,
 	struct nffs_cache_inode *cache_inode;
 	struct nffs_file *file;
 	struct fs_file_t fs_file;
-	u32_t cache_start;
-	u32_t cache_end;
+	uint32_t cache_start;
+	uint32_t cache_end;
 	int rc;
 
 	rc = fs_open(&fs_file, filename);
 	zassert_equal(rc, 0, NULL);
 
-	file = fs_file.nffs_fp;
+	file = fs_file.filep;
 	rc = nffs_cache_inode_ensure(&cache_inode, file->nf_inode_entry);
 	zassert_equal(rc, 0, NULL);
 

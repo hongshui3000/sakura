@@ -4,7 +4,7 @@ type: mcu
 arch: arm
 toolchain:
   - zephyr
-  - gccarmemb
+  - gnuarmemb
 supported:
   - ble
   - adc
@@ -12,3 +12,4 @@ supported:
   - i2c
   - spi
   - pwm
+  - watchdog

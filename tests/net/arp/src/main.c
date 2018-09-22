@@ -20,8 +20,9 @@
 #include <net/net_core.h>
 #include <net/net_pkt.h>
 #include <net/net_ip.h>
-#include <net/arp.h>
 #include <ztest.h>
+
+#include "arp.h"
 
 #define NET_LOG_ENABLED 1
 #include "net_private.h"
@@ -309,7 +310,7 @@ NET_DEVICE_INIT(net_arp_test, "net_arp_test",
 		CONFIG_KERNEL_INIT_PRIORITY_DEFAULT,
 		&net_arp_if_api, _ETH_L2_LAYER, _ETH_L2_CTX_TYPE, 127);
 
-void run_tests(void)
+void test_arp(void)
 {
 	k_thread_priority_set(k_current_get(), K_PRIO_COOP(7));
 
@@ -341,6 +342,7 @@ void run_tests(void)
 				      &src,
 				      NET_ADDR_MANUAL,
 				      0);
+	zassert_not_null(ifaddr, "Cannot add address");
 	ifaddr->addr_state = NET_ADDR_PREFERRED;
 
 	/* Application data for testing */
@@ -375,7 +377,7 @@ void run_tests(void)
 
 	memcpy(net_buf_add(frag, len), app_data, len);
 
-	pkt2 = net_arp_prepare(pkt);
+	pkt2 = net_arp_prepare(pkt, &NET_IPV4_HDR(pkt)->dst, NULL);
 
 	/* pkt2 is the ARP packet and pkt is the IPv4 packet and it was
 	 * stored in ARP table.
@@ -464,23 +466,17 @@ void run_tests(void)
 
 	if (!net_ipv4_addr_cmp(&arp_hdr->dst_ipaddr,
 			       &NET_IPV4_HDR(pkt)->dst)) {
-		char out[sizeof("xxx.xxx.xxx.xxx")];
-
-		snprintk(out, sizeof(out), "%s",
-			 net_sprint_ipv4_addr(&arp_hdr->dst_ipaddr));
-		printk("ARP IP dest invalid %s, should be %s", out,
-		       net_sprint_ipv4_addr(&NET_IPV4_HDR(pkt)->dst));
+		printk("ARP IP dest invalid %s, should be %s",
+			net_sprint_ipv4_addr(&arp_hdr->dst_ipaddr),
+			net_sprint_ipv4_addr(&NET_IPV4_HDR(pkt)->dst));
 		zassert_true(0, "exiting");
 	}
 
 	if (!net_ipv4_addr_cmp(&arp_hdr->src_ipaddr,
 			       &NET_IPV4_HDR(pkt)->src)) {
-		char out[sizeof("xxx.xxx.xxx.xxx")];
-
-		snprintk(out, sizeof(out), "%s",
-			 net_sprint_ipv4_addr(&arp_hdr->src_ipaddr));
-		printk("ARP IP src invalid %s, should be %s", out,
-		       net_sprint_ipv4_addr(&NET_IPV4_HDR(pkt)->src));
+		printk("ARP IP src invalid %s, should be %s",
+			net_sprint_ipv4_addr(&arp_hdr->src_ipaddr),
+			net_sprint_ipv4_addr(&NET_IPV4_HDR(pkt)->src));
 		zassert_true(0, "exiting");
 	}
 
@@ -495,7 +491,7 @@ void run_tests(void)
 	/* Then a case where target is not in the same subnet */
 	net_ipaddr_copy(&ipv4->dst, &dst_far);
 
-	pkt2 = net_arp_prepare(pkt);
+	pkt2 = net_arp_prepare(pkt, &NET_IPV4_HDR(pkt)->dst, NULL);
 
 	zassert_not_equal((void *)(pkt2), (void *)(pkt),
 		"ARP cache should not find anything");
@@ -508,12 +504,9 @@ void run_tests(void)
 
 	if (!net_ipv4_addr_cmp(&arp_hdr->dst_ipaddr,
 			       &iface->config.ip.ipv4->gw)) {
-		char out[sizeof("xxx.xxx.xxx.xxx")];
-
-		snprintk(out, sizeof(out), "%s",
-			 net_sprint_ipv4_addr(&arp_hdr->dst_ipaddr));
-		printk("ARP IP dst invalid %s, should be %s\n", out,
-			 net_sprint_ipv4_addr(&iface->config.ip.ipv4->gw));
+		printk("ARP IP dst invalid %s, should be %s\n",
+			net_sprint_ipv4_addr(&arp_hdr->dst_ipaddr),
+			net_sprint_ipv4_addr(&iface->config.ip.ipv4->gw));
 		zassert_true(0, "exiting");
 	}
 
@@ -529,7 +522,7 @@ void run_tests(void)
 	 */
 	net_pkt_ref(pkt);
 
-	pkt2 = net_arp_prepare(pkt);
+	pkt2 = net_arp_prepare(pkt, &NET_IPV4_HDR(pkt)->dst, NULL);
 
 	zassert_not_null(pkt2,
 		"ARP cache is not sending the request again");
@@ -546,7 +539,7 @@ void run_tests(void)
 	 */
 	net_pkt_ref(pkt);
 
-	pkt2 = net_arp_prepare(pkt);
+	pkt2 = net_arp_prepare(pkt, &NET_IPV4_HDR(pkt)->dst, NULL);
 
 	zassert_not_null(pkt2,
 		"ARP cache did not send a req");
@@ -559,19 +552,13 @@ void run_tests(void)
 	/* The arp request packet is now verified, create an arp reply.
 	 * The previous value of pkt is stored in arp table and is not lost.
 	 */
-	pkt = net_pkt_get_reserve_rx(sizeof(struct net_eth_hdr), K_FOREVER);
+	pkt = net_pkt_get_reserve_rx(sizeof(struct net_eth_hdr), K_SECONDS(1));
 
-	zassert_not_null(pkt,
-		"Out of mem RX reply");
+	zassert_not_null(pkt, "Out of mem RX reply");
 
-	printk("%d pkt %p\n", __LINE__, pkt);
+	frag = net_pkt_get_frag(pkt, K_SECONDS(1));
 
-	frag = net_pkt_get_frag(pkt, K_FOREVER);
-
-	zassert_not_null(frag,
-		"Out of mem DATA reply");
-
-	printk("%d frag %p\n", __LINE__, frag);
+	zassert_not_null(frag, "Out of mem DATA reply");
 
 	net_pkt_frag_add(pkt, frag);
 
@@ -662,6 +649,6 @@ void run_tests(void)
 void test_main(void)
 {
 	ztest_test_suite(test_arp_fn,
-		ztest_unit_test(run_tests));
+		ztest_unit_test(test_arp));
 	ztest_run_test_suite(test_arp_fn);
 }

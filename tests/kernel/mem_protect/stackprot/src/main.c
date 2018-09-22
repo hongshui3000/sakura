@@ -6,20 +6,8 @@
  */
 
 
-/**
- * @brief test Stack Protector feature using canary
- *
- * This is the test program to test stack protection using canary.
- *
- * The main thread starts a second thread, which generates a stack check
- * failure.
- * By design, the second thread will not complete its execution and
- * will not set ret to TC_FAIL.
- */
-
-#include <tc_util.h>
-
 #include <zephyr.h>
+#include <ztest.h>
 
 
 #define STACKSIZE       2048
@@ -105,31 +93,34 @@ K_THREAD_STACK_DEFINE(alt_thread_stack_area, STACKSIZE);
 static struct k_thread alt_thread_data;
 
 /**
+ * @brief test Stack Protector feature using canary
  *
+ * @details This is the test program to test stack protection using canary.
+ * The main thread starts a second thread, which generates a stack check
+ * failure.
+ * By design, the second thread will not complete its execution and
+ * will not set ret to TC_FAIL.
  * This is the entry point to the test stack protection feature.
  * It starts the thread that tests stack protection, then prints out
  * a few messages before terminating.
  *
- * @return N/A
+ * @ingroup kernel_memprotect_tests
  */
 
-void main(void)
+void test_stackprot(void)
 {
-	TC_START("Test Stack Protection Canary\n");
-	TC_PRINT("Starts %s\n", __func__);
+	zassert_true(ret == TC_PASS, NULL);
+	print_loop(__func__);
+}
 
+void test_main(void)
+{
 	/* Start thread */
 	k_thread_create(&alt_thread_data, alt_thread_stack_area, STACKSIZE,
 			(k_thread_entry_t)alternate_thread, NULL, NULL, NULL,
 			K_PRIO_PREEMPT(PRIORITY), 0, K_NO_WAIT);
 
-	if (ret == TC_FAIL) {
-		goto errorExit;
-	}
-
-	print_loop(__func__);
-
-errorExit:
-	TC_END_RESULT(ret);
-	TC_END_REPORT(ret);
+	ztest_test_suite(stackprot,
+			 ztest_unit_test(test_stackprot));
+	ztest_run_test_suite(stackprot);
 }

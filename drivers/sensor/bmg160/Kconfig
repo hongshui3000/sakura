@@ -9,7 +9,6 @@
 menuconfig BMG160
 	bool "Bosch BMG160 gyroscope support"
 	depends on I2C
-	default n
 	help
 	  Enable Bosch BMG160 gyroscope support.
 
@@ -59,8 +58,7 @@ choice
 	  Specify the type of triggering to be used by the driver.
 
 config BMG160_TRIGGER_NONE
-	bool
-	prompt "No trigger"
+	bool "No trigger"
 
 config BMG160_TRIGGER_GLOBAL_THREAD
 	bool "Use global thread"

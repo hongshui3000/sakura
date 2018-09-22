@@ -18,6 +18,7 @@
 #include <toolchain.h>
 #include <linker/sections.h>
 #include <syscall_handler.h>
+#include <logging/log.h>
 
 typedef int (*out_func_t)(int c, void *ctx);
 
@@ -305,9 +306,9 @@ void _impl_k_str_out(char *c, size_t n)
 }
 
 #ifdef CONFIG_USERSPACE
-_SYSCALL_HANDLER(k_str_out, c, n)
+Z_SYSCALL_HANDLER(k_str_out, c, n)
 {
-	_SYSCALL_MEMORY_READ(c, n);
+	Z_OOPS(Z_SYSCALL_MEMORY_READ(c, n));
 	_impl_k_str_out((char *)c, n);
 
 	return 0;
@@ -338,7 +339,12 @@ int printk(const char *fmt, ...)
 	va_list ap;
 
 	va_start(ap, fmt);
-	ret = vprintk(fmt, ap);
+
+	if (IS_ENABLED(CONFIG_LOG_PRINTK)) {
+		ret = log_printk(fmt, ap);
+	} else {
+		ret = vprintk(fmt, ap);
+	}
 	va_end(ap);
 
 	return ret;

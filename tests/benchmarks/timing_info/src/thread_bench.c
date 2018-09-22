@@ -42,7 +42,6 @@ k_tid_t producer_tid;
 k_tid_t consumer_tid;
 
 /* To time thread creation*/
-#define STACK_SIZE 500
 K_THREAD_STACK_DEFINE(my_stack_area, STACK_SIZE);
 K_THREAD_STACK_DEFINE(my_stack_area_0, STACK_SIZE);
 struct k_thread my_thread;
@@ -114,9 +113,6 @@ void main_msg_bench(void);
 
 void system_thread_bench(void)
 {
-	u64_t total_intr_time;
-	u64_t total_tick_time;
-
 	/*Thread create*/
 	u64_t thread_create_start_time;
 	u64_t thread_create_end_time;
@@ -144,20 +140,15 @@ void system_thread_bench(void)
 			NULL, NULL, NULL,
 			-1 /*priority*/, 0, 0);
 
+	k_sleep(1);
 	thread_abort_end_time = (__common_var_swap_end_time);
 	__end_swap_time = __common_var_swap_end_time;
 
-
-	u32_t total_swap_cycles = __end_swap_time -
-				     SUBTRACT_CLOCK_CYCLES(__start_swap_time);
+	u32_t total_swap_cycles = __end_swap_time - __start_swap_time;
 
 	/* Interrupt latency*/
-	total_intr_time = CYCLES_TO_NS(__end_intr_time -
-						    __start_intr_time);
-
-	/* tick overhead*/
-	total_tick_time = CYCLES_TO_NS(__end_tick_time -
-						    __start_tick_time);
+	u64_t local_end_intr_time = __end_intr_time;
+	u64_t local_start_intr_time = __start_intr_time;
 
 	/*******************************************************************/
 	/* thread create*/
@@ -175,11 +166,10 @@ void system_thread_bench(void)
 	/* thread Termination*/
 	TIMING_INFO_PRE_READ();
 	thread_cancel_start_time = TIMING_INFO_OS_GET_TIME();
-	s32_t ret_value_thread_cancel  = k_thread_cancel(my_tid);
+	k_thread_abort(my_tid);
 
 	TIMING_INFO_PRE_READ();
 	thread_cancel_end_time = TIMING_INFO_OS_GET_TIME();
-	ARG_UNUSED(ret_value_thread_cancel);
 
 	/* Thread suspend*/
 	k_tid_t sus_res_tid = k_thread_create(&my_thread, my_stack_area,
@@ -219,8 +209,8 @@ void system_thread_bench(void)
 	/*TC_PRINT("Swap Overhead:%d cycles\n", benchmarking_overhead_swap());*/
 
 	/*Interrupt latency */
-	u32_t intr_latency_cycles = SUBTRACT_CLOCK_CYCLES(__end_intr_time) -
-				       SUBTRACT_CLOCK_CYCLES(__start_intr_time);
+	u32_t intr_latency_cycles = SUBTRACT_CLOCK_CYCLES(local_end_intr_time) -
+		SUBTRACT_CLOCK_CYCLES(local_start_intr_time);
 
 	PRINT_STATS("Interrupt latency",
 		(u32_t)(intr_latency_cycles),

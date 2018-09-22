@@ -21,6 +21,8 @@ void test_getaddrinfo_ok(void)
 
 	/* With a local dnsmasq server this request shall return 0. */
 	/* zassert_equal(ret, 0, "Invalid result"); */
+
+	freeaddrinfo(res);
 }
 
 void test_getaddrinfo_no_host(void)
@@ -33,13 +35,17 @@ void test_getaddrinfo_no_host(void)
 	zassert_equal(ret, DNS_EAI_SYSTEM, "Invalid result");
 	zassert_equal(errno, EINVAL, "Invalid errno");
 	zassert_is_null(res, "ai_addr is not NULL");
+
+	freeaddrinfo(res);
 }
 
 void test_main(void)
 {
+	k_thread_system_pool_assign(k_current_get());
+
 	ztest_test_suite(socket_getaddrinfo,
-			 ztest_unit_test(test_getaddrinfo_ok),
-			 ztest_unit_test(test_getaddrinfo_no_host));
+			 ztest_user_unit_test(test_getaddrinfo_ok),
+			 ztest_user_unit_test(test_getaddrinfo_no_host));
 
 	ztest_run_test_suite(socket_getaddrinfo);
 }

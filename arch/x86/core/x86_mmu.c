@@ -7,6 +7,8 @@
 #include <kernel.h>
 #include <mmustructs.h>
 #include <linker/linker-defs.h>
+#include <kernel_internal.h>
+#include <init.h>
 
 /* Common regions for all x86 processors.
  * Peripheral I/O ranges configured at the SOC level
@@ -23,7 +25,10 @@ MMU_BOOT_REGION((u32_t)&_image_rom_start, (u32_t)&_image_rom_size,
 MMU_BOOT_REGION((u32_t)&__app_ram_start, (u32_t)&__app_ram_size,
 		MMU_ENTRY_WRITE | MMU_ENTRY_USER | MMU_ENTRY_EXECUTE_DISABLE);
 #endif
-
+#ifdef CONFIG_APP_SHARED_MEM
+MMU_BOOT_REGION((u32_t)&_app_smem_start, (u32_t)&_app_smem_size,
+		MMU_ENTRY_WRITE | MMU_ENTRY_USER | MMU_ENTRY_EXECUTE_DISABLE);
+#endif
 /* __kernel_ram_size includes all unused memory, which is used for heaps.
  * User threads cannot access this unless granted at runtime. This is done
  * automatically for stacks.
@@ -301,9 +306,33 @@ void _arch_mem_domain_partition_remove(struct k_mem_domain *domain,
 	return;
 }
 
-u8_t _arch_mem_domain_max_partitions_get(void)
+int _arch_mem_domain_max_partitions_get(void)
 {
 	return CONFIG_MAX_DOMAIN_PARTITIONS;
 }
 
+#ifdef CONFIG_NEWLIB_LIBC
+static int newlib_mmu_prepare(struct device *unused)
+{
+	ARG_UNUSED(unused);
+	void *heap_base;
+	size_t heap_size;
+
+	z_newlib_get_heap_bounds(&heap_base, &heap_size);
+
+	/* Set up the newlib heap area as a globally user-writable region.
+	 * We can't do this at build time with MMU_BOOT_REGION() as the _end
+	 * pointer shifts significantly between build phases due to the
+	 * introduction of page tables.
+	 */
+	_x86_mmu_set_flags(heap_base, heap_size,
+			   MMU_ENTRY_PRESENT | MMU_ENTRY_WRITE |
+			   MMU_ENTRY_USER,
+			   MMU_PTE_P_MASK | MMU_PTE_RW_MASK | MMU_PTE_US_MASK);
+
+	return 0;
+}
+
+SYS_INIT(newlib_mmu_prepare, APPLICATION, CONFIG_KERNEL_INIT_PRIORITY_DEFAULT);
+#endif /* CONFIG_NEWLIB_LIBC */
 #endif	/* CONFIG_X86_USERSPACE*/

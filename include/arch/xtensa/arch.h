@@ -19,6 +19,7 @@
 extern "C" {
 #endif
 
+#include <generated_dts_board.h>
 #if !defined(_ASMLANGUAGE) && !defined(__ASSEMBLER__)
 #include "sys_io.h" /* Include from the very same folder of this file */
 #include <zephyr/types.h>
@@ -27,8 +28,6 @@ extern "C" {
 #include <xtensa/config/core.h>
 
 #define STACK_ALIGN 16
-#define OCTET_TO_SIZEOFUNIT(X) (X)
-#define SIZEOFUNIT_TO_OCTET(X) (X)
 
 #define _NANO_ERR_HW_EXCEPTION (0)      /* MPU/Bus/Usage fault */
 #define _NANO_ERR_STACK_CHK_FAIL (2)    /* Stack corruption detected */

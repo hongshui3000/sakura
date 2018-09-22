@@ -135,8 +135,7 @@ SECTION_FUNC(TEXT, _interrupt_enter)
 
 
 #if defined(CONFIG_INT_LATENCY_BENCHMARK) || \
-		defined(CONFIG_KERNEL_EVENT_LOGGER_INTERRUPT) || \
-		defined(CONFIG_KERNEL_EVENT_LOGGER_SLEEP)
+		defined(CONFIG_TRACING)
 
 	/* Save these as we are using to keep track of isr and isr_param */
 	pushl	%eax
@@ -153,13 +152,7 @@ SECTION_FUNC(TEXT, _interrupt_enter)
 	call	_int_latency_start
 #endif
 
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_INTERRUPT
-	call	_sys_k_event_logger_interrupt
-#endif
-
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_SLEEP
-	call	_sys_k_event_logger_exit_sleep
-#endif
+	call	z_sys_trace_isr_enter
 
 	popl	%edx
 	popl	%eax
@@ -230,7 +223,7 @@ alreadyOnIntStack:
 	sti			/* re-enable interrupts */
 #endif
 	/* Now call the interrupt handler */
-	call	*%edx
+	INDIRECT_CALL(%edx)
 #ifndef CONFIG_X86_IAMCU
 	/* Discard ISR argument */
 	addl	$0x4, %esp
@@ -254,14 +247,6 @@ alreadyOnIntStack:
 
 #ifdef CONFIG_PREEMPT_ENABLED
 	movl	_kernel_offset_to_current(%ecx), %edx
-
-	/*
-	 * Non-preemptible thread ? Do not schedule (see explanation of
-	 * preempt field in kernel_struct.h).
-	 */
-	cmpw	$_NON_PREEMPT_THRESHOLD, _thread_offset_to_preempt(%edx)
-	jae	noReschedule
-
 
 	/* reschedule only if the scheduler says that we must do so */
 	cmpl	%edx, _kernel_offset_to_ready_q_cache(%ecx)

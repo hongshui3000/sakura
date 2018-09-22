@@ -4,30 +4,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-/**
- * @addtogroup t_queue_api
- * @{
- * @defgroup t_queue_loop test_queue_loop
- * @brief TestPurpose: verify zephyr queue continuous read write
- *                     in loop
- * @details
- * - Test Steps
- *   -# queue append/prepend/find_and_remove from main thread
- *   -# queue read from isr
- *   -# queue append/prepend/find_and_remove from isr
- *   -# queue get from spawn thread
- *   -# loop above steps for LOOPs times
- * - Expected Results
- *   -# queue data pass correctly and stably across contexts
- * - API coverage
- *   -# k_queue_init
- *   -# k_queue_append
- *   -# k_queue_prepend
- *   -# k_queue_remove
- *   -# k_queue_get
- * @}
- */
-
 #include "test_queue.h"
 
 #define STACK_SIZE (512 + CONFIG_TEST_EXTRA_STACKSIZE)
@@ -135,6 +111,12 @@ static void tqueue_read_write(struct k_queue *pqueue)
 }
 
 /*test cases*/
+/**
+ * @brief Test queue operations in loop
+ * @ingroup kernel_queue_tests
+ * @see k_queue_append(), k_queue_get(),
+ * k_queue_init(), k_queue_remove()
+ */
 void test_queue_loop(void)
 {
 	k_queue_init(&queue);

@@ -10,8 +10,19 @@
  * @brief Zephyr testing suite
  */
 
+/**
+ * @brief Zephyr Tests
+ * @defgroup all_tests Zephyr Tests
+ * @{
+ * @}
+ */
+
 #ifndef __ZTEST_H__
 #define __ZTEST_H__
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 /**
  * @defgroup ztest Zephyr testing suite
@@ -48,5 +59,11 @@
 #include <ztest_test.h>
 #include <tc_util.h>
 #include <logging/sys_log.h>
+
+void test_main(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __ZTEST_H__ */

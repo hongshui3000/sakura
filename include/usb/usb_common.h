@@ -65,10 +65,12 @@
 #define USB_ENDPOINT_DESC		0x05
 #define USB_DEVICE_QUAL_DESC		0x06
 #define USB_INTERFACE_ASSOC_DESC	0x0B
+#define USB_DEVICE_CAPABILITY_DESC	0x10
 #define USB_HID_DESC			0x21
 #define USB_HID_REPORT_DESC		0x22
 #define USB_DFU_FUNCTIONAL_DESC		0x21
 #define USB_ASSOCIATION_DESC		0x0B
+#define USB_BINARY_OBJECT_STORE_DESC	0x0F
 
 /* Useful define */
 #define USB_1_1				0x0110
@@ -100,7 +102,7 @@
 #define WIRELESS_DEVICE_CLASS		0xE0
 #define MISC_CLASS			0xEF
 #define CUSTOM_CLASS			0xFF
-#define DFU_CLASS			0xFE
+#define DFU_DEVICE_CLASS		0xFE
 
 /* Sub-classes */
 #define CDC_NCM_SUBCLASS		0x0d

@@ -193,11 +193,8 @@ static int upipe_cca(struct device *dev)
 
 static int upipe_set_channel(struct device *dev, u16_t channel)
 {
-	struct upipe_context *upipe = dev->driver_data;
-
-	if (upipe->stopped) {
-		return -EIO;
-	}
+	ARG_UNUSED(dev);
+	ARG_UNUSED(channel);
 
 	return 0;
 }
@@ -235,11 +232,16 @@ static int upipe_set_ieee_addr(struct device *dev, const u8_t *ieee_addr)
 	return 0;
 }
 
-static int upipe_set_filter(struct device *dev,
-			    enum ieee802154_filter_type type,
-			    const struct ieee802154_filter *filter)
+static int upipe_filter(struct device *dev,
+			bool set,
+			enum ieee802154_filter_type type,
+			const struct ieee802154_filter *filter)
 {
 	SYS_LOG_DBG("Applying filter %u", type);
+
+	if (!set) {
+		return -ENOTSUP;
+	}
 
 	if (type == IEEE802154_FILTER_TYPE_IEEE_ADDR) {
 		return upipe_set_ieee_addr(dev, filter->ieee_addr);
@@ -249,16 +251,13 @@ static int upipe_set_filter(struct device *dev,
 		return upipe_set_pan_id(dev, filter->pan_id);
 	}
 
-	return -EINVAL;
+	return -ENOTSUP;
 }
 
 static int upipe_set_txpower(struct device *dev, s16_t dbm)
 {
-	struct upipe_context *upipe = dev->driver_data;
-
-	if (upipe->stopped) {
-		return -EIO;
-	}
+	ARG_UNUSED(dev);
+	ARG_UNUSED(dbm);
 
 	return 0;
 }
@@ -377,7 +376,7 @@ static struct ieee802154_radio_api upipe_radio_api = {
 	.get_capabilities	= upipe_get_capabilities,
 	.cca			= upipe_cca,
 	.set_channel		= upipe_set_channel,
-	.set_filter		= upipe_set_filter,
+	.filter			= upipe_filter,
 	.set_txpower		= upipe_set_txpower,
 	.tx			= upipe_tx,
 	.start			= upipe_start,

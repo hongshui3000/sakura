@@ -19,10 +19,24 @@
 	};
 };
 
+&gpiote {
+	status ="ok";
+};
+
+&gpio0 {
+	status ="ok";
+};
+
 &uart0 {
 	compatible = "nordic,nrf-uart";
 	current-speed = <115200>;
 	status = "ok";
+};
+
+&i2c0 {
+	status = "ok";
+	sda-pin = <28>;
+	scl-pin = <2>;
 };
 
 &flash0 {
@@ -52,10 +66,11 @@
 			reg = <0x00070000 0xD000>;
 		};
 
-		/*
-		 * The flash starting at 0x0007d000 and ending at
-		 * 0x0007ffff (sectors 125-127) is reserved for use
-		 * by the application.
-		 */
+#if defined(CONFIG_FS_FLASH_STORAGE_PARTITION)
+		storage_partition: partition@7D000 {
+			label = "storage";
+			reg = <0x0007D000 0x00004000>;
+		};
+#endif
 	};
 };

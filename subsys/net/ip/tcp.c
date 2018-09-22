@@ -26,6 +26,7 @@
 #include <net/net_pkt.h>
 #include <net/net_ip.h>
 #include <net/net_context.h>
+#include <net/tcp.h>
 #include <misc/byteorder.h>
 
 #include "connection.h"
@@ -33,10 +34,12 @@
 
 #include "ipv6.h"
 #include "ipv4.h"
-#include "tcp.h"
+#include "tcp_internal.h"
 #include "net_stats.h"
 
-#define ALLOC_TIMEOUT 500
+#define ALLOC_TIMEOUT K_MSEC(500)
+
+static int net_tcp_queue_pkt(struct net_context *context, struct net_pkt *pkt);
 
 /*
  * Each TCP connection needs to be tracked by net_context, so
@@ -47,28 +50,18 @@ static struct net_tcp tcp_context[NET_MAX_TCP_CONTEXT];
 
 static struct tcp_backlog_entry {
 	struct net_tcp *tcp;
-	struct sockaddr remote;
 	u32_t send_seq;
 	u32_t send_ack;
-	u16_t send_mss;
 	struct k_delayed_work ack_timer;
+	struct sockaddr remote;
+	u16_t send_mss;
 } tcp_backlog[CONFIG_NET_TCP_BACKLOG_SIZE];
-
-/* 2MSL timeout, where "MSL" is arbitrarily 2 minutes in the RFC */
-#if defined(CONFIG_NET_TCP_2MSL_TIME)
-#define TIME_WAIT_MS K_SECONDS(CONFIG_NET_TCP_2MSL_TIME)
-#else
-#define TIME_WAIT_MS K_SECONDS(2 * 2 * 60)
-#endif
 
 #if defined(CONFIG_NET_TCP_ACK_TIMEOUT)
 #define ACK_TIMEOUT CONFIG_NET_TCP_ACK_TIMEOUT
 #else
 #define ACK_TIMEOUT K_SECONDS(1)
 #endif
-
-/* TODO: It should be 2 * MSL (Maximum segment lifetime) */
-#define TIMEWAIT_TIMEOUT MSEC(250)
 
 #define FIN_TIMEOUT K_SECONDS(1)
 
@@ -214,7 +207,7 @@ static void tcp_retry_expired(struct k_work *work)
 	struct net_tcp *tcp = CONTAINER_OF(work, struct net_tcp, retry_timer);
 	struct net_pkt *pkt;
 
-	/* Double the retry period for exponential backoff and resent
+	/* Double the retry period for exponential backoff and resend
 	 * the first (only the first!) unack'd packet.
 	 */
 	if (!sys_slist_is_empty(&tcp->sent_list)) {
@@ -246,10 +239,11 @@ static void tcp_retry_expired(struct k_work *work)
 				tcp->retry_timeout_shift, tcp, pkt);
 			if (IS_ENABLED(CONFIG_NET_STATISTICS_TCP) &&
 			    !is_6lo_technology(pkt)) {
-				net_stats_update_tcp_seg_rexmit();
+				net_stats_update_tcp_seg_rexmit(
+							net_pkt_iface(pkt));
 			}
 		}
-	} else if (IS_ENABLED(CONFIG_NET_TCP_TIME_WAIT)) {
+	} else if (CONFIG_NET_TCP_TIME_WAIT_DELAY != 0) {
 		if (tcp->fin_sent && tcp->fin_rcvd) {
 			NET_DBG("[%p] Closing connection (context %p)",
 				tcp, tcp->context);
@@ -317,7 +311,7 @@ int net_tcp_release(struct net_tcp *tcp)
 {
 	struct net_pkt *pkt;
 	struct net_pkt *tmp;
-	int key;
+	unsigned int key;
 
 	if (!PART_OF_ARRAY(tcp_context, tcp)) {
 		return -EINVAL;
@@ -369,12 +363,13 @@ static int finalize_segment(struct net_context *context, struct net_pkt *pkt)
 {
 #if defined(CONFIG_NET_IPV4)
 	if (net_pkt_family(pkt) == AF_INET) {
-		return net_ipv4_finalize(context, pkt);
+		net_ipv4_finalize(pkt, net_context_get_ip_proto(context));
 	} else
 #endif
 #if defined(CONFIG_NET_IPV6)
 	if (net_pkt_family(pkt) == AF_INET6) {
-		return net_ipv6_finalize(context, pkt);
+		return net_ipv6_finalize(pkt,
+					 net_context_get_ip_proto(context));
 	}
 #endif
 	{
@@ -391,6 +386,7 @@ static int prepare_segment(struct net_tcp *tcp,
 	struct net_buf *header, *tail = NULL;
 	struct net_context *context = tcp->context;
 	struct net_tcp_hdr *tcp_hdr;
+	struct net_pkt *alloc_pkt;
 	u16_t dst_port, src_port;
 	bool pkt_allocated;
 	u8_t optlen = 0;
@@ -418,9 +414,14 @@ static int prepare_segment(struct net_tcp *tcp,
 
 #if defined(CONFIG_NET_IPV4)
 	if (net_pkt_family(pkt) == AF_INET) {
-		net_ipv4_create(context, pkt,
-				net_sin_ptr(segment->src_addr)->sin_addr,
-				&(net_sin(segment->dst_addr)->sin_addr));
+		alloc_pkt = net_context_create_ipv4(context, pkt,
+				      net_sin_ptr(segment->src_addr)->sin_addr,
+				      &(net_sin(segment->dst_addr)->sin_addr));
+		if (!alloc_pkt) {
+			status = -ENOMEM;
+			goto fail;
+		}
+
 		dst_port = net_sin(segment->dst_addr)->sin_port;
 		src_port = ((struct sockaddr_in_ptr *)&context->local)->
 								sin_port;
@@ -429,9 +430,14 @@ static int prepare_segment(struct net_tcp *tcp,
 #endif
 #if defined(CONFIG_NET_IPV6)
 	if (net_pkt_family(pkt) == AF_INET6) {
-		net_ipv6_create(tcp->context, pkt,
-				net_sin6_ptr(segment->src_addr)->sin6_addr,
-				&(net_sin6(segment->dst_addr)->sin6_addr));
+		alloc_pkt = net_context_create_ipv6(tcp->context, pkt,
+				    net_sin6_ptr(segment->src_addr)->sin6_addr,
+				    &(net_sin6(segment->dst_addr)->sin6_addr));
+		if (!alloc_pkt) {
+			status = -ENOMEM;
+			goto fail;
+		}
+
 		dst_port = net_sin6(segment->dst_addr)->sin6_port;
 		src_port = ((struct sockaddr_in6_ptr *)&context->local)->
 								sin6_port;
@@ -442,25 +448,16 @@ static int prepare_segment(struct net_tcp *tcp,
 		NET_DBG("[%p] Protocol family %d not supported", tcp,
 			net_pkt_family(pkt));
 
-		if (pkt_allocated) {
-			net_pkt_unref(pkt);
-		} else {
-			pkt->frags = tail;
-		}
-
-		return -EINVAL;
+		status = -EINVAL;
+		goto fail;
 	}
 
 	header = net_pkt_get_data(context, ALLOC_TIMEOUT);
 	if (!header) {
 		NET_WARN("[%p] Unable to alloc TCP header", tcp);
-		if (pkt_allocated) {
-			net_pkt_unref(pkt);
-		} else {
-			pkt->frags = tail;
-		}
 
-		return -ENOMEM;
+		status = -ENOMEM;
+		goto fail;
 	}
 
 	net_pkt_frag_add(pkt, header);
@@ -501,6 +498,15 @@ static int prepare_segment(struct net_tcp *tcp,
 	*out_pkt = pkt;
 
 	return 0;
+
+fail:
+	if (pkt_allocated) {
+		net_pkt_unref(pkt);
+	} else {
+		pkt->frags = tail;
+	}
+
+	return status;
 }
 
 u32_t net_tcp_get_recv_wnd(const struct net_tcp *tcp)
@@ -547,7 +553,6 @@ int net_tcp_prepare_segment(struct net_tcp *tcp, u8_t flags,
 	}
 
 	if (flags & NET_TCP_FIN) {
-		tcp->flags |= NET_TCP_FINAL_SENT;
 		/* RFC793 says about ACK bit: "Once a connection is
 		 * established this is always sent." as teardown
 		 * happens when connection is established, it must
@@ -768,7 +773,7 @@ int net_tcp_prepare_reset(struct net_tcp *tcp,
 
 const char *net_tcp_state_str(enum net_tcp_state state)
 {
-#if defined(CONFIG_NET_DEBUG_TCP)
+#if defined(CONFIG_NET_DEBUG_TCP) || defined(CONFIG_NET_SHELL)
 	switch (state) {
 	case NET_TCP_CLOSED:
 		return "CLOSED";
@@ -831,8 +836,16 @@ int net_tcp_queue_data(struct net_context *context, struct net_pkt *pkt)
 
 	context->tcp->send_seq += data_len;
 
-	net_stats_update_tcp_sent(data_len);
+	net_stats_update_tcp_sent(net_pkt_iface(pkt), data_len);
 
+	return net_tcp_queue_pkt(context, pkt);
+}
+
+/* This function is the sole point of *adding* packets to tcp->sent_list,
+ * and should remain such.
+ */
+static int net_tcp_queue_pkt(struct net_context *context, struct net_pkt *pkt)
+{
 	sys_slist_append(&context->tcp->sent_list, &pkt->sent_list);
 
 	/* We need to restart retry_timer if it is stopped. */
@@ -929,7 +942,8 @@ int net_tcp_send_pkt(struct net_pkt *pkt)
 			if (ret < 0) {
 				net_pkt_unref(new_pkt);
 			} else {
-				net_stats_update_tcp_seg_rexmit();
+				net_stats_update_tcp_seg_rexmit(
+							net_pkt_iface(pkt));
 			}
 
 			return ret;
@@ -945,14 +959,14 @@ static void restart_timer(struct net_tcp *tcp)
 		tcp->flags |= NET_TCP_RETRYING;
 		tcp->retry_timeout_shift = 0;
 		k_delayed_work_submit(&tcp->retry_timer, retry_timeout(tcp));
-	} else if (IS_ENABLED(CONFIG_NET_TCP_TIME_WAIT)) {
-		if (tcp->fin_sent && tcp->fin_rcvd) {
-			/* We know sent_list is empty, which means if
-			 * fin_sent is true it must have been ACKd
-			 */
-			k_delayed_work_submit(&tcp->retry_timer, TIME_WAIT_MS);
-			net_context_ref(tcp->context);
-		}
+	} else if (CONFIG_NET_TCP_TIME_WAIT_DELAY != 0 &&
+			(tcp->fin_sent && tcp->fin_rcvd)) {
+		/* We know sent_list is empty, which means if
+		 * fin_sent is true it must have been ACKd
+		 */
+		k_delayed_work_submit(&tcp->retry_timer,
+				      CONFIG_NET_TCP_TIME_WAIT_DELAY);
+		net_context_ref(tcp->context);
 	} else {
 		k_delayed_work_cancel(&tcp->retry_timer);
 		tcp->flags &= ~NET_TCP_RETRYING;
@@ -1011,12 +1025,11 @@ bool net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 	sys_slist_t *list = &ctx->tcp->sent_list;
 	sys_snode_t *head;
 	struct net_pkt *pkt;
-	u32_t seq;
 	bool valid_ack = false;
 
 	if (net_tcp_seq_greater(ack, ctx->tcp->send_seq)) {
 		NET_ERR("ctx %p: ACK for unsent data", ctx);
-		net_stats_update_tcp_seg_ackerr();
+		net_stats_update_tcp_seg_ackerr(net_context_get_iface(ctx));
 		/* RFC 793 doesn't say that invalid ack sequence is an error
 		 * in the general case, but we implement tighter checking,
 		 * and consider entire packet invalid.
@@ -1026,6 +1039,8 @@ bool net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 
 	while (!sys_slist_is_empty(list)) {
 		struct net_tcp_hdr hdr, *tcp_hdr;
+		u32_t last_seq;
+		u32_t seq_len;
 
 		head = sys_slist_peek_head(list);
 		pkt = CONTAINER_OF(head, struct net_pkt, sent_list);
@@ -1041,9 +1056,26 @@ bool net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 			continue;
 		}
 
-		seq = sys_get_be32(tcp_hdr->seq) + net_pkt_appdatalen(pkt) - 1;
+		seq_len = net_pkt_appdatalen(pkt);
 
-		if (!net_tcp_seq_greater(ack, seq)) {
+		/* Each of SYN and FIN flags are counted
+		 * as one sequence number.
+		 */
+		if (tcp_hdr->flags & NET_TCP_SYN) {
+			seq_len += 1;
+		}
+		if (tcp_hdr->flags & NET_TCP_FIN) {
+			seq_len += 1;
+		}
+
+		/* Last sequence number in this packet. */
+		last_seq = sys_get_be32(tcp_hdr->seq) + seq_len - 1;
+
+		/* Ack number should be strictly greater to acknowleged numbers
+		 * below it. For example, ack no. 10 acknowledges all numbers up
+		 * to and including 9.
+		 */
+		if (!net_tcp_seq_greater(ack, last_seq)) {
 			break;
 		}
 
@@ -1062,13 +1094,13 @@ bool net_tcp_ack_received(struct net_context *ctx, u32_t ack)
 		valid_ack = true;
 	}
 
-	/* Restart the timer on a valid inbound ACK.  This isn't quite the
-	 * same behavior as per-packet retry timers, but is close in practice
-	 * (it starts retries one timer period after the connection
+	/* Restart the timer (if needed) on a valid inbound ACK.  This isn't
+	 * quite the same behavior as per-packet retry timers, but is close in
+	 * practice (it starts retries one timer period after the connection
 	 * "got stuck") and avoids the need to track per-packet timers or
 	 * sent times.
 	 */
-	if (valid_ack && net_tcp_get_state(tcp) == NET_TCP_ESTABLISHED) {
+	if (valid_ack) {
 		restart_timer(ctx->tcp);
 	}
 
@@ -1458,6 +1490,8 @@ static void queue_fin(struct net_context *ctx)
 		return;
 	}
 
+	net_tcp_queue_pkt(ctx, pkt);
+
 	ret = net_tcp_send_pkt(pkt);
 	if (ret < 0) {
 		net_pkt_unref(pkt);
@@ -1728,7 +1762,7 @@ static void handle_timewait_timeout(struct k_work *work)
 	struct net_tcp *tcp = CONTAINER_OF(work, struct net_tcp,
 					   timewait_timer);
 
-	NET_DBG("Timewait expired in %dms", TIMEWAIT_TIMEOUT);
+	NET_DBG("Timewait expired in %dms", CONFIG_NET_TCP_TIME_WAIT_DELAY);
 
 	if (net_tcp_get_state(tcp) == NET_TCP_TIME_WAIT) {
 		net_tcp_change_state(tcp, NET_TCP_CLOSED);
@@ -1836,12 +1870,20 @@ static inline int send_syn_segment(struct net_context *context,
 {
 	struct net_pkt *pkt = NULL;
 	int ret;
+	u8_t options[NET_TCP_MAX_OPT_SIZE];
+	u8_t optionlen = 0;
 
-	ret = net_tcp_prepare_segment(context->tcp, flags, NULL, 0,
+	if (flags == NET_TCP_SYN) {
+		net_tcp_set_syn_opt(context->tcp, options, &optionlen);
+	}
+
+	ret = net_tcp_prepare_segment(context->tcp, flags, options, optionlen,
 				      local, remote, &pkt);
 	if (ret) {
 		return ret;
 	}
+
+	print_send_info(pkt, msg);
 
 	ret = net_send_data(pkt);
 	if (ret < 0) {
@@ -1850,8 +1892,6 @@ static inline int send_syn_segment(struct net_context *context,
 	}
 
 	context->tcp->send_seq++;
-
-	print_send_info(pkt, msg);
 
 	return ret;
 }
@@ -1925,6 +1965,10 @@ static int send_reset(struct net_context *context,
 
 /* This is called when we receive data after the connection has been
  * established. The core TCP logic is located here.
+ *
+ * Prototype:
+ * enum net_verdict tcp_established(struct net_conn *conn, struct net_pkt *pkt,
+ *                                  void *user_data)
  */
 NET_CONN_CB(tcp_established)
 {
@@ -1960,6 +2004,7 @@ NET_CONN_CB(tcp_established)
 		/* RFC793 specifies that "highest" (i.e. current from our PoV)
 		 * ack # value can/should be sent, so we just force resend.
 		 */
+resend_ack:
 		send_ack(context, &conn->remote_addr, true);
 		return NET_DROP;
 	}
@@ -1980,11 +2025,11 @@ NET_CONN_CB(tcp_established)
 	if (tcp_flags & NET_TCP_RST) {
 		/* We only accept RST packet that has valid seq field. */
 		if (!net_tcp_validate_seq(context->tcp, pkt)) {
-			net_stats_update_tcp_seg_rsterr();
+			net_stats_update_tcp_seg_rsterr(net_pkt_iface(pkt));
 			return NET_DROP;
 		}
 
-		net_stats_update_tcp_seg_rst();
+		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 
 		net_tcp_print_recv_info("RST", pkt, tcp_hdr->src_port);
 
@@ -2011,8 +2056,6 @@ NET_CONN_CB(tcp_established)
 
 		if (net_tcp_get_state(context->tcp)
 			   == NET_TCP_FIN_WAIT_1) {
-			/* Received FIN on FIN_WAIT1, so cancel the timer */
-			k_delayed_work_cancel(&context->tcp->fin_timer);
 			/* Active close: step to FIN_WAIT_2 */
 			net_tcp_change_state(context->tcp, NET_TCP_FIN_WAIT_2);
 		} else if (net_tcp_get_state(context->tcp)
@@ -2039,6 +2082,8 @@ NET_CONN_CB(tcp_established)
 					      ACK_TIMEOUT);
 		} else if (net_tcp_get_state(context->tcp)
 			   == NET_TCP_FIN_WAIT_2) {
+			/* Received FIN on FIN_WAIT_2, so cancel the timer */
+			k_delayed_work_cancel(&context->tcp->fin_timer);
 			/* Active close: step to TIME_WAIT */
 			net_tcp_change_state(context->tcp, NET_TCP_TIME_WAIT);
 		}
@@ -2046,10 +2091,22 @@ NET_CONN_CB(tcp_established)
 		context->tcp->fin_rcvd = 1;
 	}
 
-	net_context_set_appdata_values(pkt, IPPROTO_TCP);
+	net_pkt_set_appdata_values(pkt, IPPROTO_TCP);
 
 	data_len = net_pkt_appdatalen(pkt);
 	if (data_len > net_tcp_get_recv_wnd(context->tcp)) {
+		/* In case we have zero window, we should still accept
+		 * Zero Window Probes from peer, which per convention
+		 * come with len=1. Note that normally we need to check
+		 * for net_tcp_get_recv_wnd(context->tcp) == 0, but
+		 * given the if above, we know that if data_len == 1,
+		 * then net_tcp_get_recv_wnd(context->tcp) can be only 0
+		 * here.
+		 */
+		if (data_len == 1) {
+			goto resend_ack;
+		}
+
 		NET_ERR("Context %p: overflow of recv window (%d vs %d), "
 			"pkt dropped",
 			context, net_tcp_get_recv_wnd(context->tcp), data_len);
@@ -2077,7 +2134,7 @@ NET_CONN_CB(tcp_established)
 clean_up:
 	if (net_tcp_get_state(context->tcp) == NET_TCP_TIME_WAIT) {
 		k_delayed_work_submit(&context->tcp->timewait_timer,
-				      TIMEWAIT_TIMEOUT);
+				      CONFIG_NET_TCP_TIME_WAIT_DELAY);
 	}
 
 	if (net_tcp_get_state(context->tcp) == NET_TCP_CLOSED) {
@@ -2093,6 +2150,12 @@ clean_up:
 }
 
 
+/*
+ * Prototype:
+ * enum net_verdict tcp_synack_received(struct net_conn *conn,
+ *                                      struct net_pkt *pkt,
+ *                                      void *user_data)
+ */
 NET_CONN_CB(tcp_synack_received)
 {
 	struct net_context *context = (struct net_context *)user_data;
@@ -2123,11 +2186,11 @@ NET_CONN_CB(tcp_synack_received)
 	if (NET_TCP_FLAGS(tcp_hdr) & NET_TCP_RST) {
 		/* We only accept RST packet that has valid seq field. */
 		if (!net_tcp_validate_seq(context->tcp, pkt)) {
-			net_stats_update_tcp_seg_rsterr();
+			net_stats_update_tcp_seg_rsterr(net_pkt_iface(pkt));
 			return NET_DROP;
 		}
 
-		net_stats_update_tcp_seg_rst();
+		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 
 		if (context->connect_cb) {
 			context->connect_cb(context, -ECONNREFUSED,
@@ -2242,6 +2305,10 @@ static inline void copy_pool_vars(struct net_context *new_context,
  * a packet. We need to check if we are receiving proper msg (SYN) here.
  * The ACK could also be received, in which case we have an established
  * connection.
+ *
+ * Prototype:
+ * enum net_verdict tcp_syn_rcvd(struct net_conn *conn, struct net_pkt *pkt,
+ *                               void *user_data)
  */
 NET_CONN_CB(tcp_syn_rcvd)
 {
@@ -2342,14 +2409,14 @@ NET_CONN_CB(tcp_syn_rcvd)
 	 * See RFC 793 chapter 3.4 "Reset Processing" and RFC 793, page 65
 	 * for more details.
 	 */
-	if (NET_TCP_FLAGS(tcp_hdr) == NET_TCP_RST) {
+	if (NET_TCP_FLAGS(tcp_hdr) & NET_TCP_RST) {
 
 		if (tcp_backlog_rst(pkt) < 0) {
-			net_stats_update_tcp_seg_rsterr();
+			net_stats_update_tcp_seg_rsterr(net_pkt_iface(pkt));
 			return NET_DROP;
 		}
 
-		net_stats_update_tcp_seg_rst();
+		net_stats_update_tcp_seg_rst(net_pkt_iface(pkt));
 
 		net_tcp_print_recv_info("RST", pkt, tcp_hdr->src_port);
 
@@ -2455,7 +2522,7 @@ NET_CONN_CB(tcp_syn_rcvd)
 	return NET_DROP;
 
 conndrop:
-	net_stats_update_tcp_seg_conndrop();
+	net_stats_update_tcp_seg_conndrop(net_pkt_iface(pkt));
 
 reset:
 	send_reset(tcp->context, &local_addr, &remote_addr);

@@ -18,10 +18,14 @@ _ASM_FILE_PROLOGUE
 
 GTEXT(_arm_userspace_enter)
 GTEXT(_arm_do_syscall)
+GTEXT(z_arch_user_string_nlen)
+GTEXT(z_arch_user_string_nlen_fault_start)
+GTEXT(z_arch_user_string_nlen_fault_end)
+GTEXT(z_arch_user_string_nlen_fixup)
 GDATA(_kernel)
 
 /* Imports */
-GTEXT(_k_syscall_table)
+GDATA(_k_syscall_table)
 
 /**
  *
@@ -89,10 +93,24 @@ SECTION_FUNC(TEXT,_arm_userspace_enter)
     /* restore r0 */
     mov r0, lr
 
+#ifdef CONFIG_EXECUTION_BENCHMARKING
+    stm sp!,{r0-r3} /* Save regs r0 to r4 on stack */
+    push {lr}
+    bl read_timer_end_of_userspace_enter
+    pop {lr}
+    ldm sp!,{r0-r3} /* Load back regs ro to r4 */
+#endif /* CONFIG_EXECUTION_BENCHMARKING */
+
     /* change processor mode to unprivileged */
     mrs ip, CONTROL
     orrs ip, ip, #1
     msr CONTROL, ip
+
+    /* ISB is not strictly necessary here (stack pointer is not being
+     * touched), but it's recommended to avoid executing pre-fetched
+     * instructions with the previous privilege.
+     */
+    isb
 
     /* jump to _thread_entry entry */
     ldr ip, =_thread_entry
@@ -112,71 +130,121 @@ SECTION_FUNC(TEXT,_arm_userspace_enter)
  */
 SECTION_FUNC(TEXT, _arm_do_syscall)
     /*
-     * r0-r3 are values from pre-SVC from stack frame stored during SVC
-     * 16 bytes of storage reside on the stack:
-     * arg5, arg6, call_id, and LR from SVC frame
+     * r0-r5 contain arguments
+     * r6 contains call_id
+     * r8 contains original LR
      */
-    push {r4,r5,r6,lr}
-
-    ldr ip, =_k_syscall_table
-    ldr r4, [sp, #24]	/* load call_id from stack */
-    lsl r4, #2
-    add ip, r4
-    ldr ip, [ip]	/* load table address */
-    ldr r5, =_SYSCALL_BAD
-    lsl r5, #2		/* shift to match the shift we did on the call_id */
-    cmp r4, r5
+    ldr ip, =K_SYSCALL_BAD
+    cmp r6, ip
     bne valid_syscall
 
     /* BAD SYSCALL path */
     /* fixup stack frame on unprivileged stack, adding ssf */
-    /* pop registers and lr as this is a one way jump */
-    mov r4, sp
-    str r4, [sp, #24]
-    pop {r4,r5,r6,lr}
+    mov ip, sp
+    push {r4,r5,ip,lr}
     b dispatch_syscall
 
 valid_syscall:
     /* setup priviliged stack */
-    ldr r4, =_kernel
-    ldr r4, [r4, #_kernel_offset_to_current]
-    ldr r5, [r4, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
+    push {r6}
+    ldr r6, =_kernel
+    ldr r6, [r6, #_kernel_offset_to_current]
+    ldr ip, [r6, #_thread_offset_to_priv_stack_start]    /* priv stack ptr */
     ldr r6, =CONFIG_PRIVILEGED_STACK_SIZE
-    add r5, r6
-
-    /* setup privileged stack frame */
-    /* 16 bytes: arg5, arg6, ssf, 4 bytes padding */
-    sub r5, #16
-    ldr r6, [sp, #16]
-    str r6, [r5, #0]
-    ldr r6, [sp, #20]
-    str r6, [r5, #4]
-    mov r6, sp
-    str r6, [r5, #8]	/* store ssf of unprivileged stack */
-    ldr r6, =0
-    str r6, [r5, #12]	/* store zeroed padding */
+    add ip, r6
+    pop {r6}
+    subs ip, #8
+    str sp, [ip, #0]
+    str lr, [ip, #4]
 
     /* switch to privileged stack */
-    msr PSP, r5
+    msr PSP, ip
+
+    /* push args to complete stack frame */
+    push {r4,r5}
+
 dispatch_syscall:
+    ldr ip, =_k_syscall_table
+    lsl r6, #2
+    add ip, r6
+    ldr ip, [ip]	/* load table address */
     /* execute function from dispatch table */
     blx ip
+
+    /* restore LR */
+    ldr lr, [sp,#12]
 
     /* set stack back to unprivileged stack */
     ldr ip, [sp,#8]
     msr PSP, ip
-
-    pop {r4,r5,r6,lr}
 
     /* drop privileges by setting bit 0 in CONTROL */
     mrs ip, CONTROL
     orrs ip, ip, #1
     msr CONTROL, ip
 
+    /* ISB is not strictly necessary here (stack pointer is not being
+     * touched), but it's recommended to avoid executing pre-fetched
+     * instructions with the previous privilege.
+     */
+    isb
+
+    /* Zero out volatile (caller-saved) registers so as to not leak state from
+     * kernel mode. The C calling convention for the syscall handler will
+     * restore the others to original values.
+     */
+    mov r1, #0
+    mov r2, #0
+    mov r3, #0
+
     /*
      * return back to original function that called SVC, add 1 to force thumb
      * mode
      */
-    ldr ip, [sp, #12]
+    mov ip, r8
     orrs ip, ip, #1
     bx ip
+
+
+/*
+ * size_t z_arch_user_string_nlen(const char *s, size_t maxsize, int *err_arg)
+ */
+SECTION_FUNC(TEXT, z_arch_user_string_nlen)
+    push {r0, r1, r2, r4, r5, lr}
+
+    /* sp+4 is error value, init to -1 */
+    mov.w r3, #-1
+    str	r3, [sp, #4]
+
+    /* Perform string length calculation */
+    movs r3, #0		/* r3 is the counter */
+
+strlen_loop:
+z_arch_user_string_nlen_fault_start:
+    /* r0 contains the string. r5 = *(r0 + r3]). This could fault. */
+    ldrb r5, [r0, r3]
+
+z_arch_user_string_nlen_fault_end:
+    cbz	r5, strlen_done
+    cmp	r3, r1
+    beq.n strlen_done
+
+    adds r3, #1
+    b.n	strlen_loop
+
+strlen_done:
+    /* Move length calculation from r3 to r0 (return value register) */
+    mov	r0, r3
+
+    /* Clear error value since we succeeded */
+    movs r1, #0
+    str	r1, [sp, #4]
+
+z_arch_user_string_nlen_fixup:
+    /* Write error value to err pointer parameter */
+    ldr	r1, [sp, #4]
+    str	r1, [r2, #0]
+
+    add	sp, #12
+    pop	{r4, r5, pc}
+

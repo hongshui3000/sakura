@@ -24,6 +24,7 @@
 #include <net/net_ip.h>
 #include <net/net_context.h>
 #include <net/net_offload.h>
+#include <net/tcp.h>
 
 #include "connection.h"
 #include "net_private.h"
@@ -31,7 +32,7 @@
 #include "ipv6.h"
 #include "ipv4.h"
 #include "udp_internal.h"
-#include "tcp.h"
+#include "tcp_internal.h"
 #include "net_stats.h"
 
 #ifndef EPFNOSUPPORT
@@ -622,6 +623,58 @@ int net_context_listen(struct net_context *context, int backlog)
 	return -EOPNOTSUPP;
 }
 
+#if defined(CONFIG_NET_IPV4)
+struct net_pkt *net_context_create_ipv4(struct net_context *context,
+					struct net_pkt *pkt,
+					const struct in_addr *src,
+					const struct in_addr *dst)
+{
+	NET_ASSERT(((struct sockaddr_in_ptr *)&context->local)->sin_addr);
+
+	if (!src) {
+		src = ((struct sockaddr_in_ptr *)&context->local)->sin_addr;
+	}
+
+	if (net_is_ipv4_addr_unspecified(src)
+	    || net_is_ipv4_addr_mcast(src)) {
+		src = net_if_ipv4_select_src_addr(net_pkt_iface(pkt),
+						  (struct in_addr *)dst);
+	}
+
+	return net_ipv4_create(pkt,
+			       src,
+			       dst,
+			       net_context_get_iface(context),
+			       net_context_get_ip_proto(context));
+}
+#endif /* CONFIG_NET_IPV4 */
+
+#if defined(CONFIG_NET_IPV6)
+struct net_pkt *net_context_create_ipv6(struct net_context *context,
+					struct net_pkt *pkt,
+					const struct in6_addr *src,
+					const struct in6_addr *dst)
+{
+	NET_ASSERT(((struct sockaddr_in6_ptr *)&context->local)->sin6_addr);
+
+	if (!src) {
+		src = ((struct sockaddr_in6_ptr *)&context->local)->sin6_addr;
+	}
+
+	if (net_is_ipv6_addr_unspecified(src)
+	    || net_is_ipv6_addr_mcast(src)) {
+		src = net_if_ipv6_select_src_addr(net_pkt_iface(pkt),
+						  (struct in6_addr *)dst);
+	}
+
+	return net_ipv6_create(pkt,
+			       src,
+			       dst,
+			       net_context_get_iface(context),
+			       net_context_get_ip_proto(context));
+}
+#endif /* CONFIG_NET_IPV6 */
+
 int net_context_connect(struct net_context *context,
 			const struct sockaddr *addr,
 			socklen_t addrlen,
@@ -776,7 +829,6 @@ int net_context_connect(struct net_context *context,
 
 	default:
 		return -ENOTSUP;
-
 	}
 
 	return 0;
@@ -819,29 +871,6 @@ int net_context_accept(struct net_context *context,
 	return 0;
 }
 
-static int send_data(struct net_context *context,
-		     struct net_pkt *pkt,
-		     net_context_send_cb_t cb,
-		     s32_t timeout,
-		     void *token,
-		     void *user_data)
-{
-	context->send_cb = cb;
-	context->user_data = user_data;
-	net_pkt_set_token(pkt, token);
-
-	switch (net_context_get_ip_proto(context)) {
-	case IPPROTO_UDP:
-		return net_send_data(pkt);
-
-	case IPPROTO_TCP:
-		return net_tcp_send_data(context, cb, token, user_data);
-
-	default:
-		return -EPROTONOSUPPORT;
-	}
-}
-
 #if defined(CONFIG_NET_UDP)
 static int create_udp_packet(struct net_context *context,
 			     struct net_pkt *pkt,
@@ -855,7 +884,11 @@ static int create_udp_packet(struct net_context *context,
 	if (net_pkt_family(pkt) == AF_INET6) {
 		struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)dst_addr;
 
-		pkt = net_ipv6_create(context, pkt, NULL, &addr6->sin6_addr);
+		if (!net_context_create_ipv6(context, pkt,
+					     NULL, &addr6->sin6_addr)) {
+			return -ENOMEM;
+		}
+
 		tmp = net_udp_insert(context, pkt,
 				     net_pkt_ip_hdr_len(pkt) +
 				     net_pkt_ipv6_ext_len(pkt),
@@ -866,7 +899,7 @@ static int create_udp_packet(struct net_context *context,
 
 		pkt = tmp;
 
-		r = net_ipv6_finalize(context, pkt);
+		r = net_ipv6_finalize(pkt, net_context_get_ip_proto(context));
 	} else
 #endif /* CONFIG_NET_IPV6 */
 
@@ -874,7 +907,11 @@ static int create_udp_packet(struct net_context *context,
 	if (net_pkt_family(pkt) == AF_INET) {
 		struct sockaddr_in *addr4 = (struct sockaddr_in *)dst_addr;
 
-		pkt = net_ipv4_create(context, pkt, NULL, &addr4->sin_addr);
+		if (!net_context_create_ipv4(context, pkt,
+					     NULL, &addr4->sin_addr)) {
+			return -ENOMEM;
+		}
+
 		tmp = net_udp_insert(context, pkt, net_pkt_ip_hdr_len(pkt),
 				     addr4->sin_port);
 		if (!tmp) {
@@ -883,7 +920,7 @@ static int create_udp_packet(struct net_context *context,
 
 		pkt = tmp;
 
-		r = net_ipv4_finalize(context, pkt);
+		net_ipv4_finalize(pkt, net_context_get_ip_proto(context));
 	} else
 #endif /* CONFIG_NET_IPV4 */
 	{
@@ -989,7 +1026,20 @@ static int sendto(struct net_pkt *pkt,
 		return ret;
 	}
 
-	return send_data(context, pkt, cb, timeout, token, user_data);
+	context->send_cb = cb;
+	context->user_data = user_data;
+	net_pkt_set_token(pkt, token);
+
+	switch (net_context_get_ip_proto(context)) {
+	case IPPROTO_UDP:
+		return net_send_data(pkt);
+
+	case IPPROTO_TCP:
+		return net_tcp_send_data(context, cb, token, user_data);
+
+	default:
+		return -EPROTONOSUPPORT;
+	}
 }
 
 int net_context_send(struct net_pkt *pkt,
@@ -1056,45 +1106,6 @@ int net_context_sendto(struct net_pkt *pkt,
 	return sendto(pkt, dst_addr, addrlen, cb, timeout, token, user_data);
 }
 
-void net_context_set_appdata_values(struct net_pkt *pkt,
-				    enum net_ip_protocol proto)
-{
-	size_t total_len = net_pkt_get_len(pkt);
-	u16_t proto_len = 0;
-	struct net_buf *frag;
-	u16_t offset;
-
-	switch (proto) {
-	case IPPROTO_UDP:
-#if defined(CONFIG_NET_UDP)
-		proto_len = sizeof(struct net_udp_hdr);
-#endif /* CONFIG_NET_UDP */
-		break;
-
-	case IPPROTO_TCP:
-		proto_len = tcp_hdr_len(pkt);
-		break;
-
-	default:
-		return;
-	}
-
-	frag = net_frag_get_pos(pkt, net_pkt_ip_hdr_len(pkt) +
-				net_pkt_ipv6_ext_len(pkt) +
-				proto_len,
-				&offset);
-	if (frag) {
-		net_pkt_set_appdata(pkt, frag->data + offset);
-	}
-
-	net_pkt_set_appdatalen(pkt, total_len - net_pkt_ip_hdr_len(pkt) -
-			       net_pkt_ipv6_ext_len(pkt) - proto_len);
-
-	NET_ASSERT_INFO(net_pkt_appdatalen(pkt) < total_len,
-			"Wrong appdatalen %u, total %zu",
-			net_pkt_appdatalen(pkt), total_len);
-}
-
 enum net_verdict net_context_packet_received(struct net_conn *conn,
 					     struct net_pkt *pkt,
 					     void *user_data)
@@ -1117,9 +1128,10 @@ enum net_verdict net_context_packet_received(struct net_conn *conn,
 
 	if (net_context_get_ip_proto(context) != IPPROTO_TCP) {
 		/* TCP packets get appdata earlier in tcp_established(). */
-		net_context_set_appdata_values(pkt, IPPROTO_UDP);
+		net_pkt_set_appdata_values(pkt, IPPROTO_UDP);
 	} else {
-		net_stats_update_tcp_recv(net_pkt_appdatalen(pkt));
+		net_stats_update_tcp_recv(net_pkt_iface(pkt),
+					  net_pkt_appdatalen(pkt));
 	}
 
 	NET_DBG("Set appdata %p to len %u (total %zu)",

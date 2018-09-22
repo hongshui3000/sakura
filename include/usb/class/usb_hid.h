@@ -17,6 +17,10 @@
 #ifndef __USB_HID_H__
 #define __USB_HID_H__
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct usb_hid_class_subdescriptor {
 	u8_t bDescriptorType;
 	u16_t wDescriptorLength;
@@ -65,6 +69,9 @@ struct hid_ops {
 	 * the next transfer.
 	 */
 	hid_int_ready_callback int_in_ready;
+#ifdef CONFIG_ENABLE_HID_INT_OUT_EP
+	hid_int_ready_callback int_out_ready;
+#endif
 };
 
 /* HID Report Definitions */
@@ -150,7 +157,17 @@ struct hid_ops {
 void usb_hid_register_device(const u8_t *desc, size_t size,
 			     const struct hid_ops *op);
 
+/* Write to hid interrupt endpoint */
+int hid_int_ep_write(const u8_t *data, u32_t data_len, u32_t *bytes_ret);
+
+/* Read from hid interrupt endpoint */
+int hid_int_ep_read(u8_t *data, u32_t max_data_len, u32_t *ret_bytes);
+
 /* Initialize USB HID */
 int usb_hid_init(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* __USB_HID_H__ */

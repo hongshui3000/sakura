@@ -1,4 +1,7 @@
+common:
+  platform_whitelist: native_posix qemu_x86 qemu_cortex_m3
 tests:
-  test:
+  net.iface:
     min_ram: 16
-    tags: net
+    tags: net iface
+    depends_on: netif

@@ -30,18 +30,11 @@
 extern "C" {
 #endif
 
-/* APIs need to support non-byte addressable architectures */
-
-#define OCTET_TO_SIZEOFUNIT(X) (X)
-#define SIZEOFUNIT_TO_OCTET(X) (X)
-
 /* GDT layout */
 #define CODE_SEG	0x08
 #define DATA_SEG	0x10
 #define MAIN_TSS	0x18
 #define DF_TSS		0x20
-#define USER_CODE_SEG	0x2b /* at dpl=3 */
-#define USER_DATA_SEG	0x33 /* at dpl=3 */
 
 /**
  * Macro used internally by NANO_CPU_INT_REGISTER and NANO_CPU_INT_REGISTER_ASM.
@@ -550,142 +543,6 @@ extern FUNC_NORETURN void _SysFatalErrorHandler(unsigned int reason,
 extern struct task_state_segment _main_tss;
 #endif
 
-#ifdef CONFIG_USERSPACE
-/* Syscall invocation macros. x86-specific machine constraints used to ensure
- * args land in the proper registers, see implementation of
- * _x86_syscall_entry_stub in userspace.S
- *
- * the entry stub clobbers EDX and ECX on IAMCU systems
- */
-
-static inline u32_t _arch_syscall_invoke6(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t arg5, u32_t arg6,
-					  u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("push %%ebp\n\t"
-			 "mov %[arg6], %%ebp\n\t"
-			 "int $0x80\n\t"
-			 "pop %%ebp\n\t"
-			 : "=a" (ret)
-#ifdef CONFIG_X86_IAMCU
-			   , "=d" (arg2), "=c" (arg3)
-#endif
-			 : "S" (call_id), "a" (arg1), "d" (arg2),
-			   "c" (arg3), "b" (arg4), "D" (arg5),
-			   [arg6] "m" (arg6)
-			 : "memory", "esp");
-	return ret;
-}
-
-static inline u32_t _arch_syscall_invoke5(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t arg5, u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("int $0x80"
-			 : "=a" (ret)
-#ifdef CONFIG_X86_IAMCU
-			   , "=d" (arg2), "=c" (arg3)
-#endif
-			 : "S" (call_id), "a" (arg1), "d" (arg2),
-			   "c" (arg3), "b" (arg4), "D" (arg5)
-			 : "memory");
-	return ret;
-}
-
-static inline u32_t _arch_syscall_invoke4(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t arg4, u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("int $0x80"
-			 : "=a" (ret)
-#ifdef CONFIG_X86_IAMCU
-			   , "=d" (arg2), "=c" (arg3)
-#endif
-			 : "S" (call_id), "a" (arg1), "d" (arg2), "c" (arg3),
-			   "b" (arg4)
-			 : "memory");
-	return ret;
-}
-
-static inline u32_t _arch_syscall_invoke3(u32_t arg1, u32_t arg2, u32_t arg3,
-					  u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("int $0x80"
-			 : "=a" (ret)
-#ifdef CONFIG_X86_IAMCU
-			   , "=d" (arg2), "=c" (arg3)
-#endif
-			 : "S" (call_id), "a" (arg1), "d" (arg2), "c" (arg3)
-			 : "memory");
-	return ret;
-}
-
-static inline u32_t _arch_syscall_invoke2(u32_t arg1, u32_t arg2, u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("int $0x80"
-			 : "=a" (ret)
-#ifdef CONFIG_X86_IAMCU
-			   , "=d" (arg2)
-#endif
-			 : "S" (call_id), "a" (arg1), "d" (arg2)
-			 : "memory"
-#ifdef CONFIG_X86_IAMCU
-			 , "ecx"
-#endif
-			 );
-	return ret;
-}
-
-static inline u32_t _arch_syscall_invoke1(u32_t arg1, u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("int $0x80"
-			 : "=a" (ret)
-			 : "S" (call_id), "a" (arg1)
-			 : "memory"
-#ifdef CONFIG_X86_IAMCU
-			 , "edx", "ecx"
-#endif
-			 );
-	return ret;
-}
-
-static inline u32_t _arch_syscall_invoke0(u32_t call_id)
-{
-	u32_t ret;
-
-	__asm__ volatile("int $0x80"
-			 : "=a" (ret)
-			 : "S" (call_id)
-			 : "memory"
-#ifdef CONFIG_X86_IAMCU
-			 , "edx", "ecx"
-#endif
-			 );
-	return ret;
-}
-
-static inline int _arch_is_user_context(void)
-{
-	int cs;
-
-	/* On x86, read the CS register (which cannot be manually set) */
-	__asm__ volatile ("mov %%cs, %[cs_val]" : [cs_val] "=r" (cs));
-
-	return cs == USER_CODE_SEG;
-}
-#endif /* CONFIG_USERSPACE */
-
-
 #if defined(CONFIG_HW_STACK_PROTECTION) && defined(CONFIG_USERSPACE)
 /* With both hardware stack protection and userspace enabled, stacks are
  * arranged as follows:
@@ -723,20 +580,34 @@ static inline int _arch_is_user_context(void)
 #define _STACK_BASE_ALIGN	STACK_ALIGN
 #endif
 
+#ifdef CONFIG_USERSPACE
+/* If user mode enabled, expand any stack size to fill a page since that is
+ * the access control granularity and we don't want other kernel data to
+ * unintentionally fall in the latter part of the page
+ */
+#define _STACK_SIZE_ALIGN	MMU_PAGE_SIZE
+#else
+#define _STACK_SIZE_ALIGN	1
+#endif
+
 #define _ARCH_THREAD_STACK_DEFINE(sym, size) \
 	struct _k_thread_stack_element __kernel_noinit \
 		__aligned(_STACK_BASE_ALIGN) \
-		sym[(size) + _STACK_GUARD_SIZE]
+		sym[ROUND_UP((size), _STACK_SIZE_ALIGN) + _STACK_GUARD_SIZE]
+
+#define _ARCH_THREAD_STACK_LEN(size) \
+		(ROUND_UP((size), \
+			  max(_STACK_BASE_ALIGN, _STACK_SIZE_ALIGN)) + \
+		_STACK_GUARD_SIZE)
 
 #define _ARCH_THREAD_STACK_ARRAY_DEFINE(sym, nmemb, size) \
 	struct _k_thread_stack_element __kernel_noinit \
 		__aligned(_STACK_BASE_ALIGN) \
-		sym[nmemb][ROUND_UP(size, _STACK_BASE_ALIGN) + \
-			   _STACK_GUARD_SIZE]
+		sym[nmemb][_ARCH_THREAD_STACK_LEN(size)]
 
 #define _ARCH_THREAD_STACK_MEMBER(sym, size) \
 	struct _k_thread_stack_element __aligned(_STACK_BASE_ALIGN) \
-		sym[(size) + _STACK_GUARD_SIZE]
+		sym[ROUND_UP((size), _STACK_SIZE_ALIGN) + _STACK_GUARD_SIZE]
 
 #define _ARCH_THREAD_STACK_SIZEOF(sym) \
 	(sizeof(sym) - _STACK_GUARD_SIZE)

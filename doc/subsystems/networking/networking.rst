@@ -20,3 +20,6 @@ operation of the stacks and how they were implemented.
    buffers.rst
    qemu_setup.rst
    usbnet_setup.rst
+   vlan.rst
+   traffic-class.rst
+   gptp_release_notes.rst

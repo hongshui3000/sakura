@@ -23,6 +23,7 @@
 #include <string.h>
 #include <zephyr/types.h>
 #include <stdbool.h>
+#include <misc/util.h>
 #include <misc/byteorder.h>
 #include <toolchain.h>
 
@@ -53,6 +54,15 @@ enum net_ip_protocol {
 	IPPROTO_ICMPV6 = 58,
 };
 
+/* Protocol numbers for TLS protocols */
+enum net_ip_protocol_secure {
+	IPPROTO_TLS_1_0 = 256,
+	IPPROTO_TLS_1_1 = 257,
+	IPPROTO_TLS_1_2 = 258,
+	IPPROTO_DTLS_1_0 = 272,
+	IPPROTO_DTLS_1_2 = 273,
+};
+
 /** Socket type */
 enum net_sock_type {
 	SOCK_STREAM = 1,
@@ -61,8 +71,10 @@ enum net_sock_type {
 
 #define ntohs(x) sys_be16_to_cpu(x)
 #define ntohl(x) sys_be32_to_cpu(x)
+#define ntohll(x) sys_be64_to_cpu(x)
 #define htons(x) sys_cpu_to_be16(x)
 #define htonl(x) sys_cpu_to_be32(x)
+#define htonll(x) sys_cpu_to_be64(x)
 
 /** IPv6 address structure */
 struct in6_addr {
@@ -123,19 +135,12 @@ struct sockaddr_in_ptr {
 	struct in_addr		*sin_addr;     /* IPv4 address */
 };
 
-#if defined(CONFIG_NET_IPV6)
-#define NET_SOCKADDR_MAX_SIZE (sizeof(struct sockaddr_in6))
-#define NET_SOCKADDR_PTR_MAX_SIZE (sizeof(struct sockaddr_in6_ptr))
-#elif defined(CONFIG_NET_IPV4)
+#if defined(CONFIG_NET_IPV4) && !defined(CONFIG_NET_IPV6)
 #define NET_SOCKADDR_MAX_SIZE (sizeof(struct sockaddr_in))
 #define NET_SOCKADDR_PTR_MAX_SIZE (sizeof(struct sockaddr_in_ptr))
 #else
-#if !defined(CONFIG_NET_RAW_MODE)
-#error "Either IPv6 or IPv4 needs to be selected."
-#else
 #define NET_SOCKADDR_MAX_SIZE (sizeof(struct sockaddr_in6))
 #define NET_SOCKADDR_PTR_MAX_SIZE (sizeof(struct sockaddr_in6_ptr))
-#endif
 #endif
 
 struct sockaddr {
@@ -193,15 +198,15 @@ extern const struct in6_addr in6addr_loopback;
 
 /** Network packet priority settings described in IEEE 802.1Q Annex I.1 */
 enum net_priority {
-	NET_PRIORITY_BK = 0, /* Background (lowest)                */
-	NET_PRIORITY_BE = 1, /* Best effort (default)              */
+	NET_PRIORITY_BK = 1, /* Background (lowest)                */
+	NET_PRIORITY_BE = 0, /* Best effort (default)              */
 	NET_PRIORITY_EE = 2, /* Excellent effort                   */
 	NET_PRIORITY_CA = 3, /* Critical applications (highest)    */
 	NET_PRIORITY_VI = 4, /* Video, < 100 ms latency and jitter */
 	NET_PRIORITY_VO = 5, /* Voice, < 10 ms latency and jitter  */
 	NET_PRIORITY_IC = 6, /* Internetwork control               */
 	NET_PRIORITY_NC = 7  /* Network control                    */
-};
+} __packed;
 
 /** IPv6/IPv4 network connection tuple */
 struct net_tuple {
@@ -224,10 +229,10 @@ enum net_addr_type {
 	NET_ADDR_DHCP,
 	NET_ADDR_MANUAL,
 	NET_ADDR_OVERRIDABLE,
-};
+} __packed;
 
 #if NET_LOG_ENABLED > 0
-static inline char *net_addr_type2str(enum net_addr_type type)
+static inline const char *net_addr_type2str(enum net_addr_type type)
 {
 	switch (type) {
 	case NET_ADDR_AUTOCONF:
@@ -246,7 +251,7 @@ static inline char *net_addr_type2str(enum net_addr_type type)
 	return "<unknown>";
 }
 #else /* NET_LOG_ENABLED */
-static inline char *net_addr_type2str(enum net_addr_type type)
+static inline const char *net_addr_type2str(enum net_addr_type type)
 {
 	ARG_UNUSED(type);
 
@@ -260,13 +265,13 @@ enum net_addr_state {
 	NET_ADDR_TENTATIVE = 0,
 	NET_ADDR_PREFERRED,
 	NET_ADDR_DEPRECATED,
-};
+} __packed;
 
 struct net_ipv6_hdr {
 	u8_t vtc;
 	u8_t tcflow;
 	u16_t flow;
-	u8_t len[2];
+	u16_t len;
 	u8_t nexthdr;
 	u8_t hop_limit;
 	struct in6_addr src;
@@ -283,7 +288,7 @@ struct net_ipv6_frag_hdr {
 struct net_ipv4_hdr {
 	u8_t vhl;
 	u8_t tos;
-	u8_t len[2];
+	u16_t len;
 	u8_t id[2];
 	u8_t offset[2];
 	u8_t ttl;
@@ -470,6 +475,18 @@ static inline bool net_is_ipv4_addr_unspecified(const struct in_addr *addr)
 static inline bool net_is_ipv4_addr_mcast(const struct in_addr *addr)
 {
 	return (ntohl(UNALIGNED_GET(&addr->s_addr)) & 0xE0000000) == 0xE0000000;
+}
+
+/**
+ * @brief Check if the given IPv4 address is a link local address.
+ *
+ * @param addr A valid pointer on an IPv4 address
+ *
+ * @return True if it is, false otherwise.
+ */
+static inline bool net_is_ipv4_ll_addr(const struct in_addr *addr)
+{
+	return (ntohl(UNALIGNED_GET(&addr->s_addr)) & 0xA9FE0000) == 0xA9FE0000;
 }
 
 extern struct net_if_addr *net_if_ipv4_addr_lookup(const struct in_addr *addr,
@@ -885,7 +902,7 @@ int net_addr_pton(sa_family_t family, const char *src, void *dst);
  * @param family IP address family (AF_INET or AF_INET6)
  * @param src Pointer to struct in_addr if family is AF_INET or
  *        pointer to struct in6_addr if family is AF_INET6
- * @param dst IP address in a non-null terminated string
+ * @param dst Buffer for IP address as a null terminated string
  * @param size Number of bytes available in the buffer
  *
  * @return dst pointer if ok, NULL if error
@@ -991,8 +1008,37 @@ int net_rx_priority2tc(enum net_priority prio);
  */
 static inline enum net_priority net_vlan2priority(u8_t priority)
 {
-	/* Currently this is 1:1 mapping */
-	return priority;
+	/* Map according to IEEE 802.1Q */
+	static const u8_t vlan2priority[] = {
+		NET_PRIORITY_BE,
+		NET_PRIORITY_BK,
+		NET_PRIORITY_EE,
+		NET_PRIORITY_CA,
+		NET_PRIORITY_VI,
+		NET_PRIORITY_VO,
+		NET_PRIORITY_IC,
+		NET_PRIORITY_NC
+	};
+
+	if (priority >= ARRAY_SIZE(vlan2priority)) {
+		/* Use Best Effort as the default priority */
+		return NET_PRIORITY_BE;
+	}
+
+	return vlan2priority[priority];
+}
+
+/**
+ * @brief Convert network packet priority to network packet VLAN priority.
+ *
+ * @param priority Packet priority
+ *
+ * @return VLAN priority (PCP)
+ */
+static inline u8_t net_priority2vlan(enum net_priority priority)
+{
+	/* The conversion works both ways */
+	return (u8_t)net_vlan2priority(priority);
 }
 
 #ifdef __cplusplus

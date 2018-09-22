@@ -52,6 +52,7 @@ static void prepare_sock_v6(const char *addr,
 	*sock = socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP);
 	zassert_true(*sock >= 0, "socket open failed");
 
+	memset(sockaddr, 0, sizeof(*sockaddr));
 	sockaddr->sin6_family = AF_INET6;
 	sockaddr->sin6_port = htons(port);
 	rv = inet_pton(AF_INET6, addr, &sockaddr->sin6_addr);
@@ -127,12 +128,12 @@ void test_v4_sendto_recvfrom(void)
 	struct sockaddr_in client_addr;
 	struct sockaddr_in server_addr;
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			ANY_PORT,
 			&client_sock,
 			&client_addr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			SERVER_PORT,
 			&server_sock,
 			&server_addr);
@@ -164,12 +165,12 @@ void test_v6_sendto_recvfrom(void)
 	struct sockaddr_in6 client_addr;
 	struct sockaddr_in6 server_addr;
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			ANY_PORT,
 			&client_sock,
 			&client_addr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			SERVER_PORT,
 			&server_sock,
 			&server_addr);
@@ -201,12 +202,12 @@ void test_v4_bind_sendto(void)
 	struct sockaddr_in client_addr;
 	struct sockaddr_in server_addr;
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			CLIENT_PORT,
 			&client_sock,
 			&client_addr);
 
-	prepare_sock_v4(CONFIG_NET_APP_MY_IPV4_ADDR,
+	prepare_sock_v4(CONFIG_NET_CONFIG_MY_IPV4_ADDR,
 			SERVER_PORT,
 			&server_sock,
 			&server_addr);
@@ -243,12 +244,12 @@ void test_v6_bind_sendto(void)
 	struct sockaddr_in6 client_addr;
 	struct sockaddr_in6 server_addr;
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			CLIENT_PORT,
 			&client_sock,
 			&client_addr);
 
-	prepare_sock_v6(CONFIG_NET_APP_MY_IPV6_ADDR,
+	prepare_sock_v6(CONFIG_NET_CONFIG_MY_IPV6_ADDR,
 			SERVER_PORT,
 			&server_sock,
 			&server_addr);
@@ -282,32 +283,43 @@ void test_send_recv_2_sock(void)
 	int sock1, sock2;
 	struct sockaddr_in bind_addr, conn_addr;
 	char buf[10];
-	int len, cmp;
+	int len, cmp, rv;
 
 	sock1 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
 	sock2 = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
+	zassert_true(sock1 >= 0, "cannot create sock1");
+	zassert_true(sock2 >= 0, "cannot create sock2");
 
 	bind_addr.sin_family = AF_INET;
 	bind_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 	bind_addr.sin_port = htons(55555);
-	bind(sock1, (struct sockaddr *)&bind_addr, sizeof(bind_addr));
+	rv = bind(sock1, (struct sockaddr *)&bind_addr, sizeof(bind_addr));
+	zassert_equal(rv, 0, "bind failed");
 
 	conn_addr.sin_family = AF_INET;
 	conn_addr.sin_addr.s_addr = htonl(0xc0000201);
 	conn_addr.sin_port = htons(55555);
-	connect(sock2, (struct sockaddr *)&conn_addr, sizeof(conn_addr));
+	rv = connect(sock2, (struct sockaddr *)&conn_addr, sizeof(conn_addr));
+	zassert_equal(rv, 0, "connect failed");
 
-	send(sock2, BUF_AND_SIZE(TEST_STR_SMALL), 0);
+	len = send(sock2, BUF_AND_SIZE(TEST_STR_SMALL), 0);
+	zassert_equal(len, STRLEN(TEST_STR_SMALL), "invalid send len");
 
 	len = recv(sock1, buf, sizeof(buf), MSG_PEEK);
-	zassert_equal(len, 4, "Invalid recv len");
+	zassert_equal(len, STRLEN(TEST_STR_SMALL), "Invalid recv len");
 	cmp = memcmp(buf, TEST_STR_SMALL, STRLEN(TEST_STR_SMALL));
 	zassert_equal(cmp, 0, "Invalid recv data");
 
 	len = recv(sock1, buf, sizeof(buf), 0);
-	zassert_equal(len, 4, "Invalid recv len");
+	zassert_equal(len, STRLEN(TEST_STR_SMALL), "Invalid recv len");
 	cmp = memcmp(buf, TEST_STR_SMALL, STRLEN(TEST_STR_SMALL));
 	zassert_equal(cmp, 0, "Invalid recv data");
+
+	rv = close(sock1);
+	zassert_equal(rv, 0, "close failed");
+
+	rv = close(sock2);
+	zassert_equal(rv, 0, "close failed");
 }
 
 void test_main(void)

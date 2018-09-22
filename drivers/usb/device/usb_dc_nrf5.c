@@ -1015,13 +1015,13 @@ static int hf_clock_enable(bool on, bool blocking)
 		ret = clock_control_off(clock, (void *)blocking);
 	}
 
-	if (ret) {
+	if (ret && (blocking || (ret != -EINPROGRESS))) {
 		SYS_LOG_ERR("NRF5 HF clock %s fail: %d",
 			    on ? "start" : "stop", ret);
 		return ret;
 	}
 
-	SYS_LOG_DBG("HF clock %s success", on ? "start" : "stop");
+	SYS_LOG_DBG("HF clock %s success (%d)", on ? "start" : "stop", ret);
 
 	return ret;
 }
@@ -1731,15 +1731,18 @@ int usb_dc_attach(void)
 	usbd_install_isr();
 	usbd_enable_interrupts();
 
+	/* NOTE: Non-blocking HF clock enable can return -EINPROGRESS if HF
+	 * clock start was already requested.
+	 */
 	ret = hf_clock_enable(true, false);
-	if (ret) {
+	if (ret && ret != -EINPROGRESS) {
 		goto err_clk_enable;
 	}
 
 	endpoint_ctx_init();
 	ctx->attached = true;
 
-	return ret;
+	return 0;
 
 err_clk_enable:
 	usbd_disable_interrupts();
@@ -1812,6 +1815,32 @@ int usb_dc_set_address(const u8_t addr)
 	ctx = get_usbd_ctx();
 	ctx->state = USBD_ADDRESS_SET;
 	ctx->address_set = true;
+
+	return 0;
+}
+
+int usb_dc_ep_check_cap(const struct usb_dc_ep_cfg_data * const cfg)
+{
+	u8_t ep_idx = NRF_USBD_EP_NR_GET(cfg->ep_addr);
+
+	SYS_LOG_DBG("ep %x, mps %d, type %d", cfg->ep_addr, cfg->ep_mps,
+		    cfg->ep_type);
+
+	if ((cfg->ep_type == USB_DC_EP_CONTROL) && ep_idx) {
+		SYS_LOG_ERR("invalid endpoint configuration");
+		return -1;
+	}
+
+	if (!NRF_USBD_EP_VALIDATE(cfg->ep_addr)) {
+		SYS_LOG_ERR("invalid endpoint index/address");
+		return -1;
+	}
+
+	if ((cfg->ep_type == USB_DC_EP_ISOCHRONOUS) &&
+	    (!NRF_USBD_EPISO_CHECK(cfg->ep_addr))) {
+		SYS_LOG_WRN("invalid endpoint type");
+		return -1;
+	}
 
 	return 0;
 }

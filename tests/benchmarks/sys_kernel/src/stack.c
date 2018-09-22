@@ -34,6 +34,7 @@ void stack_test_init(void)
  *
  * @param par1   Ignored parameter.
  * @param par2   Number of test loops.
+ * @param par3	 Unused
  *
  * @return N/A
  *
@@ -70,6 +71,7 @@ void stack_thread1(void *par1, void *par2, void *par3)
  *
  * @param par1   Address of the counter.
  * @param par2   Number of test cycles.
+ * @param par3	 Unused
  *
  * @return N/A
  *
@@ -101,6 +103,7 @@ void stack_thread2(void *par1, void *par2, void *par3)
  *
  * @param par1   Address of the counter.
  * @param par2   Number of test cycles.
+ * @param par3	 Unused
  *
  * @return N/A
  *
@@ -158,10 +161,10 @@ int stack_test(void)
 	t = BENCH_START();
 
 	k_thread_create(&thread_data1, thread_stack1, STACK_SIZE, stack_thread1,
-			 0, (void *) NUMBER_OF_LOOPS, NULL,
+			 0, (void *) number_of_loops, NULL,
 			 K_PRIO_COOP(3), 0, K_NO_WAIT);
 	k_thread_create(&thread_data2, thread_stack2, STACK_SIZE, stack_thread2,
-			 (void *) &i, (void *) NUMBER_OF_LOOPS, NULL,
+			 (void *) &i, (void *) number_of_loops, NULL,
 			 K_PRIO_COOP(3), 0, K_NO_WAIT);
 
 	t = TIME_STAMP_DELTA_GET(t);
@@ -185,10 +188,10 @@ int stack_test(void)
 
 	i = 0;
 	k_thread_create(&thread_data1, thread_stack1, STACK_SIZE, stack_thread1,
-			 0, (void *) NUMBER_OF_LOOPS, NULL,
+			 0, (void *) number_of_loops, NULL,
 			 K_PRIO_COOP(3), 0, K_NO_WAIT);
 	k_thread_create(&thread_data2, thread_stack2, STACK_SIZE, stack_thread3,
-			 (void *) &i, (void *) NUMBER_OF_LOOPS, NULL,
+			 (void *) &i, (void *) number_of_loops, NULL,
 			 K_PRIO_COOP(3), 0, K_NO_WAIT);
 
 	t = TIME_STAMP_DELTA_GET(t);
@@ -213,10 +216,10 @@ int stack_test(void)
 	t = BENCH_START();
 
 	k_thread_create(&thread_data1, thread_stack1, STACK_SIZE, stack_thread1,
-			 0, (void *) NUMBER_OF_LOOPS, NULL,
+			 0, (void *) number_of_loops, NULL,
 			 K_PRIO_COOP(3), 0, K_NO_WAIT);
 
-	for (i = 0; i < NUMBER_OF_LOOPS / 2; i++) {
+	for (i = 0; i < number_of_loops / 2; i++) {
 		u32_t data;
 
 		data = 2 * i;

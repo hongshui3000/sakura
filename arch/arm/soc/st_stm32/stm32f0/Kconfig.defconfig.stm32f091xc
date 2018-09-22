@@ -9,10 +9,10 @@ if SOC_STM32F091XC
 
 config SOC
 	string
-	default stm32f091xc
+	default "stm32f091xc"
 
 config NUM_IRQS
 	int
-	default 32
+	default 31
 
 endif # SOC_STM32F091XC

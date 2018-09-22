@@ -346,6 +346,8 @@
 #define SW_SWITCH_TIMER_EVTS_COMP_S2_BASE 5
 #undef HAL_EVENT_TIMER_SAMPLE_CC_OFFSET
 #define HAL_EVENT_TIMER_SAMPLE_CC_OFFSET 2
+#undef HAL_EVENT_TIMER_SAMPLE_TASK
+#define HAL_EVENT_TIMER_SAMPLE_TASK NRF_TIMER_TASK_CAPTURE2
 
 #else /* !CONFIG_BT_CTLR_SW_SWITCH_SINGLE_TIMER */
 #define SW_SWITCH_TIMER NRF_TIMER1
@@ -447,6 +449,11 @@ static inline u32_t hal_radio_phy_mode_get(u8_t phy, u8_t flags)
 	}
 
 	return mode;
+}
+
+static inline u32_t hal_radio_tx_power_max_get(void)
+{
+	return RADIO_TXPOWER_TXPOWER_Pos8dBm;
 }
 
 static inline u32_t hal_radio_tx_ready_delay_us_get(u8_t phy, u8_t flags)

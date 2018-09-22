@@ -141,10 +141,10 @@ SECTION_FUNC(TEXT, __swap)
 	movl	_kernel_offset_to_current(%edi), %edx
 	movl	%esp, _thread_offset_to_esp(%edx)
 
-#ifdef CONFIG_KERNEL_EVENT_LOGGER_CONTEXT_SWITCH
+#ifdef CONFIG_TRACING
 	/* Register the context switch */
 	push %edx
-	call	_sys_k_event_logger_context_switch
+	call	z_sys_trace_thread_switched_in
 	pop %edx
 #endif
 	movl	_kernel_offset_to_ready_q_cache(%edi), %eax
@@ -466,5 +466,5 @@ SECTION_FUNC(TEXT, _x86_thread_entry_wrapper)
 	push	$0	 /* Null return address */
 #endif
 	movl	$0, (%esp)
-	jmp	*%edi
+	INDIRECT_JMP(%edi)
 #endif /* _THREAD_WRAPPER_REQUIRED */

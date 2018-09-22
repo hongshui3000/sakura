@@ -50,3 +50,26 @@
 		KEEP(*(SORT_BY_NAME(".net_l2.init*")))
 		__net_l2_end = .;
 	} GROUP_LINK_IN(ROMABLE_REGION)
+
+#if defined(CONFIG_BT_SETTINGS)
+	SECTION_DATA_PROLOGUE(_bt_settings_area, (OPTIONAL), SUBALIGN(4))
+	{
+		_bt_settings_start = .;
+		KEEP(*(SORT_BY_NAME("._bt_settings.static.*")))
+		_bt_settings_end = .;
+	} GROUP_LINK_IN(ROMABLE_REGION)
+#endif
+
+	SECTION_DATA_PROLOGUE(log_const_sections, (OPTIONAL),)
+	{
+		__log_const_start = .;
+		KEEP(*(SORT(.log_const_*)));
+		__log_const_end = .;
+	} GROUP_LINK_IN(ROMABLE_REGION)
+
+	SECTION_DATA_PROLOGUE(log_backends_sections, (OPTIONAL),)
+	{
+		__log_backends_start = .;
+		KEEP(*(".log_backends"));
+		__log_backends_end = .;
+	} GROUP_LINK_IN(ROMABLE_REGION)

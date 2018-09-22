@@ -136,6 +136,10 @@ static ALWAYS_INLINE void clkInit(void)
 #if CONFIG_ETH_MCUX
 	CLOCK_SetEnetTime0Clock(TIMESRC_OSCERCLK);
 #endif
+#if CONFIG_USB_KINETIS
+	CLOCK_EnableUsbfs0Clock(kCLOCK_UsbSrcPll0,
+				CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC);
+#endif
 }
 
 /**
@@ -152,7 +156,7 @@ static int fsl_frdm_k64f_init(struct device *arg)
 {
 	ARG_UNUSED(arg);
 
-	int oldLevel; /* old interrupt lock level */
+	unsigned int oldLevel; /* old interrupt lock level */
 #if !defined(CONFIG_HAS_SYSMPU)
 	u32_t temp_reg;
 #endif /* !CONFIG_HAS_SYSMPU */

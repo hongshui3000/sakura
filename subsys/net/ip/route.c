@@ -239,14 +239,12 @@ static int nbr_nexthop_put(struct net_nbr *nbr)
 #if defined(CONFIG_NET_DEBUG_ROUTE)
 #define net_route_info(str, route, dst)					\
 	do {								\
-		char out[NET_IPV6_ADDR_LEN];				\
 		struct in6_addr *naddr = net_route_get_nexthop(route);	\
 									\
 		NET_ASSERT_INFO(naddr, "Unknown nexthop address");	\
 									\
-		snprintk(out, sizeof(out), "%s",			\
-			 net_sprint_ipv6_addr(dst));			\
-		NET_DBG("%s route to %s via %s (iface %p)", str, out,	\
+		NET_DBG("%s route to %s via %s (iface %p)", str,	\
+			net_sprint_ipv6_addr(dst),			\
 			net_sprint_ipv6_addr(naddr), route->iface);	\
 	} while (0)
 #else
@@ -363,19 +361,16 @@ struct net_route_entry *net_route_add(struct net_if *iface,
 				     node);
 #if defined(CONFIG_NET_DEBUG_ROUTE)
 		do {
-			char out[NET_IPV6_ADDR_LEN];
 			struct in6_addr *tmp;
 			struct net_linkaddr_storage *llstorage;
-
-			snprintk(out, sizeof(out), "%s",
-				 net_sprint_ipv6_addr(&route->addr));
 
 			tmp = net_route_get_nexthop(route);
 			nbr = net_ipv6_nbr_lookup(iface, tmp);
 			llstorage = net_nbr_get_lladdr(nbr->idx);
 
 			NET_DBG("Removing the oldest route %s via %s [%s]",
-				out, net_sprint_ipv6_addr(tmp),
+				net_sprint_ipv6_addr(&route->addr),
+				net_sprint_ipv6_addr(tmp),
 				net_sprint_ll_addr(llstorage->addr,
 						   llstorage->len));
 		} while (0);
@@ -780,18 +775,29 @@ int net_route_packet(struct net_pkt *pkt, struct in6_addr *nexthop)
 		return -ESRCH;
 	}
 
-	if (!net_pkt_ll_src(pkt)->addr) {
-		NET_DBG("Link layer source address not set");
-		return -EINVAL;
-	}
-
-	/* Sanitycheck: If src and dst ll addresses are going to be same,
-	 * then something went wrong in route lookup.
+#if defined(CONFIG_NET_L2_DUMMY)
+	/* No need to do this check for dummy L2 as it does not have any
+	 * link layer. This is done at runtime because we can have multiple
+	 * network technologies enabled.
 	 */
-	if (!memcmp(net_pkt_ll_src(pkt)->addr, lladdr->addr, lladdr->len)) {
-		NET_ERR("Src ll and Dst ll are same");
-		return -EINVAL;
+	if (net_if_l2(net_pkt_iface(pkt)) != &NET_L2_GET_NAME(DUMMY)) {
+#endif
+		if (!net_pkt_ll_src(pkt)->addr) {
+			NET_DBG("Link layer source address not set");
+			return -EINVAL;
+		}
+
+		/* Sanitycheck: If src and dst ll addresses are going to be
+		 * same, then something went wrong in route lookup.
+		 */
+		if (!memcmp(net_pkt_ll_src(pkt)->addr, lladdr->addr,
+			    lladdr->len)) {
+			NET_ERR("Src ll and Dst ll are same");
+			return -EINVAL;
+		}
+#if defined(CONFIG_NET_L2_DUMMY)
 	}
+#endif
 
 	net_pkt_set_forwarding(pkt, true);
 

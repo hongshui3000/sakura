@@ -23,6 +23,11 @@ sh_special_args = {
     '_cwd': repository_path
 }
 
+# Put the Kconfiglib path first to make sure no local Kconfiglib version is
+# used
+sys.path.insert(0, os.path.join(repository_path, "scripts/kconfig"))
+import kconfiglib
+
 
 def init_logs():
     global logger
@@ -61,7 +66,7 @@ def get_shas(refspec):
 
 def run_gitlint(tc, commit_range):
     proc = subprocess.Popen('gitlint --commits %s' %(commit_range),
-            cwd=repository_path, shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+                shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
     msg = ""
     if proc.wait() != 0:
@@ -93,6 +98,36 @@ def run_checkpatch(tc, commit_range):
             return 1
 
     return 0
+
+
+def run_kconfig_undef_ref_check(tc, commit_range):
+    # Look up Kconfig files relative to ZEPHYR_BASE
+    os.environ["srctree"] = repository_path
+
+    # Parse the entire Kconfig tree, to make sure we see all symbols
+    os.environ["ENV_VAR_BOARD_DIR"] = "boards/*/*"
+    os.environ["ENV_VAR_ARCH"] = "*"
+
+    # Enable strict Kconfig mode in Kconfiglib, which assumes there's just a
+    # single Kconfig tree and warns for all references to undefined symbols
+    os.environ["KCONFIG_STRICT"] = "y"
+
+    undef_ref_warnings = []
+
+    for warning in kconfiglib.Kconfig().warnings:
+        if "undefined symbol" in warning:
+            undef_ref_warnings.append(warning)
+
+    # Generating multiple JUnit <failure>s would be neater, but Shippable only
+    # seems to display the first one
+    if undef_ref_warnings:
+        failure = ET.SubElement(tc, "failure", type="failure",
+                                message="undefined Kconfig symbols")
+        failure.text = "\n\n\n".join(undef_ref_warnings)
+        return 1
+
+    return 0
+
 
 def verify_signed_off(tc, commit):
 
@@ -165,6 +200,10 @@ tests = {
         "checkpatch": {
             "call": run_checkpatch,
             "name": "Code style check using checkpatch",
+            },
+        "checkkconfig": {
+            "call": run_kconfig_undef_ref_check,
+            "name": "Check Kconfig files for references to undefined symbols",
             },
         "documentation": {
             "call": check_doc,

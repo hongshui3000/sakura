@@ -22,8 +22,6 @@
 extern "C" {
 #endif
 
-#if defined(CONFIG_NET_RPL)
-
 #include "route.h"
 
 #define NET_ICMPV6_RPL			155  /* RPL Control Message */
@@ -153,6 +151,8 @@ enum net_rpl_mode {
 #define NET_RPL_LOLLIPOP_CIRCULAR_REGION  127
 #define NET_RPL_LOLLIPOP_SEQUENCE_WINDOWS 16
 
+#if defined(CONFIG_NET_RPL)
+
 static inline u8_t net_rpl_lollipop_init(void)
 {
 	return NET_RPL_LOLLIPOP_MAX_VALUE -
@@ -208,6 +208,12 @@ struct net_rpl_node_energy_object {
  * @brief DAG Metric Container. RFC 6551, ch 2.1
  */
 struct net_rpl_metric_container {
+	/** Metric container information */
+	union metric_object {
+		struct net_rpl_node_energy_object energy;
+		u16_t etx;
+	} obj;
+
 	/** Type of the container */
 	u8_t type;
 
@@ -225,12 +231,6 @@ struct net_rpl_metric_container {
 
 	/** Length of the object body */
 	u8_t length;
-
-	/** Metric container information */
-	union metric_object {
-		struct net_rpl_node_energy_object energy;
-		u16_t etx;
-	} obj;
 };
 
 /**
@@ -437,14 +437,6 @@ struct net_rpl_instance {
 	/** DAO lifetime timer. */
 	struct k_delayed_work dao_lifetime_timer;
 
-#if defined(CONFIG_NET_RPL_DAO_ACK)
-	/** DAO retransmit timer */
-	struct k_delayed_work dao_retransmit_timer;
-
-	/** DAO number of retransmissions */
-	u8_t dao_transmissions;
-#endif
-
 	/** Network interface to send DAO */
 	struct net_if *iface;
 
@@ -528,6 +520,14 @@ struct net_rpl_instance {
 
 	/** Is DAO lifetime timer active or not. */
 	bool dao_lifetime_timer_active;
+
+#if defined(CONFIG_NET_RPL_DAO_ACK)
+	/** DAO number of retransmissions */
+	u8_t dao_transmissions;
+
+	/** DAO retransmit timer */
+	struct k_delayed_work dao_retransmit_timer;
+#endif
 };
 
 /**

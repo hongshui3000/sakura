@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2017 Intel Corporation.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
 #include "skeleton.dtsi"
 
 #include <dt-bindings/i2c/i2c.h>
@@ -44,6 +50,15 @@
 		compatible = "simple-bus";
 		ranges;
 
+		rtc: rtc@b0000400 {
+			compatible = "intel,qmsi-rtc";
+			reg = <0xb0000400 0x400>;
+			clock-frequency = <32768>;
+			interrupts = <47 1>;
+			interrupt-parent = <&core_intc>;
+			label = "RTC_0";
+		};
+
 		uart0: uart@b0002000 {
 			compatible = "intel,qmsi-uart";
 			reg = <0xb0002000 0x400>;
@@ -64,13 +79,57 @@
 			status = "disabled";
 		};
 
+		gpio0: gpio@80017800 {
+			compatible = "intel,qmsi-ss-gpio";
+			reg = <0x80017800 0x100>;
+			interrupts = <20 1>;
+			interrupt-parent = <&core_intc>;
+			label = "GPIO_0";
+
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpio1: gpio@80017900 {
+			compatible = "intel,qmsi-ss-gpio";
+			reg = <0x80017900 0x100>;
+			interrupts = <21 1>;
+			interrupt-parent = <&core_intc>;
+			label = "GPIO_1";
+
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpio2: gpio@b0000c00 {
+			compatible = "intel,qmsi-gpio";
+			reg = <0xb0000c00 0x400>;
+			interrupts = <44 1>;
+			interrupt-parent = <&core_intc>;
+			label = "GPIO_2";
+
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
+		gpio3: gpio@b0800b00 {
+			compatible = "intel,qmsi-gpio";
+			reg = <0xb0800b00 0x400>;
+			interrupts = <67 1>;
+			interrupt-parent = <&core_intc>;
+			label = "GPIO_3";
+
+			gpio-controller;
+			#gpio-cells = <2>;
+		};
+
 		i2c0: i2c@80012000 {
 			compatible = "intel,qmsi-ss-i2c";
 			clock-frequency = <I2C_BITRATE_STANDARD>;
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x80012000 0x100>;
-			interrupts = <21 1>, <20 1>, <19 1>, <18 1>;
+			interrupts = <22 1>, <25 1>, <24 1>, <23 1>;
 			interrupt-names = "error", "stop", "tx", "rx";
 			interrupt-parent = <&core_intc>;
 			label = "I2C_0";
@@ -84,7 +143,7 @@
 			#address-cells = <1>;
 			#size-cells = <0>;
 			reg = <0x80012100 0x100>;
-			interrupts = <25 1>, <24 1>, <23 1>, <22 1>;
+			interrupts = <26 1>, <29 1>, <28 1>, <27 1>;
 			interrupt-names = "error", "stop", "tx", "rx";
 			interrupt-parent = <&core_intc>;
 			label = "I2C_1";
@@ -114,6 +173,19 @@
 			interrupts = <37 1>;
 			interrupt-parent = <&core_intc>;
 			label = "I2C_3";
+
+			status = "disabled";
+		};
+
+		adc0: adc@80015000 {
+			compatible = "snps,dw-adc";
+			#address-cells = <1>;
+			#size-cells = <0>;
+			reg = <0x80015000 0x05>;
+			interrupts = <19 0>, <18 0>;
+			interrupt-names = "normal", "error";
+			interrupt-parent = <&core_intc>;
+			label = "ADC_0";
 
 			status = "disabled";
 		};

@@ -13,11 +13,16 @@
  * Macros to abstract compiler capabilities for GCC toolchain.
  */
 
+/* C++11 has static_assert built in */
+#ifdef __cplusplus
+#define BUILD_ASSERT(EXPR) static_assert(EXPR, "")
+#define BUILD_ASSERT_MSG(EXPR, MSG) static_assert(EXPR, MSG)
 /*
- * GCC 4.6 and higher have _Static_assert built in, and its output is
- * easier to understand than the common BUILD_ASSERT macros.
+ * GCC 4.6 and higher have the C11 _Static_assert built in, and its
+ * output is easier to understand than the common BUILD_ASSERT macros.
  */
-#if __GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)
+#elif (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 6)) || \
+	(__STDC_VERSION__) >= 201100
 #define BUILD_ASSERT(EXPR) _Static_assert(EXPR, "")
 #define BUILD_ASSERT_MSG(EXPR, MSG) _Static_assert(EXPR, MSG)
 #endif
@@ -61,6 +66,29 @@ __extension__ ({							\
 	__p->__v;							\
 })
 
+
+#if __GNUC__ >= 7 && defined(CONFIG_ARM)
+
+/* Version of UNALIGNED_PUT() which issues a compiler_barrier() after
+ * the store. It is required to workaround an apparent optimization
+ * bug in GCC for ARM Cortex-M3 and higher targets, when multiple
+ * byte, half-word and word stores (strb, strh, str instructions),
+ * which support unaligned access, can be coalesced into store double
+ * (strd) instruction, which doesn't support unaligned access (the
+ * compilers in question do this optimization ignoring __packed__
+ * attribute).
+ */
+#define UNALIGNED_PUT(v, p)                                             \
+do {                                                                    \
+	struct __attribute__((__packed__)) {                            \
+		__typeof__(*p) __v;                                     \
+	} *__p = (__typeof__(__p)) (p);                                 \
+	__p->__v = (v);                                                 \
+	compiler_barrier();                                             \
+} while (0)
+
+#else
+
 #define UNALIGNED_PUT(v, p)                                             \
 do {                                                                    \
 	struct __attribute__((__packed__)) {                            \
@@ -68,6 +96,8 @@ do {                                                                    \
 	} *__p = (__typeof__(__p)) (p);                                 \
 	__p->__v = (v);                                               \
 } while (0)
+
+#endif
 
 /* Double indirection to ensure section names are expanded before
  * stringification
@@ -112,7 +142,9 @@ do {                                                                    \
 
 #define popcount(x) __builtin_popcount(x)
 
+#ifndef __weak
 #define __weak __attribute__((__weak__))
+#endif
 #define __unused __attribute__((__unused__))
 
 /* Be *very* careful with this, you cannot filter out with -wno-deprecated,

@@ -5,7 +5,7 @@
  */
 
 /**
- * @file SoC configuration macros for the STM32F103 family processors.
+ * @file SoC configuration macros for the STM32F1 family processors.
  *
  * Based on reference manual:
  *   STM32F101xx, STM32F102xx, STM32F103xx, STM32F105xx and STM32F107xx
@@ -24,14 +24,13 @@
 
 #ifndef _ASMLANGUAGE
 
-#include <device.h>
-#include <misc/util.h>
-#include <random/rand32.h>
-
 #include <stm32f1xx.h>
 
-
-#include "soc_irq.h"
+/* ARM CMSIS definitions must be included before kernel_includes.h.
+ * Therefore, it is essential to include kernel_includes.h after including
+ * core SOC-specific headers.
+ */
+#include <kernel_includes.h>
 
 #ifdef CONFIG_SERIAL_HAS_DRIVER
 #include <stm32f1xx_ll_usart.h>

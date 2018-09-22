@@ -6,19 +6,21 @@
 
 #include <ztest.h>
 #include <stdio.h>
+#include <app_memory/app_memdomain.h>
 #ifdef KERNEL
 __kernel static struct k_thread ztest_thread;
 #endif
 
-enum {
+/* APPDMEMP0 and APPBMEMP0 are used for the application shared memory test  */
+
+APPDMEMP0 enum {
 	TEST_PHASE_SETUP,
 	TEST_PHASE_TEST,
 	TEST_PHASE_TEARDOWN,
 	TEST_PHASE_FRAMEWORK
 } phase = TEST_PHASE_FRAMEWORK;
 
-static int test_status;
-
+APPBMEMP0 static int test_status;
 
 static int cleanup_test(struct unit_test *test)
 {
@@ -148,14 +150,11 @@ out:
 #define FAIL_FAST 0
 #endif
 
-#if CONFIG_ZTEST_STACKSIZE & (STACK_ALIGN - 1)
-    #error "CONFIG_ZTEST_STACKSIZE must be a multiple of the stack alignment"
-#endif
-
 K_THREAD_STACK_DEFINE(ztest_thread_stack, CONFIG_ZTEST_STACKSIZE +
 		      CONFIG_TEST_EXTRA_STACKSIZE);
+/* APPBMEMP0 is used for the application shared memory test    */
+APPBMEMP0 static int test_result;
 
-static int test_result;
 __kernel static struct k_sem test_end_signal;
 
 void ztest_test_fail(void)
@@ -168,6 +167,13 @@ void ztest_test_fail(void)
 void ztest_test_pass(void)
 {
 	test_result = 0;
+	k_sem_give(&test_end_signal);
+	k_thread_abort(k_current_get());
+}
+
+void ztest_test_skip(void)
+{
+	test_result = -2;
 	k_sem_give(&test_end_signal);
 	k_thread_abort(k_current_get());
 }
@@ -216,7 +222,7 @@ static int run_test(struct unit_test *test)
 	 * phase": this will corrupt the kernel ready queue.
 	 */
 	k_sem_take(&test_end_signal, K_FOREVER);
-	if (test_result) {
+	if (test_result == -1) {
 		ret = TC_FAIL;
 	}
 
@@ -224,7 +230,11 @@ static int run_test(struct unit_test *test)
 		ret |= cleanup_test(test);
 	}
 
-	_TC_END_RESULT(ret, test->name);
+	if (test_result == -2) {
+		_TC_END_RESULT(TC_SKIP, test->name);
+	} else {
+		_TC_END_RESULT(ret, test->name);
+	}
 
 	return ret;
 }
@@ -258,8 +268,6 @@ void _ztest_run_test_suite(const char *name, struct unit_test *suite)
 	}
 	test_status = (test_status || fail) ? 1 : 0;
 }
-
-void test_main(void);
 
 #ifndef KERNEL
 int main(void)

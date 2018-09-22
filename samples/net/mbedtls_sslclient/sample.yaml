@@ -1,8 +1,0 @@
-sample:
-  description: TBD
-  name: TBD
-tests:
-  test:
-    harness: net
-    platform_whitelist: galileo
-    tags: net

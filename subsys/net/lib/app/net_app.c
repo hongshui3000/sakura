@@ -200,7 +200,7 @@ void _net_app_received(struct net_context *net_ctx,
 			 * context do not call the close callback.
 			 */
 			for (i = 0; i < CONFIG_NET_APP_SERVER_NUM_CONN; i++) {
-				if (!ctx->server.net_ctxs[i]) {
+				if (ctx->server.net_ctxs[i]) {
 					close = false;
 					break;
 				}
@@ -265,8 +265,8 @@ out:
 	return ret;
 }
 
-int _net_app_set_local_addr(struct sockaddr *addr, const char *myaddr,
-			    u16_t port)
+int _net_app_set_local_addr(struct net_app_ctx *ctx, struct sockaddr *addr,
+			    const char *myaddr, u16_t port)
 {
 	if (myaddr) {
 		void *inaddr;
@@ -299,20 +299,15 @@ int _net_app_set_local_addr(struct sockaddr *addr, const char *myaddr,
 #if defined(CONFIG_NET_IPV6)
 		net_ipaddr_copy(&net_sin6(addr)->sin6_addr,
 				net_if_ipv6_select_src_addr(NULL,
-					(struct in6_addr *)
-					net_ipv6_unspecified_address()));
+				     &net_sin6(&ctx->ipv6.remote)->sin6_addr));
 #else
 		return -EPFNOSUPPORT;
 #endif
 	} else if (addr->sa_family == AF_INET) {
 #if defined(CONFIG_NET_IPV4)
-		struct net_if *iface = net_if_get_default();
-
-		NET_ASSERT(iface->config.ip.ipv4);
-
-		/* For IPv4 we take the first address in the interface */
 		net_ipaddr_copy(&net_sin(addr)->sin_addr,
-			   &iface->config.ip.ipv4->unicast[0].address.in_addr);
+				net_if_ipv4_select_src_addr(NULL,
+				     &net_sin(&ctx->ipv4.remote)->sin_addr));
 #else
 		return -EPFNOSUPPORT;
 #endif
@@ -398,7 +393,6 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 
 		if (!ret) {
 			select_default_ctx(ctx);
-			return ret;
 		}
 #endif
 
@@ -421,6 +415,8 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 #if defined(CONFIG_NET_IPV6)
 			ret = setup_ipv6_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv6;
+			net_sin6(&ctx->ipv6.local)->sin6_port =
+				net_sin6(addr)->sin6_port;
 #else
 			ret = -EPFNOSUPPORT;
 			goto fail;
@@ -429,6 +425,8 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 #if defined(CONFIG_NET_IPV4)
 			ret = setup_ipv4_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv4;
+			net_sin(&ctx->ipv4.local)->sin_port =
+				net_sin(addr)->sin_port;
 #else
 			ret = -EPFNOSUPPORT;
 			goto fail;
@@ -437,11 +435,15 @@ int _net_app_config_local_ctx(struct net_app_ctx *ctx,
 #if defined(CONFIG_NET_IPV4)
 			ret = setup_ipv4_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv4;
+			net_sin(&ctx->ipv4.local)->sin_port =
+				net_sin(addr)->sin_port;
 #endif
 			/* We ignore the IPv4 error if IPv6 is enabled */
 #if defined(CONFIG_NET_IPV6)
 			ret = setup_ipv6_ctx(ctx, sock_type, proto);
 			ctx->default_ctx = &ctx->ipv6;
+			net_sin6(&ctx->ipv6.local)->sin6_port =
+				net_sin6(addr)->sin6_port;
 #endif
 		} else {
 			ret = -EINVAL;
@@ -1295,7 +1297,7 @@ int _net_app_tls_sendto(struct net_pkt *pkt,
 		 * a bit and hope things are ok after that. If not, then
 		 * return error.
 		 */
-		k_sleep(MSEC(50));
+		k_sleep(K_MSEC(50));
 
 		if (!ctx->tls.handshake_done) {
 			NET_DBG("TLS handshake not yet done, pkt %p not sent",
@@ -1400,6 +1402,12 @@ static void dtls_cleanup(struct net_app_ctx *ctx, bool cancel_timer)
 
 	/* It might be that ctx is already cleared so check it here */
 	if (ctx->dtls.ctx) {
+		/* Notify peers that we are closing. This must be called
+		 * here as the call in _net_app_ssl_mainloop() is too
+		 * late. Fixes #8605
+		 */
+		mbedtls_ssl_close_notify(&ctx->tls.mbedtls.ssl);
+
 		net_udp_unregister(ctx->dtls.ctx->conn_handler);
 		net_context_put(ctx->dtls.ctx);
 		ctx->dtls.ctx = NULL;
@@ -2129,7 +2137,7 @@ reset:
 					 * Is closing the connection here the
 					 * right thing?
 					 */
-					NET_ERR("could not skip %zu bytes",
+					NET_ERR("could not skip %d bytes",
 						hdr_len);
 					net_pkt_unref(pkt);
 					ret = -EINVAL;

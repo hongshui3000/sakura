@@ -7,7 +7,6 @@
  */
 
 #include <zephyr.h>
-#include <linker/sections.h>
 
 #include <zephyr/types.h>
 #include <stddef.h>
@@ -21,7 +20,7 @@
 #include <net/net_core.h>
 #include <net/net_pkt.h>
 #include <net/net_ip.h>
-#include <net/ethernet.h>
+#include <net/tcp.h>
 
 #include <tc_util.h>
 
@@ -32,7 +31,7 @@
 #define DBG(fmt, ...)
 #endif
 
-#include "tcp.h"
+#include "tcp_internal.h"
 #include "net_private.h"
 
 static bool test_failed;
@@ -61,6 +60,9 @@ static struct in_addr peer_v4_inaddr = { { { 192, 0, 2, 250 } } };
 static struct sockaddr_in my_v4_addr;
 static struct sockaddr_in peer_v4_addr;
 
+static struct net_if *my_iface;
+static struct net_if *peer_iface;
+
 #define NET_TCP_HDR(pkt)  net_pkt_tcp_data(pkt)
 
 #define MY_TCP_PORT 5545
@@ -78,41 +80,16 @@ static int accept_cb_called;
 static bool syn_v6_sent;
 
 struct net_tcp_context {
-	u8_t mac_addr[sizeof(struct net_eth_addr)];
-	struct net_linkaddr ll_addr;
 };
 
 int net_tcp_dev_init(struct device *dev)
 {
-	struct net_tcp_context *net_tcp_context = dev->driver_data;
-
-	net_tcp_context = net_tcp_context;
-
 	return 0;
-}
-
-static u8_t *net_tcp_get_mac(struct device *dev)
-{
-	struct net_tcp_context *context = dev->driver_data;
-
-	if (context->mac_addr[2] == 0x00) {
-		/* 00-00-5E-00-53-xx Documentation RFC 7042 */
-		context->mac_addr[0] = 0x00;
-		context->mac_addr[1] = 0x00;
-		context->mac_addr[2] = 0x5E;
-		context->mac_addr[3] = 0x00;
-		context->mac_addr[4] = 0x53;
-		context->mac_addr[5] = sys_rand32_get();
-	}
-
-	return context->mac_addr;
 }
 
 static void net_tcp_iface_init(struct net_if *iface)
 {
-	u8_t *mac = net_tcp_get_mac(net_if_get_device(iface));
-
-	net_if_set_link_addr(iface, mac, 6, NET_LINK_ETHERNET);
+	return;
 }
 
 static void v6_send_syn_ack(struct net_if *iface, struct net_pkt *req)
@@ -270,8 +247,7 @@ static void setup_ipv6_tcp(struct net_pkt *pkt,
 	ipv6.vtc = 0x60;
 	ipv6.tcflow = 0;
 	ipv6.flow = 0;
-	ipv6.len[0] = 0;
-	ipv6.len[1] = NET_TCPH_LEN + sizeof(data);
+	ipv6.len = htons(NET_TCPH_LEN + sizeof(data));
 	ipv6.nexthdr = IPPROTO_TCP;
 	ipv6.hop_limit = 255;
 
@@ -295,15 +271,14 @@ static void setup_ipv4_tcp(struct net_pkt *pkt,
 			   u16_t remote_port,
 			   u16_t local_port)
 {
-	struct net_ipv4_hdr ipv4;
+	struct net_ipv4_hdr ipv4 = {};
 	struct net_tcp_hdr tcp_hdr = { 0 };
 	u8_t data[] = { 'f', 'o', 'o', 'b', 'a', 'r' };
 
 	ipv4.vhl = 0x45;
 	ipv4.tos = 0;
-	ipv4.len[0] = 0;
-	ipv4.len[1] = NET_TCPH_LEN + sizeof(data) +
-		sizeof(struct net_ipv4_hdr);
+	ipv4.len = htons(NET_TCPH_LEN + sizeof(data) +
+				sizeof(struct net_ipv4_hdr));
 
 	ipv4.proto = IPPROTO_TCP;
 
@@ -360,9 +335,8 @@ static void setup_ipv6_tcp_long(struct net_pkt *pkt,
 	ipv6.vtc = 0x60;
 	ipv6.tcflow = 0;
 	ipv6.flow = 0;
-	ipv6.len[0] = 0;
-	ipv6.len[1] = NET_TCPH_LEN + sizeof(data) +
-		sizeof(ipv6_hop_by_hop_ext_hdr);
+	ipv6.len = htons(NET_TCPH_LEN + sizeof(data) +
+				sizeof(ipv6_hop_by_hop_ext_hdr));
 
 	ipv6.nexthdr = 0; /* Hop-by-hop option */
 	ipv6.hop_limit = 255;
@@ -594,7 +568,7 @@ static void set_port(sa_family_t family, struct sockaddr *raddr,
 static bool test_register(void)
 {
 	struct net_conn_handle *handlers[CONFIG_NET_MAX_CONN];
-	struct net_if *iface = net_if_get_default();
+	struct net_if *iface = my_iface;
 	struct net_if_addr *ifaddr;
 	struct ud *ud;
 	int ret, i = 0;
@@ -1356,14 +1330,9 @@ NET_DEVICE_INIT_INSTANCE(net_tcp_test_peer, "net_tcp_test_peer", peer,
 
 static bool test_init_tcp_context(void)
 {
-	struct net_if *iface = net_if_get_default();
+	struct net_if *iface = my_iface;
 	struct net_if_addr *ifaddr;
 	int ret;
-
-	if (!iface) {
-		TC_ERROR("Interface is NULL\n");
-		return false;
-	}
 
 	ifaddr = net_if_ipv6_addr_add(iface, &my_v6_inaddr,
 				      NET_ADDR_MANUAL, 0);
@@ -1500,7 +1469,7 @@ static bool test_tcp_seq_validity(void)
 
 static bool test_init_tcp_reply_context(void)
 {
-	struct net_if *iface = net_if_get_default() + 1;
+	struct net_if *iface = peer_iface;
 	struct net_if_addr *ifaddr;
 	int ret;
 
@@ -1686,13 +1655,34 @@ static bool test_init_tcp_connect(void)
 
 static bool test_init(void)
 {
-	struct net_if_addr *ifaddr;
 	struct net_if *iface = net_if_get_default();
+	struct net_if_addr *ifaddr;
+	const struct net_if_api *api;
 
 	if (!iface) {
 		TC_ERROR("Interface is NULL\n");
 		return false;
 	}
+
+	/* Make sure that we always use the correct network interface when
+	 * simulating the local and peer devices. To do this, we check what
+	 * device API corresponds to what network interface sending function.
+	 * This way we can use the correct network interface to set the IP
+	 * addresses etc.
+	 * The network interfaces might be set in different order depending on
+	 * used target board and linker. We cannot guarantee that network
+	 * interfaces are always set the same way in the linker section.
+	 */
+	api = net_if_get_device(iface)->driver_api;
+	if (api->send != tester_send) {
+		my_iface = iface + 1;
+		peer_iface = iface;
+	} else {
+		my_iface = iface;
+		peer_iface = iface + 1;
+	}
+
+	iface = my_iface;
 
 	ifaddr = net_if_ipv6_addr_add(iface, &my_v6_inaddr,
 				      NET_ADDR_MANUAL, 0);

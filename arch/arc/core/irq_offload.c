@@ -22,13 +22,15 @@ void _irq_do_offload(void)
 
 void irq_offload(irq_offload_routine_t routine, void *parameter)
 {
-	int key;
+	unsigned int key;
 
 	key = irq_lock();
 	offload_routine = routine;
 	offload_param = parameter;
 
-	__asm__ volatile ("trap_s 0");
+	__asm__ volatile ("trap_s %[id]"
+		:
+		: [id] "i"(_TRAP_S_SCALL_IRQ_OFFLOAD) : );
 
 	irq_unlock(key);
 }

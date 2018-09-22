@@ -8,6 +8,13 @@
 # SPDX-License-Identifier: Apache-2.0
 #
 
+# Include these first so that any properties (e.g. defaults) below can be
+# overriden (by defining symbols in multiple locations)
+
+source "boards/Kconfig"
+# Note: $ENV_VAR_ARCH might be a glob pattern
+source "arch/$ENV_VAR_ARCH/Kconfig"
+
 
 choice
 	prompt "Architecture"
@@ -81,6 +88,7 @@ config USERSPACE
 
 config PRIVILEGED_STACK_SIZE
 	int "Size of privileged stack"
+	default 384 if ARC
 	default 256
 	depends on ARCH_HAS_USERSPACE
 	help
@@ -91,7 +99,6 @@ config PRIVILEGED_STACK_SIZE
 
 config STACK_GROWS_UP
 	bool "Stack grows towards higher memory addresses"
-	default n
 	help
 	  Select this option if the architecture has upward growing thread
 	  stacks. This is not common.
@@ -106,10 +113,21 @@ config MAX_THREAD_BYTES
 	  bitfield (in bytes) and imposes a limit on how many threads can
 	  be created in the system.
 
+config DYNAMIC_OBJECTS
+	bool "Allow kernel objects to be allocated at runtime"
+	depends on USERSPACE
+	help
+	Enabling this option allows for kernel objects to be requested from
+	the calling thread's resource pool, at a slight cost in performance
+	due to the supplemental run-time tables required to validate such
+	objects.
+
+	Objects allocated in this way can be freed with a supervisor-only
+	API call, or when the number of references to that object drops to
+	zero.
+
 config SIMPLE_FATAL_ERROR_HANDLER
-	prompt "Simple system fatal error handler"
-	bool
-	default n
+	bool "Simple system fatal error handler"
 	default y if !MULTITHREADING
 	help
 	  Provides an implementation of _SysFatalErrorHandler() that hard hangs
@@ -122,17 +140,14 @@ menu "Interrupt Configuration"
 # Interrupt related configs
 #
 config GEN_ISR_TABLES
-	bool
-	prompt "Use generated IRQ tables"
-	default n
+	bool "Use generated IRQ tables"
 	help
 	  This option controls whether a platform uses the gen_isr_tables
 	  script to generate its interrupt tables. This mechanism will create
 	  an appropriate hardware vector table and/or software IRQ table.
 
 config GEN_IRQ_VECTOR_TABLE
-	bool
-	prompt "Generate an interrupt vector table"
+	bool "Generate an interrupt vector table"
 	default y
 	depends on GEN_ISR_TABLES
 	help
@@ -144,8 +159,7 @@ config GEN_IRQ_VECTOR_TABLE
 	  supplied by the application or architecture code.
 
 config GEN_SW_ISR_TABLE
-	bool
-	prompt "Generate a software ISR table"
+	bool "Generate a software ISR table"
 	default y
 	depends on GEN_ISR_TABLES
 	help
@@ -169,7 +183,6 @@ config GEN_IRQ_START_VECTOR
 
 config IRQ_OFFLOAD
 	bool "Enable IRQ offload"
-	default n
 	help
 	  Enable irq_offload() API which allows functions to be synchronously
 	  run in interrupt context. Mainly useful for test cases.
@@ -204,7 +217,6 @@ config ARCH_HAS_THREAD_ABORT
 config SYS_POWER_LOW_POWER_STATE_SUPPORTED
 	# Hidden
 	bool
-	default n
 	help
 	  This option signifies that the target supports the SYS_POWER_LOW_POWER_STATE
 	  configuration option.
@@ -212,7 +224,6 @@ config SYS_POWER_LOW_POWER_STATE_SUPPORTED
 config SYS_POWER_DEEP_SLEEP_SUPPORTED
 	# Hidden
 	bool
-	default n
 	help
 	  This option signifies that the target supports the SYS_POWER_DEEP_SLEEP
 	  configuration option.
@@ -220,7 +231,6 @@ config SYS_POWER_DEEP_SLEEP_SUPPORTED
 config BOOTLOADER_CONTEXT_RESTORE_SUPPORTED
 	# Hidden
 	bool
-	default n
 	help
 	  This option signifies that the target has options of bootloaders
 	  that support context restore upon resume from deep sleep
@@ -231,7 +241,6 @@ config BOOTLOADER_CONTEXT_RESTORE_SUPPORTED
 
 config CPU_HAS_FPU
 	bool
-	default n
 	help
 	  This option is enabled when the CPU has hardware floating point
 	  unit.
@@ -239,14 +248,12 @@ config CPU_HAS_FPU
 config CPU_HAS_MPU
 	bool
 	# Omit prompt to signify "hidden" option
-	default n
 	help
 	  This option is enabled when the CPU has a Memory Protection Unit (MPU).
 
 config MPU_REQUIRES_POWER_OF_TWO_ALIGNMENT
 	bool
 	# Omit prompt to signify "hidden" option
-	default n
 	help
 	  This option is enabled when the MPU requires a power of two alignment
 	  and size for MPU regions.
@@ -256,9 +263,7 @@ menu "Floating Point Options"
 depends on CPU_HAS_FPU
 
 config FLOAT
-	bool
-	prompt "Floating point registers"
-	default n
+	bool "Floating point registers"
 	help
 	  This option allows threads to use the floating point registers.
 	  By default, only a single thread may use the registers.
@@ -267,10 +272,8 @@ config FLOAT
 	  floating point register will get a fatal exception.
 
 config FP_SHARING
-	bool
-	prompt "Floating point register sharing"
+	bool "Floating point register sharing"
 	depends on FLOAT
-	default n
 	help
 	  This option allows multiple threads to use the floating point
 	  registers.
@@ -316,8 +319,3 @@ config BOARD
 	  The Board is the first location where we search for a linker.ld file,
 	  if not found we look for the linker file in
 	  arch/<arch>/soc/<family>/<series>
-
-
-source "arch/$ENV_VAR_SYM_ARCH/Kconfig"
-
-source "boards/Kconfig"

@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017 Linaro Limited
- * Copyright (c) 2017 Open Source Foundries Limited.
+ * Copyright (c) 2017 Foundries.io
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -81,7 +81,7 @@ typedef void *(*lwm2m_engine_get_data_cb_t)(u16_t obj_inst_id,
 typedef int (*lwm2m_engine_set_data_cb_t)(u16_t obj_inst_id,
 				       u8_t *data, u16_t data_len,
 				       bool last_block, size_t total_size);
-typedef int (*lwm2m_engine_exec_cb_t)(u16_t obj_inst_id);
+typedef int (*lwm2m_engine_user_cb_t)(u16_t obj_inst_id);
 
 
 /* LWM2M Device Object */
@@ -144,8 +144,8 @@ void lwm2m_firmware_set_write_cb(lwm2m_engine_set_data_cb_t cb);
 lwm2m_engine_set_data_cb_t lwm2m_firmware_get_write_cb(void);
 
 #if defined(CONFIG_LWM2M_FIRMWARE_UPDATE_PULL_SUPPORT)
-void lwm2m_firmware_set_update_cb(lwm2m_engine_exec_cb_t cb);
-lwm2m_engine_exec_cb_t lwm2m_firmware_get_update_cb(void);
+void lwm2m_firmware_set_update_cb(lwm2m_engine_user_cb_t cb);
+lwm2m_engine_user_cb_t lwm2m_firmware_get_update_cb(void);
 #endif
 #endif
 
@@ -186,17 +186,17 @@ int lwm2m_engine_set_float64(char *pathstr, float64_value_t *value);
 
 int lwm2m_engine_get_opaque(char *pathstr, void *buf, u16_t buflen);
 int lwm2m_engine_get_string(char *path, void *str, u16_t strlen);
-u8_t  lwm2m_engine_get_u8(char *path);
-u16_t lwm2m_engine_get_u16(char *path);
-u32_t lwm2m_engine_get_u32(char *path);
-u64_t lwm2m_engine_get_u64(char *path);
-s8_t  lwm2m_engine_get_s8(char *path);
-s16_t lwm2m_engine_get_s16(char *path);
-s32_t lwm2m_engine_get_s32(char *path);
-s64_t lwm2m_engine_get_s64(char *path);
-bool  lwm2m_engine_get_bool(char *path);
-int   lwm2m_engine_get_float32(char *pathstr, float32_value_t *buf);
-int   lwm2m_engine_get_float64(char *pathstr, float64_value_t *buf);
+int lwm2m_engine_get_u8(char *path, u8_t *value);
+int lwm2m_engine_get_u16(char *path, u16_t *value);
+int lwm2m_engine_get_u32(char *path, u32_t *value);
+int lwm2m_engine_get_u64(char *path, u64_t *value);
+int lwm2m_engine_get_s8(char *path, s8_t *value);
+int lwm2m_engine_get_s16(char *path, s16_t *value);
+int lwm2m_engine_get_s32(char *path, s32_t *value);
+int lwm2m_engine_get_s64(char *path, s64_t *value);
+int lwm2m_engine_get_bool(char *path, bool *value);
+int lwm2m_engine_get_float32(char *pathstr, float32_value_t *buf);
+int lwm2m_engine_get_float64(char *pathstr, float64_value_t *buf);
 
 int lwm2m_engine_register_read_callback(char *path,
 					lwm2m_engine_get_data_cb_t cb);
@@ -205,7 +205,25 @@ int lwm2m_engine_register_pre_write_callback(char *path,
 int lwm2m_engine_register_post_write_callback(char *path,
 					      lwm2m_engine_set_data_cb_t cb);
 int lwm2m_engine_register_exec_callback(char *path,
-					lwm2m_engine_exec_cb_t cb);
+					lwm2m_engine_user_cb_t cb);
+int lwm2m_engine_register_create_callback(u16_t obj_id,
+					  lwm2m_engine_user_cb_t cb);
+int lwm2m_engine_register_delete_callback(u16_t obj_id,
+					  lwm2m_engine_user_cb_t cb);
+
+/* resource data bit values */
+#define LWM2M_RES_DATA_READ_ONLY	0
+
+/* resource data flags */
+#define LWM2M_RES_DATA_FLAG_RO		BIT(LWM2M_RES_DATA_READ_ONLY)
+
+/* helper macro to read resource flag */
+#define LWM2M_HAS_RES_FLAG(res, f)	((res->data_flags & f) == f)
+
+int lwm2m_engine_set_res_data(char *pathstr, void *data_ptr, u16_t data_len,
+			      u8_t data_flags);
+int lwm2m_engine_get_res_data(char *pathstr, void **data_ptr, u16_t *data_len,
+			      u8_t *data_flags);
 
 #if defined(CONFIG_NET_CONTEXT_NET_PKT_POOL)
 int lwm2m_engine_set_net_pkt_pool(struct lwm2m_ctx *ctx,

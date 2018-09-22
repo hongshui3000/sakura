@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2016 Jean-Paul Etienne <fractalclone@gmail.com>
+ * Contributors: 2018 Antmicro <www.antmicro.com>
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -20,6 +21,7 @@
 #include <irq.h>
 #include <sw_isr_table.h>
 #include <soc.h>
+#include <generated_dts_board.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -33,11 +35,6 @@ extern "C" {
 
 #define STACK_ROUND_UP(x) ROUND_UP(x, STACK_ALIGN)
 #define STACK_ROUND_DOWN(x) ROUND_DOWN(x, STACK_ALIGN)
-
-/* APIs need to support non-byte addressable architectures */
-
-#define OCTET_TO_SIZEOFUNIT(X) (X)
-#define SIZEOFUNIT_TO_OCTET(X) (X)
 
 /* macros convert value of it's argument to a string */
 #define DO_TOSTR(s) #s
@@ -127,8 +124,8 @@ extern u32_t _timer_cycle_get_32(void);
 #include <arch/riscv32/pulpino/asm_inline.h>
 #elif defined(CONFIG_SOC_RISCV32_QEMU)
 #include <arch/riscv32/riscv32-qemu/asm_inline.h>
-#elif defined(CONFIG_SOC_RISCV32_FE310)
-#include <arch/riscv32/fe310/asm_inline.h>
+#elif defined(CONFIG_SOC_FAMILY_RISCV_PRIVILEGE)
+#include <arch/riscv32/riscv-privilege/asm_inline.h>
 #endif
 
 #ifdef __cplusplus

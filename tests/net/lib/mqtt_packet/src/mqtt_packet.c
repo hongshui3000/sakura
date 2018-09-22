@@ -9,8 +9,6 @@
 #include <misc/util.h>	/* for ARRAY_SIZE */
 #include <ztest.h>
 
-#define RC_STR(rc)	(rc == TC_PASS ? PASS : FAIL)
-
 #define CLIENTID	"zephyr"
 #define CLIENTID_LEN	6
 #define TOPIC		"sensors"
@@ -735,7 +733,7 @@ int eval_buffers(u8_t *buf, u16_t buf_len, u8_t *expected,
 	return TC_PASS;
 
 exit_eval:
-	TC_PRINT("%s\n", FAIL);
+	TC_PRINT("FAIL\n");
 	TC_PRINT("Computed:");
 	print_array(buf, buf_len);
 	TC_PRINT("Expected:");
@@ -1004,7 +1002,7 @@ static int eval_msg_unsuback(struct mqtt_test *mqtt_test)
 	return eval_msg_packet_id(mqtt_test, MQTT_UNSUBACK);
 }
 
-void run_tests(void)
+void test_mqtt_packet(void)
 {
 	TC_START("MQTT Library test");
 
@@ -1020,7 +1018,8 @@ void run_tests(void)
 		}
 
 		rc = test->eval_fcn(test);
-		TC_PRINT("[%s] %d - %s\n", RC_STR(rc), i + 1, test->test_name);
+		TC_PRINT("[%s] %d - %s\n", TC_RESULT_TO_STR(rc), i + 1,
+			test->test_name);
 
 		/**TESTPOINT: Check eval_fcn*/
 		zassert_false(rc, "mqtt_packet test error");
@@ -1033,6 +1032,6 @@ void run_tests(void)
 void test_main(void)
 {
 	ztest_test_suite(test_mqtt_packet_fn,
-		ztest_unit_test(run_tests));
+		ztest_unit_test(test_mqtt_packet));
 	ztest_run_test_suite(test_mqtt_packet_fn);
 }

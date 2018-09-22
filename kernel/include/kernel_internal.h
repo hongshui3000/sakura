@@ -157,7 +157,34 @@ void _arch_user_mode_enter(k_thread_entry_t user_entry, void *p1, void *p2,
  *            architecture specific.
  */
 extern FUNC_NORETURN void _arch_syscall_oops(void *ssf);
+
+/**
+ * @brief Safely take the length of a potentially bad string
+ *
+ * This must not fault, instead the err parameter must have -1 written to it.
+ * This function otherwise should work exactly like libc strnlen(). On success
+ * *err should be set to 0.
+ *
+ * @param s String to measure
+ * @param maxlen Max length of the string
+ * @param err Error value to write
+ * @return Length of the string, not counting NULL byte, up to maxsize
+ */
+extern size_t z_arch_user_string_nlen(const char *s, size_t maxsize, int *err);
 #endif /* CONFIG_USERSPACE */
+
+/**
+ * @brief Allocate some memory from the current thread's resource pool
+ *
+ * Threads may be assigned a resource pool, which will be used to allocate
+ * memory on behalf of certain kernel and driver APIs. Memory reserved
+ * in this way should be freed with k_free().
+ *
+ * @param size Memory allocation size
+ * @return A pointer to the allocated memory, or NULL if there is insufficient
+ * RAM in the pool or the thread has no resource pool assigned
+ */
+void *z_thread_malloc(size_t size);
 
 /* set and clear essential thread flag */
 
@@ -177,6 +204,27 @@ extern void _thread_monitor_exit(struct k_thread *thread);
 extern void smp_init(void);
 
 extern void smp_timer_init(void);
+
+#ifdef CONFIG_NEWLIB_LIBC
+/**
+ * @brief Fetch dimentions of newlib heap area for _sbrk()
+ *
+ * This memory region is used for heap allocations by the newlib C library.
+ * If user threads need to have access to this, the results returned can be
+ * used to program memory protection hardware appropriately.
+ *
+ * @param base Pointer to void pointer, filled in with the heap starting
+ *             address
+ * @param size Pointer to a size_y, filled in with the maximum heap size
+ */
+extern void z_newlib_get_heap_bounds(void **base, size_t *size);
+#endif
+
+extern u32_t z_early_boot_rand32_get(void);
+
+#if CONFIG_STACK_POINTER_RANDOM
+extern int z_stack_adjust_initialized;
+#endif
 
 #ifdef __cplusplus
 }

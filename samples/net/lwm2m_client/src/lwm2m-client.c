@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2017 Linaro Limited
- * Copyright (c) 2017 Open Source Foundries Limited.
+ * Copyright (c) 2017 Foundries.io
  *
  * SPDX-License-Identifier: Apache-2.0
  */
@@ -16,12 +16,12 @@
 
 #define APP_BANNER "Run LWM2M client"
 
-#if !defined(CONFIG_NET_APP_PEER_IPV4_ADDR)
-#define CONFIG_NET_APP_PEER_IPV4_ADDR ""
+#if !defined(CONFIG_NET_CONFIG_PEER_IPV4_ADDR)
+#define CONFIG_NET_CONFIG_PEER_IPV4_ADDR ""
 #endif
 
-#if !defined(CONFIG_NET_APP_PEER_IPV6_ADDR)
-#define CONFIG_NET_APP_PEER_IPV6_ADDR ""
+#if !defined(CONFIG_NET_CONFIG_PEER_IPV6_ADDR)
+#define CONFIG_NET_CONFIG_PEER_IPV6_ADDR ""
 #endif
 
 #define WAIT_TIME	K_SECONDS(10)
@@ -36,13 +36,17 @@
 
 #define ENDPOINT_LEN		32
 
-#if defined(LED0_GPIO_PORT)
-#define LED_GPIO_PORT	LED0_GPIO_PORT
-#define LED_GPIO_PIN	LED0_GPIO_PIN
+#ifndef LED0_GPIO_CONTROLLER
+#ifdef LED0_GPIO_PORT
+#define LED0_GPIO_CONTROLLER 	LED0_GPIO_PORT
 #else
-#define LED_GPIO_PORT	"(fail)"
-#define LED_GPIO_PIN	0
+#define LED0_GPIO_CONTROLLER "(fail)"
+#define LED0_GPIO_PIN 0
 #endif
+#endif
+
+#define LED_GPIO_PORT LED0_GPIO_CONTROLLER
+#define LED_GPIO_PIN LED0_GPIO_PIN
 
 static int pwrsrc_bat;
 static int pwrsrc_usb;
@@ -224,16 +228,28 @@ static int lwm2m_setup(void)
 
 	/* setup DEVICE object */
 
-	lwm2m_engine_set_string("3/0/0", CLIENT_MANUFACTURER);
-	lwm2m_engine_set_string("3/0/1", CLIENT_MODEL_NUMBER);
-	lwm2m_engine_set_string("3/0/2", CLIENT_SERIAL_NUMBER);
-	lwm2m_engine_set_string("3/0/3", CLIENT_FIRMWARE_VER);
+	lwm2m_engine_set_res_data("3/0/0", CLIENT_MANUFACTURER,
+				  sizeof(CLIENT_MANUFACTURER),
+				  LWM2M_RES_DATA_FLAG_RO);
+	lwm2m_engine_set_res_data("3/0/1", CLIENT_MODEL_NUMBER,
+				  sizeof(CLIENT_MODEL_NUMBER),
+				  LWM2M_RES_DATA_FLAG_RO);
+	lwm2m_engine_set_res_data("3/0/2", CLIENT_SERIAL_NUMBER,
+				  sizeof(CLIENT_SERIAL_NUMBER),
+				  LWM2M_RES_DATA_FLAG_RO);
+	lwm2m_engine_set_res_data("3/0/3", CLIENT_FIRMWARE_VER,
+				  sizeof(CLIENT_FIRMWARE_VER),
+				  LWM2M_RES_DATA_FLAG_RO);
 	lwm2m_engine_register_exec_callback("3/0/4", device_reboot_cb);
 	lwm2m_engine_register_exec_callback("3/0/5", device_factory_default_cb);
 	lwm2m_engine_set_u8("3/0/9", 95); /* battery level */
 	lwm2m_engine_set_u32("3/0/10", 15); /* mem free */
-	lwm2m_engine_set_string("3/0/17", CLIENT_DEVICE_TYPE);
-	lwm2m_engine_set_string("3/0/18", CLIENT_HW_VER);
+	lwm2m_engine_set_res_data("3/0/17", CLIENT_DEVICE_TYPE,
+				  sizeof(CLIENT_DEVICE_TYPE),
+				  LWM2M_RES_DATA_FLAG_RO);
+	lwm2m_engine_set_res_data("3/0/18", CLIENT_HW_VER,
+				  sizeof(CLIENT_HW_VER),
+				  LWM2M_RES_DATA_FLAG_RO);
 	lwm2m_engine_set_u8("3/0/20", LWM2M_DEVICE_BATTERY_STATUS_CHARGING);
 	lwm2m_engine_set_u32("3/0/21", 25); /* mem total */
 
@@ -364,11 +380,11 @@ void main(void)
 #endif /* CONFIG_NET_APP_DTLS */
 
 #if defined(CONFIG_NET_IPV6)
-	ret = lwm2m_rd_client_start(&client, CONFIG_NET_APP_PEER_IPV6_ADDR,
+	ret = lwm2m_rd_client_start(&client, CONFIG_NET_CONFIG_PEER_IPV6_ADDR,
 				    CONFIG_LWM2M_PEER_PORT, CONFIG_BOARD,
 				    rd_client_event);
 #elif defined(CONFIG_NET_IPV4)
-	ret = lwm2m_rd_client_start(&client, CONFIG_NET_APP_PEER_IPV4_ADDR,
+	ret = lwm2m_rd_client_start(&client, CONFIG_NET_CONFIG_PEER_IPV4_ADDR,
 				    CONFIG_LWM2M_PEER_PORT, CONFIG_BOARD,
 				    rd_client_event);
 #else

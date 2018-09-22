@@ -20,8 +20,8 @@
 #define FIRMWARE_UPDATE_ID			2
 #define FIRMWARE_STATE_ID			3
 #define FIRMWARE_UPDATE_RESULT_ID		5
-#define FIRMWARE_PACKAGE_NAME_ID		6 /* TODO */
-#define FIRMWARE_PACKAGE_VERSION_ID		7 /* TODO */
+#define FIRMWARE_PACKAGE_NAME_ID		6
+#define FIRMWARE_PACKAGE_VERSION_ID		7
 #define FIRMWARE_UPDATE_PROTO_SUPPORT_ID	8 /* TODO */
 #define FIRMWARE_UPDATE_DELIV_METHOD_ID		9
 
@@ -47,6 +47,9 @@ static struct lwm2m_engine_obj_field fields[] = {
 	OBJ_FIELD_EXECUTE(FIRMWARE_UPDATE_ID),
 	OBJ_FIELD_DATA(FIRMWARE_STATE_ID, R, U8),
 	OBJ_FIELD_DATA(FIRMWARE_UPDATE_RESULT_ID, R, U8),
+	OBJ_FIELD_DATA(FIRMWARE_PACKAGE_NAME_ID, R_OPT, STRING),
+	OBJ_FIELD_DATA(FIRMWARE_PACKAGE_VERSION_ID, R_OPT, STRING),
+	OBJ_FIELD(FIRMWARE_UPDATE_PROTO_SUPPORT_ID, R_OPT, U8, 0),
 	OBJ_FIELD_DATA(FIRMWARE_UPDATE_DELIV_METHOD_ID, R, U8)
 };
 
@@ -54,7 +57,7 @@ static struct lwm2m_engine_obj_inst inst;
 static struct lwm2m_engine_res_inst res[FIRMWARE_MAX_ID];
 
 static lwm2m_engine_set_data_cb_t write_cb;
-static lwm2m_engine_exec_cb_t update_cb;
+static lwm2m_engine_user_cb_t update_cb;
 
 #ifdef CONFIG_LWM2M_FIRMWARE_UPDATE_PULL_SUPPORT
 extern int lwm2m_firmware_start_transfer(char *package_uri);
@@ -253,19 +256,19 @@ lwm2m_engine_set_data_cb_t lwm2m_firmware_get_write_cb(void)
 	return write_cb;
 }
 
-void lwm2m_firmware_set_update_cb(lwm2m_engine_exec_cb_t cb)
+void lwm2m_firmware_set_update_cb(lwm2m_engine_user_cb_t cb)
 {
 	update_cb = cb;
 }
 
-lwm2m_engine_exec_cb_t lwm2m_firmware_get_update_cb(void)
+lwm2m_engine_user_cb_t lwm2m_firmware_get_update_cb(void)
 {
 	return update_cb;
 }
 
 static int firmware_update_cb(u16_t obj_inst_id)
 {
-	lwm2m_engine_exec_cb_t callback;
+	lwm2m_engine_user_cb_t callback;
 	u8_t state;
 	int ret;
 
@@ -336,7 +339,7 @@ static int lwm2m_firmware_init(struct device *dev)
 
 	firmware.obj_id = LWM2M_OBJECT_FIRMWARE_ID;
 	firmware.fields = fields;
-	firmware.field_count = sizeof(fields) / sizeof(*fields);
+	firmware.field_count = ARRAY_SIZE(fields);
 	firmware.max_instance_count = 1;
 	firmware.create_cb = firmware_create;
 	lwm2m_register_obj(&firmware);

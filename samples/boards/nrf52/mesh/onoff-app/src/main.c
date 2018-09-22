@@ -37,6 +37,7 @@
  */
 
 #include <misc/printk.h>
+#include <settings/settings.h>
 #include <misc/byteorder.h>
 #include <nrf.h>
 #include <device.h>
@@ -319,7 +320,7 @@ static void gen_onoff_get(struct bt_mesh_model *model,
 	struct onoff_state *onoff_state = model->user_data;
 
 	SYS_LOG_INF("addr 0x%04x onoff 0x%02x",
-		    model->elem->addr, onoff_state->current);
+		    bt_mesh_model_elem(model)->addr, onoff_state->current);
 	bt_mesh_model_msg_init(&msg, BT_MESH_MODEL_OP_GEN_ONOFF_STATUS);
 	net_buf_simple_add_u8(&msg, onoff_state->current);
 
@@ -338,7 +339,7 @@ static void gen_onoff_set_unack(struct bt_mesh_model *model,
 
 	onoff_state->current = net_buf_simple_pull_u8(buf);
 	SYS_LOG_INF("addr 0x%02x state 0x%02x",
-		    model->elem->addr, onoff_state->current);
+		    bt_mesh_model_elem(model)->addr, onoff_state->current);
 
 	/* Pin set low turns on LED's on the nrf52840-pca10056 board */
 	gpio_pin_write(onoff_state->led_device,
@@ -389,10 +390,10 @@ static void gen_onoff_status(struct bt_mesh_model *model,
 	state = net_buf_simple_pull_u8(buf);
 
 	SYS_LOG_INF("Node 0x%04x OnOff status from 0x%04x with state 0x%02x",
-		    model->elem->addr, ctx->addr, state);
+		    bt_mesh_model_elem(model)->addr, ctx->addr, state);
 }
 
-static int output_number(bt_mesh_output_action_t action, uint32_t number)
+static int output_number(bt_mesh_output_action_t action, u32_t number)
 {
 	SYS_LOG_INF("OOB Number %u", number);
 	return 0;
@@ -440,7 +441,7 @@ static uint8_t pin_to_sw(uint32_t pin_pos)
 }
 
 static void button_pressed(struct device *dev, struct gpio_callback *cb,
-			   uint32_t pin_pos)
+			   u32_t pin_pos)
 {
 	/*
 	 * One button press within a 1 second interval sends an on message
@@ -577,17 +578,21 @@ static void bt_ready(int err)
 
 	SYS_LOG_INF("Bluetooth initialized");
 
-	/* Use identity address as device UUID */
-	if (bt_le_oob_get_local(&oob)) {
-		SYS_LOG_ERR("Identity Address unavailable");
-	} else {
-		memcpy(dev_uuid, oob.addr.a.val, 6);
-	}
-
 	err = bt_mesh_init(&prov, &comp);
 	if (err) {
 		SYS_LOG_ERR("Initializing mesh failed (err %d)", err);
 		return;
+	}
+
+	if (IS_ENABLED(CONFIG_SETTINGS)) {
+		settings_load();
+	}
+
+	/* Use identity address as device UUID */
+	if (bt_le_oob_get_local(BT_ID_DEFAULT, &oob)) {
+		SYS_LOG_ERR("Identity Address unavailable");
+	} else {
+		memcpy(dev_uuid, oob.addr.a.val, 6);
 	}
 
 	bt_mesh_prov_enable(BT_MESH_PROV_GATT | BT_MESH_PROV_ADV);

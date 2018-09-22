@@ -4,7 +4,7 @@ Networking API
 ##############
 
 .. contents::
-   :depth: 1
+   :depth: 2
    :local:
    :backlinks: top
 
@@ -108,6 +108,12 @@ Hostname Configuration Library
 .. doxygengroup:: net_hostname
    :project: Zephyr
 
+generic Precision Time Protocol (gPTP)
+**************************************
+
+.. doxygengroup:: gptp
+   :project: Zephyr
+
 Network technologies
 ********************
 
@@ -117,10 +123,34 @@ Ethernet
 .. doxygengroup:: ethernet
    :project: Zephyr
 
+Ethernet Management
+===================
+
+.. doxygengroup:: ethernet_mgmt
+   :project: Zephyr
+
+Virtual LAN definitions and helpers
+===================================
+
+.. doxygengroup:: vlan
+   :project: Zephyr
+
+Link Layer Discovery Protocol definitions and helpers
+=====================================================
+
+.. doxygengroup:: lldp
+   :project: Zephyr
+
 IEEE 802.15.4
 =============
 
 .. doxygengroup:: ieee802154
+   :project: Zephyr
+
+IEEE 802.15.4 Management
+========================
+
+.. doxygengroup:: ieee802154_mgmt
    :project: Zephyr
 
 Network and application libraries

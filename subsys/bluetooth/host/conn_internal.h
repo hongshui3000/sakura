@@ -88,6 +88,9 @@ struct bt_conn {
 
 	ATOMIC_DEFINE(flags, BT_CONN_NUM_FLAGS);
 
+	/* Which local identity address this connection uses */
+	u8_t                    id;
+
 #if defined(CONFIG_BT_SMP) || defined(CONFIG_BT_BREDR)
 	bt_security_t		sec_level;
 	bt_security_t		required_sec_level;
@@ -159,7 +162,7 @@ u8_t bt_conn_get_io_capa(void);
 u8_t bt_conn_ssp_get_auth(const struct bt_conn *conn);
 void bt_conn_ssp_auth(struct bt_conn *conn, u32_t passkey);
 
-void bt_conn_disconnect_all(void);
+void bt_conn_disconnect_all(u8_t id);
 
 /* Look up an existing connection */
 struct bt_conn *bt_conn_lookup_handle(u16_t handle);
@@ -194,8 +197,8 @@ bool le_param_req(struct bt_conn *conn, struct bt_le_conn_param *param);
 
 #if defined(CONFIG_BT_SMP)
 /* rand and ediv should be in BT order */
-int bt_conn_le_start_encryption(struct bt_conn *conn, u64_t rand,
-				u16_t ediv, const u8_t *ltk, size_t len);
+int bt_conn_le_start_encryption(struct bt_conn *conn, u8_t rand[8],
+				u8_t ediv[2], const u8_t *ltk, size_t len);
 
 /* Notify higher layers that RPA was resolved */
 void bt_conn_identity_resolved(struct bt_conn *conn);
