@@ -9,7 +9,7 @@ config SOC_FAMILY_TIVAWARE
 if SOC_FAMILY_TIVAWARE
 config SOC_FAMILY
 	string
-	default ti_tivaware
+	default "ti_tivaware"
 endif
 
 source "arch/arm/soc/ti_tivaware/*/Kconfig.soc"

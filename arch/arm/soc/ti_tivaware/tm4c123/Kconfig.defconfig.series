@@ -6,6 +6,6 @@ if SOC_SERIES_TM4C123
 source "arch/arm/soc/ti_tivaware/tm4c123/Kconfig.defconfig.tm4c123*"
 
 config SOC_SERIES
-	default tm4c123
+	default "tm4c123"
 
 endif # SOC_SERIES_TM4C123

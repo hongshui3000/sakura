@@ -5,7 +5,7 @@ if SOC_TM4C123GH6PM
 
 config SOC
 	string
-	default tm4c123gh6pm
+	default "tm4c123gh6pm"
 
 config NUM_IRQS
 	int
